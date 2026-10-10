@@ -95,7 +95,7 @@ async function handle(req: Request) {
     const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) ? 1:0;
     if(pk)phones.add(pk);if(ek)emails.add(ek);if(review)reviewed++;
     const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original);
-    const owner = !review && body.preserve_owners && original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
+    const owner = !review && (body.source === "阿里" || body.preserve_owners) && original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
     const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";
     statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id(),name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now()));inserted++;
    }
