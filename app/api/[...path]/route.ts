@@ -35,7 +35,7 @@ async function handle(req: Request) {
   if (path === "password" && req.method === "POST") {
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
    if (!await verifyPassword(clean(body.current,200), stored.password)) throw new Problem("原密码不正确");
-   if (clean(body.password,200).length < 10) throw new Problem("新密码至少10位");
+   if (clean(body.password,200).length < 8) throw new Problem("新密码至少8位");
    await db.batch([db.prepare("UPDATE crm_users SET password=? WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
   }
   if (path === "users") {
@@ -44,7 +44,7 @@ async function handle(req: Request) {
    if (req.method === "POST") {
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
-    if (!["admin","operations","sales"].includes(body.role) || clean(body.password,200).length < 10) throw new Problem("请选择角色，密码至少10位");
+    if (!["admin","operations","sales"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     await db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(id(),username,name,body.role,await passwordHash(body.password),now()).run();return json({ok:true});
    }
