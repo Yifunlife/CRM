@@ -1,0 +1,15 @@
+import { unzipSync,strFromU8 } from 'fflate';
+export const FIELDS=['客户名称','联系方式','邮箱','所在国家/地区','来源渠道','录入日期','项目类型','联系方式偏好','客户身份','公司名称','投资预算','6个月内投资计划','项目需求描述','推广产品','分配业务员','跟进状态','收件箱链接','客资滞留时长'];
+export type Grid={name:string;headers:string[];rows:string[][]};
+export function parseCSV(text:string){const rows:string[][]=[];let row:string[]=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(Boolean))rows.push(row);row=[];cell='';}else cell+=c;}if(quoted)throw new Error('CSV引号未闭合');row.push(cell);if(row.some(Boolean))rows.push(row);return rows;}
+function xml(text:string){const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw new Error('表格内容无法解析');return doc;}
+export async function readGrid(file:File):Promise<Grid[]>{
+ if(file.size>25*1024*1024)throw new Error('文件超过25MB，请拆分表格');
+ if(file.name.toLowerCase().endsWith('.csv')){const r=parseCSV((await file.text()).replace(/^\uFEFF/,''));if(!r.length)throw new Error('表格为空');return [{name:'CSV',headers:r[0],rows:r.slice(1)}];}
+ if(!file.name.toLowerCase().endsWith('.xlsx'))throw new Error('请选择XLSX或UTF-8 CSV文件');
+ const files=unzipSync(new Uint8Array(await file.arrayBuffer()),{filter:e=>{const yes=/^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(e.name);if(yes&&e.originalSize>35*1024*1024)throw new Error('工作表过大');return yes;}});
+ const read=(p:string)=>{if(!files[p])throw new Error('缺少工作表内容');return xml(strFromU8(files[p]));};
+ const ss=files['xl/sharedStrings.xml']?Array.from(read('xl/sharedStrings.xml').getElementsByTagName('si')).map(i=>Array.from(i.getElementsByTagName('t')).map(t=>t.textContent||'').join('')):[];
+ const rel=new Map(Array.from(read('xl/_rels/workbook.xml.rels').getElementsByTagName('Relationship')).map(r=>[r.getAttribute('Id'),r.getAttribute('Target')||'']));
+ return Array.from(read('xl/workbook.xml').getElementsByTagName('sheet')).map(sh=>{const t=rel.get(sh.getAttribute('r:id'))||'',p=t.startsWith('/')?t.slice(1):'xl/'+t;const r=Array.from(read(p).getElementsByTagName('row')).map(row=>{const out:string[]=[];Array.from(row.getElementsByTagName('c')).forEach(c=>{let v=c.getElementsByTagName('v')[0]?.textContent||'';if(c.getAttribute('t')==='s')v=ss[Number(v)]||'';if(c.getAttribute('t')==='inlineStr')v=Array.from(c.getElementsByTagName('t')).map(t=>t.textContent||'').join('');const at=(c.getAttribute('r')||'A1').replace(/\d/g,'').split('').reduce((n,c)=>n*26+c.charCodeAt(0)-64,0)-1;out[at]=v;});return out;}).filter(r=>r.some(Boolean));const headers=r[0]||[];return {name:sh.getAttribute('name')||'工作表',headers,rows:r.slice(1).map(r=>headers.map((h,i)=>h==='录入日期'&&/^\d{5}(\.\d+)?$/.test(r[i]||'')?new Date(Date.UTC(1899,11,30)+Number(r[i])*86400000).toISOString().slice(0,10):r[i]||''))};});
+}

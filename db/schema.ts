@@ -1,0 +1,11 @@
+// Intentionally empty by default.
+// Add Drizzle tables here when the site actually needs a database.
+// See examples/d1/db/schema.ts for an opt-in example.
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+export const users = sqliteTable("crm_users", { id: text().primaryKey(), username: text().notNull().unique(), name: text().notNull(), role: text().notNull(), password: text().notNull(), active: integer().notNull().default(1), created: text().notNull() });
+export const sessions = sqliteTable("crm_sessions", { token: text().primaryKey(), user_id: text().notNull().references(() => users.id), expires: integer().notNull() });
+export const attempts = sqliteTable("crm_login_attempts", { key: text().primaryKey(), count: integer().notNull(), until: integer().notNull() });
+export const batches = sqliteTable("crm_batches", { id: text().primaryKey(), filename: text().notNull(), source: text().notNull(), created: text().notNull(), creator: text().notNull().references(() => users.id), total: integer().notNull() });
+export const leads = sqliteTable("crm_leads", { id: text().primaryKey(), name: text().notNull(), phone: text().notNull().default(""), email: text().notNull().default(""), country: text().notNull().default(""), source: text().notNull(), channel: text().notNull().default(""), entered: text().notNull().default(""), owner_id: text().references(() => users.id), original_owner: text().notNull().default(""), status: text().notNull().default("待首次联系"), next_date: text().notNull().default(""), last_contact: text().notNull().default(""), detail: text().notNull(), fingerprint: text().notNull().unique(), review: integer().notNull().default(0), batch_id: text().references(() => batches.id), created: text().notNull() });
+export const notes = sqliteTable("crm_notes", { id: text().primaryKey(), lead_id: text().notNull().references(() => leads.id), user_id: text().notNull().references(() => users.id), content: text().notNull(), method: text().notNull(), next_step: text().notNull(), created: text().notNull() });
+export const assignments = sqliteTable("crm_assignments", { id: text().primaryKey(), lead_id: text().notNull().references(() => leads.id), user_id: text().notNull().references(() => users.id), owner_id: text().notNull().references(() => users.id), created: text().notNull() });
