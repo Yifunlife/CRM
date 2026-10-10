@@ -1,0 +1,1 @@
+ALTER TABLE `crm_leads` ADD `grade` text DEFAULT '' NOT NULL;

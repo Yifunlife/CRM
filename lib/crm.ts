@@ -1,3 +1,4 @@
+export const GRADES = ["VIP", "A", "B", "C"];
 export const SOURCES = ["Meta", "独立站", "WhatsApp／其他", "阿里"];
 export const STATUSES = ["待首次联系", "已联系待回复", "正在沟通", "暂停跟进", "已成交", "已结束"];
 export const id = () => crypto.randomUUID();

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { SOURCES, STATUSES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead } from "../../../lib/crm";
+import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead } from "../../../lib/crm";
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra } });
 class Problem extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -46,7 +46,11 @@ async function handle(req: Request) {
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
     if (!["admin","operations","sales"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
-    await db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(id(),username,name,body.role,await passwordHash(body.password),now()).run();return json({ok:true});
+    if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
+    const userId = id();
+    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
+    if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
+    await db.batch(statements);return json({ok:true});
    }
    if (req.method === "PATCH") {
     if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
@@ -69,13 +73,19 @@ async function handle(req: Request) {
    const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
    await db.batch([db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,user.id,clean(body.content),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
+  if (path === "grade" && req.method === "POST") {
+   const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
+   if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
+   if (!["",...GRADES].includes(body.grade)) throw new Problem("请选择VIP、A、B、C或未评级");
+   await db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id).run();return json({ok:true});
+  }
   if (user.role === "sales") throw new Problem("此操作需要运营或管理员权限",403);
   if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
   if (path === "assign" && req.method === "POST") {
    const ids = [...new Set(body.ids || [])];if(!ids.length || ids.length>200)throw new Problem("每次选择1至200条客资");
    const owner: any = await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role='sales'").bind(body.owner_id).first();if(!owner)throw new Problem("请选择有效的业务员账号");
-   const selected = await db.prepare(`SELECT id,owner_id,review FROM crm_leads WHERE id IN (${ids.map(()=>"?").join(",")})`).bind(...ids).all();
-   if(selected.results.length!==ids.length || selected.results.some((r:any)=>r.owner_id || r.review))throw new Problem("只能分配未分配且已完成核查的客资");
+   const selected = await db.prepare(`SELECT id,owner_id,original_owner,review FROM crm_leads WHERE id IN (${ids.map(()=>"?").join(",")})`).bind(...ids).all();
+   if(selected.results.length!==ids.length || selected.results.some((r:any)=>r.owner_id || r.original_owner || r.review))throw new Problem("只能分配没有负责人的客资；表格中已分配的客资会保留负责人");
    await db.batch(ids.flatMap((leadId:any)=>[db.prepare("UPDATE crm_leads SET owner_id=? WHERE id=? AND owner_id IS NULL AND review=0").bind(owner.id,leadId),db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) SELECT ?,id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?").bind(id(),user.id,owner.id,now(),leadId,owner.id)]));return json({ok:true});
   }
   if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
@@ -95,7 +105,7 @@ async function handle(req: Request) {
     const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) ? 1:0;
     if(pk)phones.add(pk);if(ek)emails.add(ek);if(review)reviewed++;
     const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original);
-    const owner = !review && (body.source === "阿里" || body.preserve_owners) && original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
+    const owner = original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
     const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";
     statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id(),name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now()));inserted++;
    }
