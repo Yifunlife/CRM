@@ -5,8 +5,8 @@ export const metadata: Metadata = {
   title: "亦玩客资管理",
   description: "统一客资，运营分配，业务跟进。",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/yifun-favicon.png",
+    shortcut: "/yifun-favicon.png",
   },
 };
 
