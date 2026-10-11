@@ -1,3 +1,4 @@
+import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
 import { env } from "cloudflare:workers";
 import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead } from "../../../lib/crm";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ async function handle(req: Request) {
   if (write && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if (path === "google/callback" && !write) {
+   let result="connected";
+   try { await finishGoogle(req,db,env); } catch { result="error"; }
+   return new Response(null,{status:302,headers:{Location:url.origin+"/?google="+result,"Set-Cookie":`crm_google_state=; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=0${url.protocol==="https:"?"; Secure":""}`,"Cache-Control":"no-store","Referrer-Policy":"no-referrer"}});
+  }
   if (path === "login" && req.method === "POST") {
    const username = clean(body.username, 80).toLowerCase(), pw = clean(body.password, 200), key = await digest(username + ":" + (req.headers.get("cf-connecting-ip") || "local"));
    const attempt: any = await db.prepare("SELECT * FROM crm_login_attempts WHERE key=?").bind(key).first();
@@ -56,6 +62,20 @@ async function handle(req: Request) {
     if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
     await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id)]);return json({ok:true});
    }
+  }
+  if (path.startsWith("google/")) {
+   if(user.role!=="admin")throw new Problem("只有管理员可以配置Google连接",403);
+   const secret=(env as any).GOOGLE_TOKEN_KEY;
+   if(path==="google/status"&&!write){const c=await connection(db);return json({configured:!!(c?.client_id&&c.client_secret&&secret),client_id:c?.client_id||"",connected:!!c?.refresh_token,email:c?.email||"",connected_at:c?.connected||"",checked:c?.checked||"",sheet_id:GOOGLE_SHEET_ID,callback_url:url.origin+"/api/google/callback",last_error:c?.last_error||"",protected:!!secret});}
+   if(path==="google/config"&&req.method==="POST"){
+    if(!secret)throw new Problem("服务器凭证保护尚未配置",503);
+    const clientId=clean(body.client_id,300),clientSecret=clean(body.client_secret,2000);
+    if(!/^[a-zA-Z0-9._-]+\.apps\.googleusercontent\.com$/.test(clientId)||!clientSecret)throw new Problem("请填写Google OAuth客户端ID和客户端密钥");
+    await db.batch([db.prepare("INSERT INTO crm_google_connection(id,client_id,client_secret) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET client_id=excluded.client_id,client_secret=excluded.client_secret,refresh_token='',email='',connected='',checked='',last_error=''").bind(clientId,await seal(clientSecret,secret)),db.prepare("DELETE FROM crm_google_oauth")]);return json({ok:true});
+   }
+   if(path==="google/start"&&req.method==="POST"){try{const r=await startGoogle(db,env,user.id,url.origin);return json({url:r.url},200,{"Set-Cookie":r.cookie});}catch(e:any){throw new Problem(e.message);}}
+   if(path==="google/preview"&&req.method==="POST"){try{return json(await previewGoogle(db,env));}catch(e:any){const message=e.name==='TimeoutError'?'Google连接超时，请稍后重试':e.message;await db.prepare("UPDATE crm_google_connection SET last_error=? WHERE id='main'").bind(clean(message,200)).run();throw new Problem(message);}}
+   if(path==="google/disconnect"&&req.method==="POST"){await db.batch([db.prepare("UPDATE crm_google_connection SET refresh_token='',email='',connected='',checked='',last_error='' WHERE id='main'"),db.prepare("DELETE FROM crm_google_oauth")]);return json({ok:true});}
   }
   const scope = user.role === "sales" ? " WHERE l.owner_id=?" : "";
   if (path === "leads" && !write) {

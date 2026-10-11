@@ -8,3 +8,5 @@
 
 /* Workplace brand: full wordmark on a white surface, blue navigation and gold selection. */
 .brand img{display:block;width:100%;height:auto;object-fit:contain;background:#fff;padding:8px;border-radius:5px}aside .brand{padding:0}aside .brand img{max-width:188px}.brand-sub{padding:10px 8px;color:#c4d2e6}nav button.active{box-shadow:inset 3px 0 #edbd0b}.login-story .brand{width:190px}.login-story .brand img{width:190px}@media(max-width:720px){aside .brand img{width:112px;padding:5px}.login-story .brand,.login-story .brand img{width:150px}}
+
+.google-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
