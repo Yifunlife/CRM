@@ -10,3 +10,5 @@
 .brand img{display:block;width:100%;height:auto;object-fit:contain;background:#fff;padding:8px;border-radius:5px}aside .brand{padding:0}aside .brand img{max-width:188px}.brand-sub{padding:10px 8px;color:#c4d2e6}nav button.active{box-shadow:inset 3px 0 #edbd0b}.login-story .brand{width:190px}.login-story .brand img{width:190px}@media(max-width:720px){aside .brand img{width:112px;padding:5px}.login-story .brand,.login-story .brand img{width:150px}}
 
 .google-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+
+.password-field{margin-bottom:20px}.password-field label{margin-bottom:7px}.password-input{position:relative}.password-input input:not([type=checkbox]){padding-right:52px}.password-input button{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:44px;min-height:38px;padding:8px;border:0;background:transparent;color:var(--muted)}.password-input button:hover{background:#eaf1fb;color:var(--green)}.password-hint{font-size:14px;font-weight:400;line-height:1.6;color:var(--muted);margin:8px 0 0}.password-error{font-size:14px;color:#953b35;margin:0 0 18px}
