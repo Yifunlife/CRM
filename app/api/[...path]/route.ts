@@ -100,7 +100,8 @@ async function handle(req: Request) {
     const detail: Record<string,string> = {};for(const [k,v] of Object.entries(raw))detail[clean(k,100)]=clean(v);
     const name = clean(detail["客户名称"]||detail["姓名"]||detail["name"],200),phone=clean(detail["联系方式"]||detail["电话"]||detail["phone"],100),email=clean(detail["邮箱"]||detail["email"],200);
     if(!name || (!phone && !email)) { skipped++;continue; }
-    const fingerprint = await digest(body.source+JSON.stringify(Object.keys(detail).sort().map(k=>[k,detail[k]])));
+    const metaId = body.source === "Meta" && detail["form_id"] ? clean(detail["id"],200) : "";
+    const fingerprint = await digest(metaId ? "Meta:lead:"+metaId : body.source+JSON.stringify(Object.keys(detail).sort().map(k=>[k,detail[k]])));
     if(fingerprints.has(fingerprint)){skipped++;continue;}fingerprints.add(fingerprint);
     const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) ? 1:0;
     if(pk)phones.add(pk);if(ek)emails.add(ek);if(review)reviewed++;
