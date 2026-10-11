@@ -22,6 +22,20 @@
       "when": 1791705375300,
       "tag": "0002_glossy_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791706358053,
+      "tag": "0003_kind_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791706780495,
+      "tag": "0004_condemned_rockslide",
+      "breakpoints": true
     }
   ]
 }

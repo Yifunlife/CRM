@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+const origin='http://127.0.0.1:8792';
+const login=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({username:'reviewadmin',password:'local-review-only'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
+async function request(path,body,method=body===undefined?'GET':'POST'){const r=await fetch(origin+'/api/'+path,{method,headers:{cookie,origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
+const scope='meta-product',config={members:[{user_id:'test-a',state:'参与',share:70},{user_id:'test-b',state:'参与',share:30}],rule:{performance:30,maxChange:10,minimum:5,automatic:true}};
+assert.equal((await request('allocation/config',{scope,config})).status,200);
+const marker=Date.now(),rows=Array.from({length:10},(_,i)=>({'客户名称':`本地测试${marker}-${i}`,'邮箱':`test-${marker}-${i}@example.invalid`}));
+const imported=await request('import',{source:'Meta',business_scope:scope,filename:'isolated-allocation-test',rows});assert.equal(imported.status,200);assert.equal(imported.data.autoAssigned,10);
+const all=(await request('leads')).data,ours=all.filter(l=>l.name.startsWith('本地测试'+marker));assert.equal(ours.filter(l=>l.owner_id==='test-a').length,7);assert.equal(ours.filter(l=>l.owner_id==='test-b').length,3);
+const duplicate=await request('import',{source:'Meta',business_scope:scope,rows:[{'客户名称':'待核查测试'+marker,'邮箱':rows[0]['邮箱']}]});assert.equal(duplicate.data.reviewed,1);assert.equal(duplicate.data.autoAssigned,0);
+const wrong=await request('import',{source:'抖音',business_scope:scope,rows});assert.equal(wrong.status,400);
+const unscoped=await request('import',{source:'Meta',rows:[{'客户名称':'未分类测试'+marker,'邮箱':`unscoped-${marker}@example.invalid`}]});assert.equal(unscoped.data.autoAssigned,0);
+const lead=ours[0],today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),order='PREVIEW-'+marker;
+assert.equal((await request('deals',{lead_id:lead.id,order_number:order,deal_date:'2099-01-01'})).status,400);
+assert.equal((await request('deals',{lead_id:lead.id,order_number:order,deal_date:today})).status,200);
+assert.equal((await request('deals',{lead_id:lead.id,order_number:order,deal_date:today})).status,400);
+const detail=(await request('leads/'+lead.id)).data;assert.equal(detail.deals.length,1);
+assert.equal((await request('business-scope',{id:lead.id,scope:'meta-full'})).status,400);
+assert.equal((await request('deals',{id:detail.deals[0].id},'PATCH')).status,200);
+const report=(await request('allocation/report?scope='+scope)).data;assert.equal(report.deals.reduce((n,r)=>n+r.n,0),0);
+console.log('PASS: real Worker API, scoped automatic import 70/30, review exclusion, missing scope, source mismatch, order date/duplicates, detail records, cancellation and report. Isolated localhost data only.');

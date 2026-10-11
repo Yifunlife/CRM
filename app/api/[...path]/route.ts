@@ -1,3 +1,5 @@
+import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
+import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
 import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
 import { env } from "cloudflare:workers";
 import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead } from "../../../lib/crm";
@@ -36,6 +38,8 @@ async function handle(req: Request) {
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
   const user: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!user) throw new Problem("请先登录", 401);
+  const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
+  if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
   if (path === "me" && !write) return json(user);
   if (path === "password" && req.method === "POST") {
@@ -84,7 +88,7 @@ async function handle(req: Request) {
   if (path.startsWith("leads/") && !write) {
    const lead: any = await db.prepare("SELECT l.*,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE l.id=?").bind(path.split("/")[1]).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权查看",404);
-   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results});
+   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results});
   }
   if (path === "followup" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
@@ -100,17 +104,41 @@ async function handle(req: Request) {
    await db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id).run();return json({ok:true});
   }
   if (user.role === "sales") throw new Problem("此操作需要运营或管理员权限",403);
+  if(path==='business-scope'&&req.method==='POST'){
+   const lead:any=await db.prepare('SELECT id,source FROM crm_leads WHERE id=?').bind(body.id).first(),business=BUSINESS_SCOPES.find(v=>v.id===body.scope);
+   if(!lead||!business||business.source!==lead.source)throw new Problem('业务范围必须与客资来源匹配');
+   if(await db.prepare('SELECT id FROM crm_deals WHERE lead_id=? LIMIT 1').bind(body.id).first())throw new Problem('已有成交记录的客资不能更改业务范围');
+   await db.prepare('UPDATE crm_leads SET business_scope=? WHERE id=?').bind(business.id,lead.id).run();return json({ok:true});
+  }
+  if(path==='deals'&&req.method==='POST'){
+   if(user.role!=='admin')throw new Problem('只有管理员可以确认成交单',403);
+   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(body.lead_id).first();
+   if(!lead?.owner_id||!BUSINESS_SCOPES.some(v=>v.id===lead.business_scope))throw new Problem('请先设置业务范围与客资负责人');
+   const order=clean(body.order_number,100),date=clean(body.deal_date,10),today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+   if(!order||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>today)throw new Problem('请填写唯一订单编号与有效成交日期，不能选择未来日期');
+   if(await db.prepare('SELECT id FROM crm_deals WHERE order_number=?').bind(order).first())throw new Problem('此订单编号已经录入，不可重复计数');
+   await db.prepare('INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),order,lead.id,lead.owner_id,lead.business_scope,date,now(),user.id).run();return json({ok:true});
+  }
+  if(path==='deals'&&req.method==='PATCH'){
+   if(user.role!=='admin')throw new Problem('只有管理员可以撤销成交单',403);
+   await db.prepare('UPDATE crm_deals SET cancelled=1 WHERE id=?').bind(body.id).run();return json({ok:true});
+  }
   if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
   if (path === "assign" && req.method === "POST") {
    const ids = [...new Set(body.ids || [])];if(!ids.length || ids.length>200)throw new Problem("每次选择1至200条客资");
    const owner: any = await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role='sales'").bind(body.owner_id).first();if(!owner)throw new Problem("请选择有效的业务员账号");
-   const selected = await db.prepare(`SELECT id,owner_id,original_owner,review FROM crm_leads WHERE id IN (${ids.map(()=>"?").join(",")})`).bind(...ids).all();
+   const selected = await db.prepare("SELECT id,owner_id,original_owner,review,business_scope FROM crm_leads WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all();
    if(selected.results.length!==ids.length || selected.results.some((r:any)=>r.owner_id || r.original_owner || r.review))throw new Problem("只能分配没有负责人的客资；表格中已分配的客资会保留负责人");
-   await db.batch(ids.flatMap((leadId:any)=>[db.prepare("UPDATE crm_leads SET owner_id=? WHERE id=? AND owner_id IS NULL AND review=0").bind(owner.id,leadId),db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) SELECT ?,id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?").bind(id(),user.id,owner.id,now(),leadId,owner.id)]));return json({ok:true});
+   const rows:any[]=selected.results;
+   for(const scope of [...new Set(rows.map(row=>row.business_scope))]){if(!scope)throw new Problem('请先为客资指定业务范围');const {weights}=await allocationWeights(db,scope);if(!weights.some(w=>w.user_id===owner.id))throw new Problem('此业务员未参与所选客资业务范围的分配');}
+   await db.batch(ids.flatMap((leadId:any)=>[db.prepare("UPDATE crm_leads SET owner_id=? WHERE id=? AND owner_id IS NULL AND original_owner='' AND review=0 AND business_scope=?").bind(owner.id,leadId,rows.find(row=>row.id===leadId).business_scope),db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month) SELECT ?,id,?,?,?,business_scope,? FROM crm_leads WHERE id=? AND owner_id=? AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),user.id,owner.id,now(),monthNow(),leadId,owner.id,leadId)]));return json({ok:true});
   }
   if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
   if (path === "import" && req.method === "POST") {
    if(!SOURCES.includes(body.source)||!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem("请选择来源，每次导入1至3000条");
+   const businessScope=clean(body.business_scope,80),business=BUSINESS_SCOPES.find(s=>s.id===businessScope);
+   if(businessScope&&(!business||business.source!==body.source))throw new Problem('业务范围与来源渠道不匹配');
+   const autoIds:string[]=[];
    const allUsers = (await db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role='sales'").all()).results;
    const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint FROM crm_leads").all()).results;
    const fingerprints = new Set(existing.map(r=>r.fingerprint)), phones = new Set(existing.map(r=>phoneKey(r.phone)).filter(Boolean)), emails = new Set(existing.map(r=>emailKey(r.email)).filter(Boolean));
@@ -128,11 +156,12 @@ async function handle(req: Request) {
     const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original);
     const owner = original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
     const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";
-    statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id(),name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now()));inserted++;
+    const leadId=id();if(!original&&!review&&businessScope)autoIds.push(leadId);
+    statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(leadId,name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now(),businessScope));inserted++;
    }
-   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));return json({inserted,skipped,reviewed,unmatched});
+   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客资分配页面处理剩余记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
   }
   throw new Problem("操作不存在",404);
- } catch(e:any) { if(e instanceof Problem)return json({error:e.message},e.status); console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
+ } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
 }
 export const GET=handle,POST=handle,PATCH=handle;
