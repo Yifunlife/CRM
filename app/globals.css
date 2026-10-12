@@ -20,3 +20,26 @@
 .ops-filters label{min-width:180px;margin:0}.ops-actions{display:flex;gap:12px;flex-wrap:wrap}.ops-notes{min-width:180px;max-width:320px;white-space:pre-wrap;overflow-wrap:anywhere}.panel fieldset{padding:0;margin:0;border:0;min-width:0}@media(max-width:720px){.ops-filters label{width:100%;min-width:0}}
 
 .follower-change{display:block;min-height:44px;padding:10px 12px;background:#f4f7fb;border:1px solid var(--line);border-radius:6px;white-space:normal;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+
+/* Keep the selected advertising form first and leave history collapsed below it. */
+.advertising-page .page-heading{margin-bottom:12px}
+.advertising-page .tabs{margin-bottom:12px;gap:24px}
+.advertising-page .tabs button{padding:8px 0;min-height:44px}
+.advertising-page .panel{padding:16px;margin-bottom:12px}
+.advertising-page h2{margin-bottom:8px}
+.advertising-page .panel>p{margin-bottom:12px}
+.advertising-page .notice{margin-bottom:12px}
+.advertising-page .form-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px;align-items:start;margin-bottom:12px}
+.advertising-page label{margin-bottom:12px}
+.advertising-page .form-row>label{margin-bottom:0;min-width:0}
+.advertising-page label>input,.advertising-page label>select,.advertising-page label>textarea,.advertising-page .follower-change{margin-top:4px}
+.advertising-page textarea{min-height:64px}
+.advertising-page .account-setup-notice{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.advertising-page .account-setup-notice p{margin:0}
+.advertising-page .account-setup-notice button{flex-shrink:0}
+.advertising-page .compact-history{padding:0 16px}
+.advertising-page .compact-history>summary{padding:12px 0;min-height:44px}
+.advertising-page .compact-history[open]{padding-bottom:16px}
+.advertising-page .compact-history>p:last-child{margin-bottom:0}
+@media(max-width:1100px){.advertising-page .form-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.advertising-page .form-row{grid-template-columns:1fr}.advertising-page .tabs{gap:16px}.advertising-page .panel{padding:12px}.advertising-page .compact-history{padding:0 12px}.advertising-page .account-setup-notice{flex-wrap:wrap}.advertising-page button,.advertising-page input:not([type=checkbox]),.advertising-page select{min-height:44px}}
