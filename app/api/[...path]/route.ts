@@ -1,4 +1,5 @@
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
+import {syncAssignments} from '../../../lib/assignment-sync';
 import {operationsEndpoint} from '../../../lib/operations-server';
 import {advertisingEndpoint} from '../../../lib/advertising-server';
 import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
@@ -110,6 +111,7 @@ async function handle(req: Request) {
    await db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id).run();return json({ok:true});
   }
   if (user.role === "sales") throw new Problem("此操作需要运营或管理员权限",403);
+  if(path==='import-assignments'&&req.method==='POST')return json(await syncAssignments(db,user,body));
   if(path==='business-scope'&&req.method==='POST'){
    const lead:any=await db.prepare('SELECT id,source FROM crm_leads WHERE id=?').bind(body.id).first(),business=BUSINESS_SCOPES.find(v=>v.id===body.scope);
    if(!lead||!business||business.source!==lead.source)throw new Problem('业务范围必须与客资来源匹配');
