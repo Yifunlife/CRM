@@ -1,11 +1,16 @@
-import {OP_PLATFORMS,type OpPlatform,opToday} from './operations';
+import {OP_PLATFORMS,type OpPlatform,opToday,deriveFollowerChanges,advertisingSpend} from './operations';
 import {id,now,clean} from './crm';
 import {AllocationError} from './allocation-server';
 export async function operationsEndpoint(db:D1Database,user:any,path:string,method:string,body:any){
  if(!['operations/accounts','operations/daily'].includes(path))return undefined;
  if(!['admin','operations'].includes(user.role))throw new AllocationError('需要运营或管理员权限',403);
  const accounts=path==='operations/accounts';
- if(method==='GET')return (await db.prepare(accounts?'SELECT a.*,u.name AS owner_name FROM crm_operation_accounts a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.platform,a.name':'SELECT d.*,a.name AS account_name,a.platform,a.currency,u.name AS updated_by_name FROM crm_operation_daily d JOIN crm_operation_accounts a ON a.id=d.account_id JOIN crm_users u ON u.id=d.updated_by ORDER BY d.date DESC,d.updated DESC').all()).results;
+ if(method==='GET'){
+  if(accounts)return (await db.prepare('SELECT a.*,u.name AS owner_name FROM crm_operation_accounts a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.platform,a.name').all()).results;
+  const rows=(await db.prepare('SELECT d.*,a.name AS account_name,a.platform,a.currency,u.name AS updated_by_name FROM crm_operation_daily d JOIN crm_operation_accounts a ON a.id=d.account_id JOIN crm_users u ON u.id=d.updated_by ORDER BY d.date DESC,d.updated DESC').all()).results;
+  const ads=(await db.prepare("SELECT account_id,date,spent,status,spend_basis FROM crm_advertising WHERE spend_basis='daily'").all()).results;
+  return deriveFollowerChanges(rows).map((r:any)=>{const spend=advertisingSpend(ads,r.account_id,r.date);return {...r,legacy_ad_spend:r.ad_spend,ad_spend:spend.count?spend.amount:r.ad_spend,ad_count:spend.count};});
+ }
  if(!['POST','PATCH'].includes(method))throw new AllocationError('操作不存在',404);
  const table=accounts?'crm_operation_accounts':'crm_operation_daily',existing:any=method==='PATCH'?await db.prepare(`SELECT * FROM ${table} WHERE id=?`).bind(clean(body.id,80)).first():null;
  if(method==='PATCH'&&!existing)throw new AllocationError('记录不存在',404);
@@ -29,10 +34,9 @@ export async function operationsEndpoint(db:D1Database,user:any,path:string,meth
  if(existing&&(existing.account_id!==accountId||existing.date!==date))throw new AllocationError('修改时不能更换账号或日期；请作废原记录后填写正确记录');
  if(!['有效','作废'].includes(status))throw new AllocationError('记录状态无效');
  if(status==='作废'&&!notes)throw new AllocationError('请在备注中填写作废原因');
- function integer(value:unknown,signed=false){const s=String(value??'');if(!(signed?/^-?\d{1,9}$/:/^\d{1,9}$/).test(s))throw new AllocationError('粉丝和发布数量须为整数，只有净增粉丝可填负数');return Number(s);}
+ function integer(value:unknown,signed=false){const s=String(value??'');if(!(signed?/^-?\d{1,9}$/:/^\d{1,9}$/).test(s))throw new AllocationError('总粉丝和发布数量须为非负整数');return Number(s);}
  function amount(value:unknown){const s=String(value??'');if(!/^\d{1,10}(\.\d{1,2})?$/.test(s))throw new AllocationError('金额须为非负数，最多两位小数');return Math.round(Number(s)*100);}
- const total=integer(body.followers_total),change=integer(body.followers_change,true),posts=integer(body.posts),ad=amount(body.ad_spend),other=amount(body.other_spend),revenue=amount(body.revenue);
- if(change>total)throw new AllocationError('当天净增粉丝不能超过日末总粉丝');
+ const total=integer(body.followers_total),change=0,posts=integer(body.posts),ad=existing?.ad_spend||0,other=amount(body.other_spend),revenue=amount(body.revenue);
  if(existing)return save('UPDATE crm_operation_daily SET followers_total=?,followers_change=?,posts=?,ad_spend=?,other_spend=?,revenue=?,notes=?,status=?,updated=?,updated_by=?,version=version+1 WHERE id=? AND version=?',[total,change,posts,ad,other,revenue,notes,status,time,user.id,recordId,existing.version]);
  if(await db.prepare('SELECT id FROM crm_operation_daily WHERE account_id=? AND date=?').bind(accountId,date).first())throw new AllocationError('该账号当天已有记录，请在记录列表中编辑，避免重复统计',409);
  return save('INSERT INTO crm_operation_daily(id,account_id,date,followers_total,followers_change,posts,ad_spend,other_spend,revenue,notes,status,created,created_by,updated,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[recordId,accountId,date,total,change,posts,ad,other,revenue,notes,status,time,user.id,time,user.id]);

@@ -50,6 +50,13 @@
       "when": 1791787426921,
       "tag": "0006_amused_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791788580267,
+      "tag": "0007_silky_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

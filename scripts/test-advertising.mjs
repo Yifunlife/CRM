@@ -11,12 +11,14 @@ class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...ar
 const db={prepare:sql=>new Statement(sql)},admin={id:'admin',role:'admin'},ops={id:'ops',role:'operations'},sales={id:'sales',role:'sales'};
 for(const u of [admin,ops,sales])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-10-12');
 const call=(user,method,body={})=>advertisingEndpoint(db,user,'advertising',method,body);
-const draft={name:'测试投放',platform:'Meta',date:'2026-10-12',status:'计划中',owner_id:'ops',budget:'100.01',spent:'0.10',notes:'等待素材'};
+const accountPlatforms={'阿里':'阿里','抖音本地推':'抖音','Meta':'Instagram','谷歌':'谷歌'};
+for(const [platform,ap] of Object.entries(accountPlatforms))sqlite.prepare('INSERT INTO crm_operation_accounts(id,name,platform,currency,owner_id,created,created_by,updated,updated_by) VALUES(?,?,?,?,?,?,?,?,?)').run(platform,ap,ap,['阿里','抖音本地推'].includes(platform)?'CNY':'USD','ops','2026-10-12','ops','2026-10-12','ops');
+const draft={account_id:'Meta',name:'测试投放',platform:'Meta',date:'2026-10-12',status:'计划中',owner_id:'ops',budget:'100.01',spent:'0.10',notes:'等待素材'};
 await assert.rejects(call(sales,'GET'),e=>e.status===403);await assert.rejects(call(sales,'POST',draft),e=>e.status===403);
-for(const platform of ['阿里','抖音本地推','Meta','谷歌'])await call(ops,'POST',{...draft,platform,currency:'FAKE'});
+for(const platform of ['阿里','抖音本地推','Meta','谷歌'])await call(ops,'POST',{...draft,platform,account_id:platform,currency:'FAKE'});
 let rows=await call(admin,'GET');assert.equal(rows.length,4);for(const r of rows){assert.equal(r.currency,['阿里','抖音本地推'].includes(r.platform)?'CNY':'USD');assert.equal(r.budget,10001);assert.equal(r.spent,10);}
 const meta=rows.find(r=>r.platform==='Meta');await call(ops,'PATCH',{...draft,id:meta.id,status:'投放中',spent:'30.25'});rows=await call(admin,'GET');assert.equal(rows.find(r=>r.id===meta.id).spent,3025);
-await assert.rejects(call(admin,'PATCH',{...draft,id:meta.id,platform:'阿里'}),/币种/);
+await assert.rejects(call(admin,'PATCH',{...draft,id:meta.id,platform:'阿里',account_id:'阿里'}),/币种/);
 await assert.rejects(call(admin,'PATCH',{...draft,id:'missing'}),e=>e.status===404);
 for(const budget of ['-1','NaN','','1.234','10000000000','Infinity'])await assert.rejects(call(ops,'POST',{...draft,budget}),/金额/);
 for(const date of ['2026-02-30','2026-13-01','bad'])await assert.rejects(call(ops,'POST',{...draft,date}),/日期/);

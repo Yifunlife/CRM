@@ -1,0 +1,1 @@
+ALTER TABLE `crm_advertising` ADD `spend_basis` text DEFAULT 'cumulative' NOT NULL;
