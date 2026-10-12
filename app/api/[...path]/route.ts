@@ -14,6 +14,18 @@ async function handle(req: Request) {
   if (write && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if(path==='admin-recovery'&&req.method==='POST'){
+   const secret=(env as any).CRM_RECOVERY_SECRET,expires=Number((env as any).CRM_RECOVERY_EXPIRES);
+   if(!secret||!Number.isFinite(expires)||Date.now()>expires||body.token!==secret)throw new Problem('恢复凭据无效',403);
+   const admin:any=await db.prepare("SELECT id FROM crm_users WHERE username='admin' AND role='admin'").first();
+   if(!admin)throw new Problem('管理员账号不存在',404);
+   const marker=await digest('admin-recovery:'+secret);
+   if(await db.prepare('SELECT token FROM crm_sessions WHERE token=?').bind(marker).first())throw new Problem('恢复凭据已使用',403);
+   if(typeof body.password!=='string'||body.password.length<8||body.password.length>200)throw new Problem('密码至少8位');
+   const hash=await passwordHash(body.password),key=await digest('admin:'+(req.headers.get('cf-connecting-ip')||'local'));
+   await db.batch([db.prepare('DELETE FROM crm_sessions WHERE user_id=?').bind(admin.id),db.prepare('UPDATE crm_users SET password=?,active=1 WHERE id=?').bind(hash,admin.id),db.prepare('DELETE FROM crm_login_attempts WHERE key=?').bind(key),db.prepare('INSERT INTO crm_sessions(token,user_id,expires) VALUES(?,?,0)').bind(marker,admin.id)]);
+   return json({ok:true});
+  }
   if (path === "google/callback" && !write) {
    let result="connected";
    try { await finishGoogle(req,db,env); } catch { result="error"; }
