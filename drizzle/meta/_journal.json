@@ -36,6 +36,13 @@
       "when": 1791706780495,
       "tag": "0004_condemned_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791781701722,
+      "tag": "0005_certain_gargoyle",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
+import {advertisingEndpoint} from '../../../lib/advertising-server';
 import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
 import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
 import { env } from "cloudflare:workers";
@@ -38,6 +39,8 @@ async function handle(req: Request) {
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
   const user: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!user) throw new Problem("请先登录", 401);
+  const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
+  if(advertisingResult!==undefined)return json(advertisingResult);
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
