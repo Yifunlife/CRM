@@ -46,6 +46,11 @@ await advertisingEndpoint(db,ops,'advertising','PATCH',{...ad,id:automaticAd.id,
 assert.equal((await get('daily')).find(r=>r.account_id===us.id).ad_spend,101,'moving ad date removes it from original day');
 await advertisingEndpoint(db,ops,'advertising','PATCH',{...ad,id:automaticAd.id,spent:'20.25'});
 assert.equal((await get('daily')).find(r=>r.account_id===us.id).ad_spend,2126);
+sqlite.prepare('UPDATE crm_operation_daily SET ad_spend=77777 WHERE account_id=?').run(us.id);
+const allAds=await advertisingEndpoint(db,ops,'advertising','GET',{});
+for(const r of allAds)await advertisingEndpoint(db,ops,'advertising','PATCH',{...ad,id:r.id,spent:String(r.spent/100),status:'作废',notes:'全部作废验收'});
+assert.equal((await get('daily')).find(r=>r.account_id===us.id).ad_spend,0,'voiding every ad must not resurrect old manual spend');
+assert.equal((await get('daily')).find(r=>r.account_id===us.id).legacy_ad_spend,77777,'legacy manual data stays available for reconciliation');
 const usAccount=(await get('accounts')).find(a=>a.id===us.id);await call('accounts','PATCH',{...usAccount,active:0});await assert.rejects(call('daily','POST',{...row,account_id:us.id,date:'2026-10-09'}),/有效的运营账号/);
 const storedAd=(await advertisingEndpoint(db,ops,'advertising','GET',{}))[0];await advertisingEndpoint(db,ops,'advertising','PATCH',{...ad,id:storedAd.id,status:'已结束'});
 assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_leads').get().n,0);

@@ -9,7 +9,7 @@ export async function operationsEndpoint(db:D1Database,user:any,path:string,meth
   if(accounts)return (await db.prepare('SELECT a.*,u.name AS owner_name FROM crm_operation_accounts a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.platform,a.name').all()).results;
   const rows=(await db.prepare('SELECT d.*,a.name AS account_name,a.platform,a.currency,u.name AS updated_by_name FROM crm_operation_daily d JOIN crm_operation_accounts a ON a.id=d.account_id JOIN crm_users u ON u.id=d.updated_by ORDER BY d.date DESC,d.updated DESC').all()).results;
   const ads=(await db.prepare("SELECT account_id,date,spent,status,spend_basis FROM crm_advertising WHERE spend_basis='daily'").all()).results;
-  return deriveFollowerChanges(rows).map((r:any)=>{const spend=advertisingSpend(ads,r.account_id,r.date);return {...r,legacy_ad_spend:r.ad_spend,ad_spend:spend.count?spend.amount:r.ad_spend,ad_count:spend.count};});
+  return deriveFollowerChanges(rows).map((r:any)=>{const spend=advertisingSpend(ads,r.account_id,r.date);return {...r,legacy_ad_spend:r.ad_spend,ad_spend:spend.amount,ad_count:spend.count};});
  }
  if(!['POST','PATCH'].includes(method))throw new AllocationError('操作不存在',404);
  const table=accounts?'crm_operation_accounts':'crm_operation_daily',existing:any=method==='PATCH'?await db.prepare(`SELECT * FROM ${table} WHERE id=?`).bind(clean(body.id,80)).first():null;
