@@ -43,6 +43,13 @@
       "when": 1791781701722,
       "tag": "0005_certain_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791787426921,
+      "tag": "0006_amused_chimera",
+      "breakpoints": true
     }
   ]
 }

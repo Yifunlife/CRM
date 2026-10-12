@@ -1,4 +1,5 @@
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
+import {operationsEndpoint} from '../../../lib/operations-server';
 import {advertisingEndpoint} from '../../../lib/advertising-server';
 import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
 import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
@@ -39,6 +40,8 @@ async function handle(req: Request) {
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
   const user: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!user) throw new Problem("请先登录", 401);
+  const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
+  if(operationsResult!==undefined)return json(operationsResult);
   const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
   if(advertisingResult!==undefined)return json(advertisingResult);
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
