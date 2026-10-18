@@ -75,3 +75,7 @@ await call('command','POST',next);
 assert.equal((await device({result:{id:payload.id,state:'done',value:{status:'sent'}}})).command,undefined);
 assert.equal((await device({})).command.id,next.id);
 console.log('PASS: result acknowledgment never consumes the next queued command');
+await assert.rejects(call('command','POST',{id:'command-management-0001',kind:'client-update',desktop_id:'desktop-1',changes:[{id:'desktop-1',revision:'x',patch:{owner:'other'}}]}),/字段/);
+await assert.rejects(call('command','POST',{id:'command-management-0002',kind:'client-update',desktop_id:'desktop-1',changes:[{id:'foreign-client',revision:'x',patch:{grade:'A'}}]}),/不属于/);
+await assert.rejects(call('command','POST',{id:'command-management-0003',kind:'scene-save',desktop_id:'desktop-1',scene:{}},winnie,winnie),e=>e.status===403);
+console.log('PASS: management patch allowlist, batch ownership and company scene permission');
