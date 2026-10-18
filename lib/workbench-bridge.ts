@@ -1,6 +1,6 @@
 import {digest,id,clean} from './crm';
 import {AllocationError} from './allocation-server';
-const kinds=['conversation','send','generate','rewrite','translate','pause','resume','material','email-sync','test-email','directory','client-update','client-create','archive','record-add','scenes','scene-save','message-translate'];
+const kinds=['unread','read','conversation','send','generate','rewrite','translate','pause','resume','material','email-sync','test-email','directory','client-update','client-create','archive','record-add','scenes','scene-save','message-translate'];
 export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:string,method:string,body:any){
  if(path==='workbench/bridge'&&method==='POST'){
   if(actor.role!=='admin'||owner.id===actor.id)throw new AllocationError('只有管理员可以配置 Winnie 收发连接',403);
@@ -22,6 +22,7 @@ export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:
   if(body.kind==='scene-save'&&actor.role!=='admin')throw new AllocationError('公司场景由管理员审核发布',403);
   await ownedDesktop(db,owner.id,body.desktop_id);
   const payload={keep_desktop_draft:body.keep_desktop_draft===true,include_materials:body.include_materials===true,channel:body.channel==='email'?'email':'whatsapp',text:clean(body.text,12000),subject:clean(body.subject,200),instruction:clean(body.instruction,2000),reference:clean(body.reference,4000),revision:clean(body.revision,150),material:clean(body.material,30)};
+  if(body.kind==='read')(payload as any).keys=(Array.isArray(body.keys)?body.keys:[]).filter((k:any)=>typeof k==='string'&&k.length<300).slice(-80);
   if(body.kind==='archive')(payload as any).offset=Math.max(0,Math.floor(Number(body.offset)||0));
   if(body.kind==='record-add'){(payload as any).recordType=body.recordType==='handover'?'handover':'note';(payload as any).actorName=actor.name;}
   if(body.kind==='message-translate')(payload as any).messageKey=clean(body.messageKey,300);
