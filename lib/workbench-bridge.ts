@@ -74,7 +74,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  // Running work is never automatically reclaimed: a lost receipt must not cause a duplicate send.
  await db.prepare("UPDATE crm_workbench_commands SET state='uncertain',result=?,updated=? WHERE owner_id=? AND state='running' AND updated<?").bind(JSON.stringify({error:'执行结果待核实，不会自动重发'}),timestamp,device.owner_id,timestamp-300000).run();
  if(body.heartbeat||body.result)return {ok:true};
- const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY created LIMIT 1").bind(device.owner_id).first();
+ const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 1").bind(device.owner_id).first();
  if(!next)return {command:null};
  try{await ownedDesktop(db,device.owner_id,next.desktop_id);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch{await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
  const claimed:any=await db.prepare("UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' RETURNING id").bind(timestamp,next.id).first();
