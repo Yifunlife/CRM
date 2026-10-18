@@ -26,7 +26,7 @@ export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:st
    if(!c.id||seen.has(c.id)||!Array.isArray(c.messages)||c.messages.length>500)throw new AllocationError('客户编号重复或会话格式无效');seen.add(c.id);
    return {id:clean(c.id,150),name:clean(c.name,200),phone:clean(c.phone,100),email:clean(c.email,200),country:clean(c.country,100),stage:clean(c.stage,100),messages:c.messages.map((m:any)=>({channel:clean(m.channel,30),timestamp:clean(m.timestamp,50),speaker:clean(m.speaker,200),subject:clean(m.subject,500),text:clean(m.text,12000)}))};
   });
-  const payload={format:body.format,captured_at:body.captured_at,clients,scenes:body.scenes.map((s:any)=>({id:clean(s.id,100),name:clean(s.name,200),reply:clean(s.reply,12000)}))};
+  const payload={format:body.format,captured_at:body.captured_at,clients,scenes:body.scenes.map((s:any)=>({id:clean(s.id,100),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,12000)}))};
   if(new TextEncoder().encode(JSON.stringify(payload)).byteLength>1500000)throw new AllocationError('会话资料超过1.5MB，请缩小历史范围');
   const previous:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
   if(previous&&Date.parse(JSON.parse(previous.payload).captured_at)>Date.parse(body.captured_at))throw new AllocationError('文件早于当前同步版本，请重新导出',409);
