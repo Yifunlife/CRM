@@ -4,10 +4,12 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const bridgeUrl=moduleUrl('lib/workbench-bridge.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
+const {bridgeDeviceEndpoint}=await import(bridgeUrl);
+const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
-const db={prepare:sql=>new Statement(sql)},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
+const db={prepare:sql=>new Statement(sql),batch:async statements=>Promise.all(statements.map(s=>s.run()))},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
 for(const u of [admin,winnie,other,ops])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unchanged','2026-10-18');
 for(const u of [winnie,other])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-18')").run(u.id,u.id,u.id,u.id);
 const before=JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all());
@@ -49,3 +51,27 @@ assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,0)
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='winnie'").run();await assert.rejects(viewUser(db,admin,'winnie'),e=>e.status===409);
 assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
 console.log('PASS: role switching, disabled account, owner isolation, import validation, stale snapshot, idempotency, secret allowlist, actor audit and preserved customer/assignment/followup records');
+
+// Relay isolation, one-time claim, offline denial and non-replay after lost acknowledgments.
+sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='winnie'").run();
+const pairing=await call('bridge','POST');
+const device=(body,token=pairing.token)=>bridgeDeviceEndpoint(db,new Request('https://example.invalid/api/bridge/poll',{headers:{authorization:'Bearer '+token}}),body);
+await assert.rejects(device({},'invalid'),e=>e.status===401);
+const payload={id:'command-test-00000001',desktop_id:'desktop-1',kind:'send',channel:'whatsapp',text:'Test only'};
+await assert.rejects(call('command','POST',payload),/离线/);
+await device({heartbeat:true,status:{whatsapp:true,email:false,reception:false}});
+await call('command','POST',payload);await call('command','POST',payload);
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_workbench_commands').get().n,1);
+assert.equal((await device({})).command.id,payload.id);
+assert.equal((await device({})).command,null);
+await device({result:{id:payload.id,state:'done',value:{status:'sent',messageId:'test-receipt'}}});
+assert.equal((await call('command/'+payload.id,'GET')).state,'done');
+await assert.rejects(call('command/'+payload.id,'GET',{},other),e=>e.status===404);
+await assert.rejects(call('command','POST',{...payload,text:'changed'}),e=>e.status===409);
+console.log('PASS: device authentication, offline denial, idempotent enqueue, single claim, result isolation and conflict protection');
+
+const next={...payload,id:'command-test-00000002',kind:'conversation'};
+await call('command','POST',next);
+assert.equal((await device({result:{id:payload.id,state:'done',value:{status:'sent'}}})).command,undefined);
+assert.equal((await device({})).command.id,next.id);
+console.log('PASS: result acknowledgment never consumes the next queued command');

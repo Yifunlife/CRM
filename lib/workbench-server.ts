@@ -1,3 +1,4 @@
+import {bridgeUserEndpoint} from './workbench-bridge';
 import {id,now,clean} from './crm';
 import {AllocationError} from './allocation-server';
 export async function viewUser(db:D1Database,actor:any,view:string|null){
@@ -12,6 +13,7 @@ export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:st
  if(!['admin','sales'].includes(user.role))throw new AllocationError('此页面仅供业务员与管理员使用',403);
  const owner:any=user.role==='admin'?await db.prepare("SELECT id,name FROM crm_users WHERE username='winnie' AND role='sales' AND active=1").first():user;
  if(!owner)throw new AllocationError('请先启用Winnie账号',409);
+ const bridge=await bridgeUserEndpoint(db,owner,actor,path,method,body);if(bridge!==undefined)return bridge;
  if(path==='workbench/snapshot'&&method==='GET'){
   const row:any=await db.prepare('SELECT payload,updated FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
   return {owner,updated:row?.updated||'',snapshot:row?JSON.parse(row.payload):null};

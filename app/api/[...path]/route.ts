@@ -1,3 +1,4 @@
+import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
 import {syncAssignments} from '../../../lib/assignment-sync';
@@ -14,9 +15,10 @@ async function handle(req: Request) {
  try {
   const db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
-  if (write && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
+  if (write && path!=="bridge/poll" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
   if (path === "google/callback" && !write) {
    let result="connected";
    try { await finishGoogle(req,db,env); } catch { result="error"; }
