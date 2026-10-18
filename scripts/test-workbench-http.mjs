@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+const origin='http://127.0.0.1:8796';
+const login=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'local-workbench-test-only'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
+async function request(path,body,view='boss',session=cookie){const r=await fetch(origin+'/api/'+path,{method:body===undefined?'GET':'POST',headers:{cookie:session,origin,'Content-Type':'application/json','X-CRM-View':view},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
+for(const username of ['winnie','other'])assert.equal((await request('users',{username,name:username==='winnie'?'Winnie':'Other',role:'sales',password:'local-workbench-test-only'})).status,200);
+assert.equal((await request('import',{source:'Meta',filename:'isolated workbench QA',rows:[{'客户名称':'Winnie测试客户','邮箱':'winnie@example.invalid','分配业务员':'Winnie'},{'客户名称':'其他业务员测试客户','邮箱':'other@example.invalid','分配业务员':'Other'}]})).status,200);
+const before=await request('leads');assert.equal(before.data.length,2);
+const mine=await request('leads',undefined,'winnie');assert.equal(mine.data.length,1);assert.equal(mine.data[0].name,'Winnie测试客户');
+const forbidden=before.data.find(l=>l.id!==mine.data[0].id);assert.equal((await request('leads/'+forbidden.id,undefined,'winnie')).status,404);
+assert.equal((await request('operations/accounts',undefined,'winnie')).status,403);
+assert.equal((await request('password',{current:'local-workbench-test-only',password:'change-no'},'winnie')).status,403);
+assert.equal((await request('workbench/drafts',{lead_id:mine.data[0].id,channel:'WhatsApp',content:'本地隔离测试草稿'},'winnie')).status,200);
+assert.equal((await request('followup',{id:mine.data[0].id,status:'正在沟通',content:'本地隔离测试跟进',method:'其他',next_step:'测试',next_date:''},'winnie')).status,200);
+const detail=(await request('leads/'+mine.data[0].id)).data;assert.equal(detail.notes[0].author,'管理员');
+assert.equal((await request('me',undefined,'boss')).data.role,'admin');
+const sl=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({username:'other',password:'local-workbench-test-only'})});const sc=sl.headers.get('set-cookie').split(';')[0];
+assert.equal((await request('me',undefined,'winnie',sc)).status,403);
+assert.equal((await request('me',undefined,'boss',sc)).data.role,'sales');
+assert.equal((await request('workbench/snapshot',undefined,'boss',sc)).data.snapshot,null);
+assert.equal((await request('workbench/drafts',undefined,'boss',sc)).data.length,0);
+assert.equal((await request('leads')).data.length,2);
+console.log('PASS HTTP: boss/Winnie switch, customer isolation, operations denial, password protection, actual actor audit, drafts and no privilege escalation');

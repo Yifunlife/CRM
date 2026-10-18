@@ -1,3 +1,4 @@
+import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
 import {syncAssignments} from '../../../lib/assignment-sync';
 import {operationsEndpoint} from '../../../lib/operations-server';
@@ -39,8 +40,10 @@ async function handle(req: Request) {
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const user: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
-  if (!user) throw new Problem("请先登录", 401);
+  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  if (!actor) throw new Problem("请先登录", 401);
+  const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
+  const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
   if(operationsResult!==undefined)return json(operationsResult);
   const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
@@ -48,8 +51,9 @@ async function handle(req: Request) {
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json(user);
+  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin'});
   if (path === "password" && req.method === "POST") {
+   if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
    if (!await verifyPassword(clean(body.current,200), stored.password)) throw new Problem("原密码不正确");
    if (clean(body.password,200).length < 8) throw new Problem("新密码至少8位");
@@ -102,7 +106,7 @@ async function handle(req: Request) {
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
    if (!STATUSES.includes(body.status) || !clean(body.content)) throw new Problem("请填写跟进结果并选择状态");
    const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
-   await db.batch([db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,user.id,clean(body.content),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
+   await db.batch([db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
   if (path === "grade" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
