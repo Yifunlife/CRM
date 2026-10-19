@@ -1,4 +1,5 @@
 import {editAccount} from '../../../lib/account-edit';
+import {initializeEmployeeLogin} from '../../../lib/employee-login';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
@@ -62,6 +63,7 @@ async function handle(req: Request) {
    if (clean(body.password,200).length < 8) throw new Problem("新密码至少8位");
    await db.batch([db.prepare("UPDATE crm_users SET password=? WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
   }
+  if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
   if (path === "users") {
    if (!write) return json(user.role === "sales" ? [] : (await db.prepare("SELECT id,username,name,role,active,created FROM crm_users ORDER BY created").all()).results);
    if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);

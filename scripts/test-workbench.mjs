@@ -99,3 +99,19 @@ assert.equal(recordsBefore,JSON.stringify(['crm_leads','crm_notes','crm_assignme
 await editAccount(db,admin,{id:'admin',name:'Boss Updated',username:'boss.new'});
 assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE username='boss.new'").get().role,'admin');
 console.log('PASS: admin-only account editing, duplicate/invalid-name rejection, unchanged credentials and records, stable Winnie workbench after rename');
+
+const {initializeEmployeeLogin}=await import(moduleUrl('lib/employee-login.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const {verifyPassword}=await import(moduleUrl('lib/crm.ts'));
+const employee={id:'other',name:'other',previous_username:'other',employee_number:'YW004'};
+const preserved=JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all());
+await assert.rejects(initializeEmployeeLogin(db,other,{accounts:[employee]}),e=>e.status===403);
+await assert.rejects(initializeEmployeeLogin(db,admin,{accounts:[employee,employee]}),/重复/);
+assert.equal(sqlite.prepare("SELECT username FROM crm_users WHERE id='other'").get().username,'other');
+await assert.rejects(initializeEmployeeLogin(db,admin,{accounts:[{...employee,name:'wrong'}]}),/重新核对/);
+assert.equal((await initializeEmployeeLogin(db,admin,{accounts:[employee]})).updated,1);
+const employeeAfter=sqlite.prepare("SELECT * FROM crm_users WHERE id='other'").get();
+assert.equal(employeeAfter.username,'yw004');assert.equal(employeeAfter.role,'sales');assert.equal(employeeAfter.name,'other');
+assert.equal(await verifyPassword('YW004',employeeAfter.password),true);
+assert.equal(JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all()),preserved);
+await assert.rejects(initializeEmployeeLogin(db,admin,{accounts:[{...employee,previous_username:'yw004'}]}),/不重复/);
+console.log('PASS: employee login permissions, exact matching, duplicate rejection, password verification, unchanged ownership and repeat protection');
