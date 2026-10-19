@@ -79,3 +79,23 @@ await assert.rejects(call('command','POST',{id:'command-management-0001',kind:'c
 await assert.rejects(call('command','POST',{id:'command-management-0002',kind:'client-update',desktop_id:'desktop-1',changes:[{id:'foreign-client',revision:'x',patch:{grade:'A'}}]}),/不属于/);
 await assert.rejects(call('command','POST',{id:'command-management-0003',kind:'scene-save',desktop_id:'desktop-1',scene:{}},winnie,winnie),e=>e.status===403);
 console.log('PASS: management patch allowlist, batch ownership and company scene permission');
+
+// Account edits retain identity and workbench ownership after login-name changes.
+const {editAccount}=await import(moduleUrl('lib/account-edit.ts',{"'./allocation-server'":JSON.stringify(errors)}));
+sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='winnie'").run();
+const userBefore=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
+const recordsBefore=JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_snapshots','crm_workbench_links','crm_workbench_drafts','crm_sessions'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
+await assert.rejects(editAccount(db,other,{id:'winnie',name:'New',username:'new'}),e=>e.status===403);
+await assert.rejects(editAccount(db,admin,{id:'winnie',name:'New',username:'admin'}),/已存在/);
+await assert.rejects(editAccount(db,admin,{id:'winnie',name:'',username:'new'}),/姓名/);
+await assert.rejects(editAccount(db,admin,{id:'winnie',name:'New',username:'a b'}),/用户名/);
+await assert.rejects(editAccount(db,admin,{id:'winnie',name:'New',username:'new',role:'admin'}),/只能修改/);
+await editAccount(db,admin,{id:'winnie',name:'Winnie Updated',username:'WINNIE.NEW'});
+const userAfter=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
+assert.deepEqual({...userAfter},{...userBefore,name:'Winnie Updated',username:'winnie.new'});
+assert.equal((await viewUser(db,admin,'winnie')).id,'winnie');
+assert.equal((await call('snapshot','GET')).owner.id,'winnie');
+assert.equal(recordsBefore,JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_snapshots','crm_workbench_links','crm_workbench_drafts','crm_sessions'].map(t=>sqlite.prepare('SELECT * FROM '+t).all())));
+await editAccount(db,admin,{id:'admin',name:'Boss Updated',username:'boss.new'});
+assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE username='boss.new'").get().role,'admin');
+console.log('PASS: admin-only account editing, duplicate/invalid-name rejection, unchanged credentials and records, stable Winnie workbench after rename');

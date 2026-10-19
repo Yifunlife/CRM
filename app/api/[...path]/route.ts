@@ -1,3 +1,4 @@
+import {editAccount} from '../../../lib/account-edit';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
 import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
@@ -76,6 +77,7 @@ async function handle(req: Request) {
     await db.batch(statements);return json({ok:true});
    }
    if (req.method === "PATCH") {
+    if ('name' in body || 'username' in body) return json(await editAccount(db,user,body));
     if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
     await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id)]);return json({ok:true});
    }

@@ -4,14 +4,14 @@ import {AllocationError} from './allocation-server';
 export async function viewUser(db:D1Database,actor:any,view:string|null){
  if(!view||view==='boss')return actor;
  if(view!=='winnie'||actor.role!=='admin')throw new AllocationError('无权切换此视角',403);
- const target:any=await db.prepare("SELECT id,username,name,role FROM crm_users WHERE username='winnie' AND role='sales' AND active=1").first();
+ const target:any=await db.prepare("SELECT id,username,name,role FROM crm_users WHERE id=COALESCE((SELECT owner_id FROM crm_workbench_snapshots ORDER BY updated LIMIT 1),(SELECT id FROM crm_users WHERE username='winnie')) AND role='sales' AND active=1").first();
  if(!target)throw new AllocationError('Winnie账号不存在或已停用',409);
  return {...target,can_switch:true,actor_name:actor.name};
 }
 export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('workbench/'))return undefined;
  if(!['admin','sales'].includes(user.role))throw new AllocationError('此页面仅供业务员与管理员使用',403);
- const owner:any=user.role==='admin'?await db.prepare("SELECT id,name FROM crm_users WHERE username='winnie' AND role='sales' AND active=1").first():user;
+ const owner:any=user.role==='admin'?await db.prepare("SELECT id,name FROM crm_users WHERE id=COALESCE((SELECT owner_id FROM crm_workbench_snapshots ORDER BY updated LIMIT 1),(SELECT id FROM crm_users WHERE username='winnie')) AND role='sales' AND active=1").first():user;
  if(!owner)throw new AllocationError('请先启用Winnie账号',409);
  const bridge=await bridgeUserEndpoint(db,owner,actor,path,method,body);if(bridge!==undefined)return bridge;
  if(path==='workbench/snapshot'&&method==='GET'){
