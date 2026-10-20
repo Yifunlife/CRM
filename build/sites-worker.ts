@@ -4,6 +4,16 @@ import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 
 export default {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+    // Keep the original company URL and desktop bridge working after cutover.
+    if (env.CRM_BACKEND_ORIGIN === 'https://yifun-crm.yifunlife.workers.dev') {
+      const source = new URL(request.url);
+      const target = new URL(source.pathname + source.search, env.CRM_BACKEND_ORIGIN);
+      const forwarded = new Request(target, request);
+      if (forwarded.headers.get('origin') === source.origin) {
+        forwarded.headers.set('origin', target.origin);
+      }
+      return fetch(forwarded);
+    }
     let binding = ctx.props?.CONNECTORS;
     // Local preview emulates the same request-scoped capability. This branch and
     // the auxiliary service binding are absent from production builds.
