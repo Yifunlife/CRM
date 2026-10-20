@@ -1,3 +1,4 @@
+import {readJson,storeJson} from './object-storage';
 import {bridgeUserEndpoint} from './workbench-bridge';
 import {id,now,clean} from './crm';
 import {AllocationError} from './allocation-server';
@@ -16,7 +17,7 @@ export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:st
  const bridge=await bridgeUserEndpoint(db,owner,actor,path,method,body);if(bridge!==undefined)return bridge;
  if(path==='workbench/snapshot'&&method==='GET'){
   const row:any=await db.prepare('SELECT payload,updated FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
-  return {owner,updated:row?.updated||'',snapshot:row?JSON.parse(row.payload):null};
+  return {owner,updated:row?.updated||'',snapshot:row?(await readJson(row.payload)):null};
  }
  if(path==='workbench/snapshot'&&method==='POST'){
   if(user.role!=='admin'||actor.role!=='admin')throw new AllocationError('只有老板视角可以同步工作台资料',403);
@@ -29,15 +30,15 @@ export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:st
   const payload={format:body.format,captured_at:body.captured_at,clients,scenes:body.scenes.map((s:any)=>({id:clean(s.id,100),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,12000)}))};
   if(new TextEncoder().encode(JSON.stringify(payload)).byteLength>1500000)throw new AllocationError('会话资料超过1.5MB，请缩小历史范围');
   const previous:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
-  if(previous&&Date.parse(JSON.parse(previous.payload).captured_at)>Date.parse(body.captured_at))throw new AllocationError('文件早于当前同步版本，请重新导出',409);
-  await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner.id,JSON.stringify(payload),now(),actor.id).run();
+  if(previous&&Date.parse((await readJson(previous.payload)).captured_at)>Date.parse(body.captured_at))throw new AllocationError('文件早于当前同步版本，请重新导出',409);
+  await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner.id,await storeJson(payload,`snapshots/${owner.id}`,true),now(),actor.id).run();
   return {clients:clients.length,scenes:payload.scenes.length};
  }
  if(path==='workbench/links'&&method==='GET')return (await db.prepare('SELECT w.lead_id,w.desktop_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND l.owner_id=w.owner_id').bind(owner.id).all()).results;
  if(path==='workbench/links'&&method==='POST'){
   const lead:any=await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(body.lead_id,owner.id).first();
   const row:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
-  if(!lead||!row||!JSON.parse(row.payload).clients.some((c:any)=>c.id===body.desktop_id))throw new AllocationError('客户不存在或不属于当前业务员',404);
+  if(!lead||!row||!(await readJson(row.payload)).clients.some((c:any)=>c.id===body.desktop_id))throw new AllocationError('客户不存在或不属于当前业务员',404);
   const existing:any=await db.prepare('SELECT lead_id,desktop_id FROM crm_workbench_links WHERE lead_id=? OR (owner_id=? AND desktop_id=?)').bind(lead.id,owner.id,body.desktop_id).first();
   if(existing){if(existing.lead_id===lead.id&&existing.desktop_id===body.desktop_id)return {ok:true};throw new AllocationError('已有其他关联，请先核对客户，不能覆盖',409);}
   await db.prepare('INSERT INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) VALUES(?,?,?,?,?)').bind(lead.id,owner.id,body.desktop_id,now(),actor.id).run();return {ok:true};

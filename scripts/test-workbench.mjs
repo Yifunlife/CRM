@@ -4,9 +4,11 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const bridgeUrl=moduleUrl('lib/workbench-bridge.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
+const envUrl='data:text/javascript,'+encodeURIComponent(`const objects=new Map();export const env={BUCKET:{async put(key,input){const bytes=new Uint8Array(await new Response(input).arrayBuffer());objects.set(key,bytes);return {size:bytes.length};},async get(key){const bytes=objects.get(key);return bytes?{size:bytes.length,body:bytes,json:async()=>JSON.parse(new TextDecoder().decode(bytes))}:null;},async delete(key){objects.delete(key);}}};`);
+const storageUrl=moduleUrl('lib/object-storage.ts',{"'cloudflare:workers'":JSON.stringify(envUrl)});
+const bridgeUrl=moduleUrl('lib/workbench-bridge.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
 const {bridgeDeviceEndpoint}=await import(bridgeUrl);
-const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>Promise.all(statements.map(s=>s.run()))},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
@@ -24,6 +26,8 @@ await assert.rejects(call('snapshot','POST',snapshot,await viewUser(db,admin,'wi
 await assert.rejects(call('snapshot','GET',{},ops),e=>e.status===403);
 await call('snapshot','POST',snapshot);await call('snapshot','POST',snapshot);
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_workbench_snapshots').get().n,1);
+assert.ok(JSON.parse(sqlite.prepare('SELECT payload FROM crm_workbench_snapshots').get().payload).$r2.startsWith('records/snapshots/'));
+assert.ok(sqlite.prepare('SELECT length(payload) n FROM crm_workbench_snapshots').get().n<200);
 assert.equal((await call('snapshot','GET',{},other)).snapshot,null);
 assert.equal((await call('snapshot','GET',{},winnie)).snapshot.clients.length,1);
 assert.ok(!JSON.stringify(await call('snapshot','GET')).includes('must-not-copy'));
@@ -100,7 +104,7 @@ await editAccount(db,admin,{id:'admin',name:'Boss Updated',username:'boss.new'})
 assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE username='boss.new'").get().role,'admin');
 console.log('PASS: admin-only account editing, duplicate/invalid-name rejection, unchanged credentials and records, stable Winnie workbench after rename');
 
-const {initializeEmployeeLogin}=await import(moduleUrl('lib/employee-login.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const {initializeEmployeeLogin}=await import(moduleUrl('lib/employee-login.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
 const {verifyPassword}=await import(moduleUrl('lib/crm.ts'));
 const employee={id:'other',name:'other',previous_username:'other',employee_number:'YW004'};
 const preserved=JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all());
@@ -115,3 +119,25 @@ assert.equal(await verifyPassword('YW004',employeeAfter.password),true);
 assert.equal(JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all()),preserved);
 await assert.rejects(initializeEmployeeLogin(db,admin,{accounts:[{...employee,previous_username:'yw004'}]}),/不重复/);
 console.log('PASS: employee login permissions, exact matching, duplicate rejection, password verification, unchanged ownership and repeat protection');
+
+const {readJson,storeJson}=await import(storageUrl);
+assert.deepEqual(await readJson('{"legacy":true}'),{legacy:true});
+const large={message:'large'.repeat(10000)};
+const reference=await storeJson(large,'results/test');
+assert.ok(reference.length<150);
+assert.deepEqual(await readJson(reference),large);
+await assert.rejects(readJson('{"$r2":"records/missing.json"}'),/不存在/);
+console.log('PASS: R2 snapshots and large results, legacy JSON, missing-object failure');
+
+const {customerFiles}=await import(moduleUrl('lib/customer-files.ts',{"'cloudflare:workers'":JSON.stringify(envUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./allocation-server'":JSON.stringify(errors)}));
+const fileRequest=(method,desktop='desktop-1',body='bytes')=>new Request('https://crm.test/api/workbench/files?desktop_id='+desktop+'&name=test.png',{method,headers:{'content-length':String(body.length)},...(method==='PUT'?{body}:{} )});
+const uploaded=await (await customerFiles(fileRequest('PUT'),db,winnie,winnie)).json();
+assert.equal((await (await customerFiles(fileRequest('GET'),db,winnie,winnie)).json()).length,1);
+await assert.rejects(customerFiles(fileRequest('GET'),db,other,other),e=>e.status===404);
+await assert.rejects(customerFiles(fileRequest('GET'),db,ops,ops),e=>e.status===403);
+const download=await customerFiles(new Request('https://crm.test'+uploaded.url),db,winnie,winnie);
+assert.equal(await download.text(),'bytes');
+assert.equal(download.headers.get('content-type'),'application/octet-stream');
+await assert.rejects(customerFiles(new Request('https://crm.test'+uploaded.url),db,other,other),e=>e.status===404);
+await assert.rejects(customerFiles(new Request('https://crm.test/api/workbench/files?desktop_id=desktop-1&name=big',{method:'PUT',headers:{'content-length':String(101*1024*1024)},body:'x'}),db,winnie,winnie),e=>e.status===413);
+console.log('PASS: streamed attachment bytes, link download, owner and role isolation, size limit');

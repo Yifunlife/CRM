@@ -1,3 +1,5 @@
+import {databaseBackup} from '../../../lib/database-backup';
+import {customerFiles} from '../../../lib/customer-files';
 import {editAccount} from '../../../lib/account-edit';
 import {initializeEmployeeLogin} from '../../../lib/employee-login';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
@@ -19,7 +21,7 @@ async function handle(req: Request) {
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
   if (write && path!=="bridge/poll" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
-  if (write) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if (write && !path.startsWith("workbench/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
   if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
   if (path === "google/callback" && !write) {
    let result="connected";
@@ -47,6 +49,8 @@ async function handle(req: Request) {
   const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
   const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
+  if(path==='admin/backup'&&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
+  if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
   if(operationsResult!==undefined)return json(operationsResult);
@@ -182,4 +186,4 @@ async function handle(req: Request) {
   throw new Problem("操作不存在",404);
  } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
 }
-export const GET=handle,POST=handle,PATCH=handle;
+export const GET=handle,POST=handle,PATCH=handle,PUT=handle;

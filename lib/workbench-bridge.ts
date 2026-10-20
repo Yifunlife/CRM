@@ -1,3 +1,4 @@
+import {readJson,storeJson} from './object-storage';
 import {digest,id,clean} from './crm';
 import {AllocationError} from './allocation-server';
 const kinds=['unread','read','conversation','send','generate','rewrite','translate','pause','resume','material','email-sync','test-email','directory','client-update','client-create','archive','record-add','scenes','scene-save','message-translate'];
@@ -14,7 +15,7 @@ export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:
  }
  if(path.startsWith('workbench/command/')&&method==='GET'){
   const row:any=await db.prepare('SELECT id,state,result,desktop_id FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(path.slice('workbench/command/'.length),owner.id).first();
-  if(!row)throw new AllocationError('操作不存在',404);await ownedDesktop(db,owner.id,row.desktop_id);return {...row,result:JSON.parse(row.result)};
+  if(!row)throw new AllocationError('操作不存在',404);await ownedDesktop(db,owner.id,row.desktop_id);return {...row,result:await readJson(row.result)};
  }
  if(path==='workbench/command'&&method==='POST'){
   if(!kinds.includes(body.kind)||!/^[-a-zA-Z0-9]{16,80}$/.test(body.id||''))throw new AllocationError('操作格式无效');
@@ -42,9 +43,9 @@ export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:
  }
  return undefined;
 }
-async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string){
+export async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string){
  const row:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(ownerId).first();
- if(!row||![...JSON.parse(row.payload).clients,...(JSON.parse(row.payload).groups||[])].some((c:any)=>c.id===desktopId))throw new AllocationError('会话不属于当前业务员',404);
+ if(!row||![...(await readJson(row.payload)).clients,...((await readJson(row.payload)).groups||[])].some((c:any)=>c.id===desktopId))throw new AllocationError('会话不属于当前业务员',404);
  const link:any=await db.prepare('SELECT l.owner_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND w.desktop_id=?').bind(ownerId,desktopId).first();
  if(link&&link.owner_id!==ownerId)throw new AllocationError('客资已重新分配，不能继续操作',403);
 }
@@ -57,12 +58,12 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
-  await db.prepare("UPDATE crm_workbench_commands SET state=?,result=?,updated=? WHERE id=? AND owner_id=? AND state='running'").bind(r.state,JSON.stringify(r.value||{}),timestamp,r.id,device.owner_id).run();
+  await db.prepare("UPDATE crm_workbench_commands SET state=?,result=?,updated=? WHERE id=? AND owner_id=? AND state='running'").bind(r.state,await storeJson(r.value||{},`results/${device.owner_id}`),timestamp,r.id,device.owner_id).run();
   if(r.state==='done'&&Array.isArray(r.value?.clients)){
    const job:any=await db.prepare('SELECT kind FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(r.id,device.owner_id).first();
    if(job&&['directory','client-update','client-create'].includes(job.kind)){
     const row:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first();
-    if(row){const snapshot=JSON.parse(row.payload);if(job.kind==='directory'){snapshot.groups=(r.value.groups||[]).filter((g:any)=>/^group:\d+@g\.us$/.test(g.id)).map((g:any)=>({id:g.id,name:clean(g.name,200),group:true}));snapshot.scenes=(r.value.scenes||[]).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,80),category:clean(s.category,40),reply:clean(s.reply,2000)}));}for(const raw of r.value.clients){const patch=clientPatch(Object.fromEntries(clientFields.filter(k=>k in raw).map(k=>[k,raw[k]])));const metadata={...patch,id:clean(raw.id,150),phone:patch.whatsapp||'',revision:clean(raw.revision,150),createdAt:clean(raw.createdAt,50),lastContact:clean(raw.lastContact,50)};const previous=snapshot.clients.find((c:any)=>c.id===metadata.id);if(previous)Object.assign(previous,metadata);else snapshot.clients.push({...metadata,messages:[]});}await db.prepare('UPDATE crm_workbench_snapshots SET payload=?,updated=? WHERE owner_id=?').bind(JSON.stringify(snapshot),new Date().toISOString(),device.owner_id).run();}
+    if(row){const snapshot=(await readJson(row.payload));if(job.kind==='directory'){snapshot.groups=(r.value.groups||[]).filter((g:any)=>/^group:\d+@g\.us$/.test(g.id)).map((g:any)=>({id:g.id,name:clean(g.name,200),group:true}));snapshot.scenes=(r.value.scenes||[]).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,80),category:clean(s.category,40),reply:clean(s.reply,2000)}));}for(const raw of r.value.clients){const patch=clientPatch(Object.fromEntries(clientFields.filter(k=>k in raw).map(k=>[k,raw[k]])));const metadata={...patch,id:clean(raw.id,150),phone:patch.whatsapp||'',revision:clean(raw.revision,150),createdAt:clean(raw.createdAt,50),lastContact:clean(raw.lastContact,50)};const previous=snapshot.clients.find((c:any)=>c.id===metadata.id);if(previous)Object.assign(previous,metadata);else snapshot.clients.push({...metadata,messages:[]});}await db.prepare('UPDATE crm_workbench_snapshots SET payload=?,updated=? WHERE owner_id=?').bind(await storeJson(snapshot,`snapshots/${device.owner_id}`,true),new Date().toISOString(),device.owner_id).run();}
    }
   }
   if(r.state==='done'&&r.value?.status==='sent'){

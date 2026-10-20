@@ -1,0 +1,12 @@
+.wb-customer-management{padding:10px}
+.wb-customer-management>.wb-customer-header{gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+.wb-customer-header h2{font-size:15px;white-space:nowrap}
+.wb-customer-management .wb-customer-tools{flex:1;margin:0;gap:6px;flex-wrap:nowrap}
+.wb-customer-management .wb-customer-tools input{min-width:150px}
+.wb-customer-management .wb-customer-tools select{max-width:180px}
+.wb-customer-management .wb-customer-header button,.wb-customer-management .wb-customer-tools input,.wb-customer-management .wb-customer-tools select{font-size:12px;min-height:32px;padding:5px 8px}
+.wb-customer-header button{white-space:nowrap}
+.wb-customer-management .wb-batch{margin:0 0 8px;padding:6px 8px;background:var(--canvas);font-size:12px}
+.wb-customer-management .wb-table-pagination{margin:0;padding:6px 0 0;position:sticky;bottom:0;background:#fff}
+.wb-customer-management .wb-customer-sheet th,.wb-customer-management .wb-customer-sheet td{height:34px;padding:5px 8px;font-size:12px}
+@media(max-width:1000px){.wb-customer-management .wb-customer-tools{flex-wrap:wrap}.wb-customer-management .wb-customer-tools input{flex-basis:100%}}
