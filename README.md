@@ -59,7 +59,7 @@ Cloudflare D1 保存账号、客资、分配和跟进，R2 保存工作台快照
 - GitHub：`https://github.com/Yifunlife/CRM`，使用 `main`。
 - 网站：`https://yifun-crm.yifunlife.workers.dev`。
 - D1：`yifun-crm-db`，绑定 `DB`；R2：`yifun-crm-files`，绑定 `BUCKET`。均与其他业务系统隔离。
-- `npm run deploy:cloudflare` 构建、应用追加迁移并部署。需要先在自己的终端完成 Wrangler 登录。Cloudflare 的 Git 构建可使用构建命令 `npm run build:cloudflare`，部署命令 `npx wrangler d1 migrations apply DB --remote --config wrangler.json && npx wrangler deploy --config dist/server/wrangler.json`，根目录为本仓库根目录。
+- `npm run deploy:cloudflare` 只构建和部署程序，不运行数据库迁移、初始化、导入或 R2 文件上传。数据库结构升级通过 `npm run db:migrate:cloudflare` 单独执行。需要先在自己的终端完成 Wrangler 登录。Cloudflare 的 Git 构建可使用构建命令 `npm run build:cloudflare`，部署命令 `npm run publish:cloudflare`，根目录为本仓库根目录。
 - 原 Sites 地址可通过运行时变量 `CRM_BACKEND_ORIGIN=https://yifun-crm.yifunlife.workers.dev` 转发到新站，保留原访问限制和桌面工作台地址。新 Cloudflare Worker 不设置此变量。切换前校验数据并迁移有效登录会话；切换期间短暂停用桌面 CRM 连接，切换后恢复。桌面工作台仍负责本机 WhatsApp／邮件收发。
 - D1 不保存图片、二进制或 Base64 文件。工作台快照只保存 `{"$r2":"records/..."}` 引用；超过16KB的操作结果采用相同方式。旧版内嵌 JSON 可读取，迁移后统一使用新引用。附件单文件限100MB，按流上传，下载时重新校验账号和客户归属；R2 桶保持私有。
 - 管理员在「账号与权限」下载完整数据库备份；包含账号密码哈希和业务数据，应按敏感备份保存，不上传 GitHub。备份会还原 JSON 引用内容，但不包含附件二进制；有云端附件时还需单独备份 R2。
@@ -67,3 +67,8 @@ Cloudflare D1 保存账号、客资、分配和跟进，R2 保存工作台快照
 - 备份、迁移报告和本地凭证不在仓库中；旧站数据库暂保留为回退副本，不自动删除。
 
 验证：`node scripts/test-workbench.mjs`（R2 引用兼容、缺失对象、上传下载字节、归属隔离、大小限制），以及原分配、运营、广告测试和类型检查。
+
+## main 自动部署
+
+Cloudflare Workers Builds 连接 `Yifunlife/CRM` 的 `main`，构建命令为 `npm run build:cloudflare`，部署命令为 `npm run publish:cloudflare`。自动部署仅更新 Worker 程序和网页静态资源，继续绑定现有 D1 `yifun-crm-db` 与 R2 `yifun-crm-files`；不执行数据库迁移、清空、种子数据、备份导入或对象覆盖。涉及数据库结构的更改应先单独审核迁移并备份，再执行 `npm run db:migrate:cloudflare`。
+部署前会核对生成配置中的 Worker、账号、D1 数据库 ID 和 R2 桶名；不匹配时停止发布，防止误接到其他数据资源。
