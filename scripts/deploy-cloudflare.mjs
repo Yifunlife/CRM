@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+
+const configPath='dist/server/wrangler.json';
+const config=JSON.parse(readFileSync(configPath,'utf8'));
+assert.equal(config.name,'yifun-crm','Refusing to deploy a different Worker');
+assert.equal(config.account_id,'5a472d15dc37681abce4ab6e4eb152c3','Cloudflare account changed');
+assert.equal(config.d1_databases.length,1,'Unexpected database bindings');
+assert.equal(config.d1_databases[0].binding,'DB');
+assert.equal(config.d1_databases[0].database_id,'59e890b8-985a-4027-a205-50d8920509cb','Existing CRM database must be retained');
+assert.equal(config.r2_buckets.length,1,'Unexpected file storage bindings');
+assert.equal(config.r2_buckets[0].binding,'BUCKET');
+assert.equal(config.r2_buckets[0].bucket_name,'yifun-crm-files','Existing CRM file storage must be retained');
+assert.ok(!config.vars?.CRM_BACKEND_ORIGIN,'The primary Worker must not forward to itself');
+console.log('Verified existing CRM database and R2 bindings. Publishing code only.');
+if(process.argv.includes('--check'))process.exit(0);
+const result=spawnSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','deploy','--config',configPath],{stdio:'inherit'});
+if(result.error)throw result.error;
+process.exit(result.status??1);

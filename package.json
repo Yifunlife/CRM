@@ -13,7 +13,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "build:cloudflare": "CRM_CLOUDFLARE=1 node node_modules/vite/bin/vite.js build",
-    "deploy:cloudflare": "npm run build:cloudflare && wrangler d1 migrations apply DB --remote --config wrangler.json && wrangler deploy --config dist/server/wrangler.json"
+    "deploy:cloudflare": "npm run build:cloudflare && npm run publish:cloudflare",
+    "publish:cloudflare": "node scripts/deploy-cloudflare.mjs",
+    "db:migrate:cloudflare": "wrangler d1 migrations apply DB --remote --config wrangler.json"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
