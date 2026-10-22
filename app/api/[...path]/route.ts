@@ -1,6 +1,8 @@
+import {followupEndpoint,followupManager} from '../../../lib/order-followup-server';
+import {followupFiles} from '../../../lib/order-followup-files';
 import {databaseBackup} from '../../../lib/database-backup';
 import {customerFiles} from '../../../lib/customer-files';
-import {editAccount} from '../../../lib/account-edit';
+import {editAccount,resetAccountPassword} from '../../../lib/account-edit';
 import {initializeEmployeeLogin} from '../../../lib/employee-login';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
@@ -21,7 +23,7 @@ async function handle(req: Request) {
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
   if (write && path!=="bridge/poll" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
-  if (write && !path.startsWith("workbench/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
   if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
   if (path === "google/callback" && !write) {
    let result="connected";
@@ -51,6 +53,8 @@ async function handle(req: Request) {
   const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
   if(path==='admin/backup'&&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
+  if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
+  const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
   if(operationsResult!==undefined)return json(operationsResult);
@@ -59,7 +63,7 @@ async function handle(req: Request) {
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin'});
+  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:user.role==='sales'||await followupManager(db,user)});
   if (path === "password" && req.method === "POST") {
    if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
@@ -68,6 +72,7 @@ async function handle(req: Request) {
    await db.batch([db.prepare("UPDATE crm_users SET password=? WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
   }
   if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
+  if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
   if (path === "users") {
    if (!write) return json(user.role === "sales" ? [] : (await db.prepare("SELECT id,username,name,role,active,created FROM crm_users ORDER BY created").all()).results);
    if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);

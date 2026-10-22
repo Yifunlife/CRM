@@ -1,5 +1,5 @@
 import {readJson} from './object-storage';
-export const backupTables=['crm_users','crm_batches','crm_leads','crm_notes','crm_assignments','crm_allocation_configs','crm_allocation_plans','crm_deals','crm_operation_accounts','crm_operation_daily','crm_advertising','crm_google_connection','crm_workbench_snapshots','crm_workbench_drafts','crm_workbench_links','crm_workbench_bridge','crm_workbench_commands','crm_files'];
+export const backupTables=['crm_users','crm_batches','crm_leads','crm_notes','crm_assignments','crm_allocation_configs','crm_allocation_plans','crm_deals','crm_operation_accounts','crm_operation_daily','crm_advertising','crm_google_connection','crm_workbench_snapshots','crm_workbench_drafts','crm_workbench_links','crm_workbench_bridge','crm_workbench_commands','crm_files','crm_followup_staff','crm_followup_orders','crm_followup_tasks','crm_followup_events','crm_followup_files'];
 
 export function databaseBackup(db:D1Database):Response{
  const stream=new ReadableStream({async start(controller){

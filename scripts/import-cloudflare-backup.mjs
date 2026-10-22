@@ -37,7 +37,7 @@ for await(const line of createInterface({input:createReadStream(backup),crlfDela
  assert.match(table,/^crm_[a-z_]+$/);
  assert.ok(source.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
  if(table==='crm_google_connection'&&(row.client_secret||row.refresh_token))throw Error('Migrate GOOGLE_TOKEN_KEY before importing encrypted Google credentials');
- if(table==='crm_files')throw Error('Existing cloud attachments require a separate object copy before import');
+ if(table==='crm_files'||table==='crm_followup_files')throw Error('Existing cloud attachments require a separate object copy before import');
  if(table==='crm_workbench_commands'&&['queued','running'].includes(row.state)){
   states[row.id]=row.state;
   row.state=row.state==='queued'?'cancelled':'uncertain';

@@ -85,7 +85,7 @@ await assert.rejects(call('command','POST',{id:'command-management-0003',kind:'s
 console.log('PASS: management patch allowlist, batch ownership and company scene permission');
 
 // Account edits retain identity and workbench ownership after login-name changes.
-const {editAccount}=await import(moduleUrl('lib/account-edit.ts',{"'./allocation-server'":JSON.stringify(errors)}));
+const {editAccount,resetAccountPassword}=await import(moduleUrl('lib/account-edit.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))}));
 sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='winnie'").run();
 const userBefore=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
 const recordsBefore=JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_snapshots','crm_workbench_links','crm_workbench_drafts','crm_sessions'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
@@ -141,3 +141,23 @@ assert.equal(download.headers.get('content-type'),'application/octet-stream');
 await assert.rejects(customerFiles(new Request('https://crm.test'+uploaded.url),db,other,other),e=>e.status===404);
 await assert.rejects(customerFiles(new Request('https://crm.test/api/workbench/files?desktop_id=desktop-1&name=big',{method:'PUT',headers:{'content-length':String(101*1024*1024)},body:'x'}),db,winnie,winnie),e=>e.status===413);
 console.log('PASS: streamed attachment bytes, link download, owner and role isolation, size limit');
+
+const resetBefore=JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_links'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
+const targetBefore=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
+const otherBefore=sqlite.prepare("SELECT * FROM crm_users WHERE id='other'").get();
+sqlite.prepare("INSERT INTO crm_sessions(token,user_id,expires) VALUES('reset-target','winnie',9999999999999),('reset-other','other',9999999999999)").run();
+await assert.rejects(resetAccountPassword(db,ops,{id:'winnie',password:'test-password'}),e=>e.status===403);
+await assert.rejects(resetAccountPassword(db,admin,{id:'winnie',password:'short'}),/8–200/);
+await assert.rejects(resetAccountPassword(db,admin,{id:'missing',password:'test-password'}),e=>e.status===404);
+await assert.rejects(resetAccountPassword(db,admin,{id:'winnie',password:'test-password',role:'admin'}),/只能/);
+await resetAccountPassword(db,admin,{id:'winnie',password:'test-password'});
+const resetAfter=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
+assert(await verifyPassword('test-password',resetAfter.password));
+assert.deepEqual({...resetAfter,password:targetBefore.password},{...targetBefore});
+assert.deepEqual(sqlite.prepare("SELECT * FROM crm_users WHERE id='other'").get(),otherBefore);
+assert.equal(sqlite.prepare("SELECT count(*) AS n FROM crm_sessions WHERE user_id='winnie'").get().n,0);
+assert(sqlite.prepare("SELECT * FROM crm_sessions WHERE token='reset-other'").get());
+assert.equal(resetBefore,JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_links'].map(t=>sqlite.prepare('SELECT * FROM '+t).all())));
+await resetAccountPassword(db,admin,{id:'admin',password:'admin-test-password'});
+assert(await verifyPassword('admin-test-password',sqlite.prepare("SELECT password FROM crm_users WHERE id='admin'").get().password));
+console.log('PASS: password reset permissions, validation, hashing, target session revocation, self reset and business-data preservation');
