@@ -4,7 +4,10 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const workflow=moduleUrl('lib/order-followup.ts'),server=moduleUrl('lib/order-followup-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow)});
+const workflow=moduleUrl('lib/order-followup.ts');
+const importRules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)});
+const importServer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(importRules)});
+const server=moduleUrl('lib/order-followup-server.ts',{"'./order-import-server'":JSON.stringify(importServer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow)});
 const {followupEndpoint,followupOrder}=await import(server),{ORDER_STEPS,orderReminders,blankSteps}=await import(workflow);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
@@ -15,6 +18,7 @@ for(const [id,owner] of [['lead1','sales'],['lead2','other']])sqlite.prepare("IN
 const untouched=()=>JSON.stringify(['crm_users','crm_leads','crm_deals','crm_assignments','crm_notes'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
 const before=untouched();
 const call=(path,method='GET',body={},user=admin,actor=user)=>followupEndpoint(db,user,actor,path,method,body);
+assert.equal(await call('followup','POST',{id:'lead1',content:'原客户沟通跟进',status:'已联系待回复'},sales),undefined,'Customer follow-up writes must reach the original handler');
 await assert.rejects(call('followup','GET',{},staff),e=>e.status===403);
 await assert.rejects(call('followup/staff','POST',{user_id:'staff',enabled:true},sales),e=>e.status===403);
 await call('followup/staff','POST',{user_id:'staff',enabled:true});
@@ -72,7 +76,8 @@ assert(orderReminders(remindersOrder,[],'2026-11-03').some(r=>r.key==='eta_port'
 remindersOrder.steps[4]={status:'已完成',for_date:'2026-11-01'};assert.equal(orderReminders(remindersOrder,[],'2026-10-22').length,0);
 remindersOrder.details.dates.planned_ship.date='2026-11-02';assert(orderReminders(remindersOrder,[],'2026-10-23').length);
 assert.equal(orderReminders({...remindersOrder,archived:1},[],'2026-11-03').length,0);
-await call('followup/staff','POST',{user_id:'staff',enabled:false});await assert.rejects(call('followup','GET',{},staff),e=>e.status===403);
+await call('followup/staff','POST',{user_id:'staff',enabled:false});assert.equal(await call('followup','POST',{id:'lead1',content:'原客户沟通跟进',status:'已联系待回复'},sales),undefined,'Customer follow-up writes must reach the original handler');
+await assert.rejects(call('followup','GET',{},staff),e=>e.status===403);
 assert.equal(untouched(),before,'Existing customers, accounts, deals and records must not change');
 assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
 console.log('PASS: staff authorization/revocation, sales ownership isolation and read-only access, duplicate prevention, optimistic conflicts and atomic audit, all 12 stages, money confirmation, unresolved issue and archive gates, date history, 10/7-day reminders, reopening and existing-data preservation');

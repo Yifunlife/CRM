@@ -1,3 +1,4 @@
+import {importOrders} from './order-import-server';
 import {AllocationError} from './allocation-server';
 import {id,now,clean} from './crm';
 import {ORDER_STEPS,ORDER_FIELDS,LOGISTICS_FIELDS,ORDER_DATES,blankSteps} from './order-followup';
@@ -24,6 +25,8 @@ export async function writeFollowup(db:D1Database,row:any,body:any,actor:any,kin
 }
 export async function followupEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('followup'))return undefined;
+ // Customer communication follow-ups use the original /followup POST handler.
+ if(path==='followup'&&method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
  const manager=await followupManager(db,user);
  if(!manager&&user.role!=='sales')fail('此账号没有跟单访问权限，请联系管理员',403);
@@ -37,6 +40,10 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const leads=manager?(await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE owner_id IS NOT NULL ORDER BY name').all()).results:[];
   const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id)) ORDER BY u.name").all()).results:[];
   return {orders,tasks,people,staff,deals,leads,logistics,can_manage:manager,is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
+ }
+ if(path==='followup/import'&&method==='POST'){
+  if(!manager)fail('只有管理员及指定后勤可以导入跟单',403);
+  return importOrders(db,user,actor,body);
  }
  if(path==='followup/staff'&&method==='POST'){
   if(user.role!=='admin'||actor.role!=='admin')fail('只有管理员可以指定后勤账号',403);
@@ -71,7 +78,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  const action=match[2];
  if(row.archived&&action!=='reopen')fail('订单已归档，请先重新打开',409);
  if(action==='details'){
-  const details:any={dates:{}},input=body.details;
+  const details:any={dates:{},history_note:row.details.history_note||''},input=body.details;
   if(!input||typeof input!=='object'||!input.dates||typeof input.dates!=='object')fail('资料格式无效');
   for(const [key] of [...ORDER_FIELDS,...LOGISTICS_FIELDS]){if(input[key]!==undefined&&typeof input[key]!=='string')fail('资料内容须为文字');details[key]=clean(input[key],2000);}
   const logistics=await person(db,body.logistics_id||row.logistics_id,'后勤负责人');
@@ -79,7 +86,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const changes:any[]=[];
   for(const [key,label] of ORDER_DATES){
    const item=input.dates[key]||{},value=date(item.date||''),previous=row.details.dates?.[key];
-   if(value){if(!['预计','已确认','实际'].includes(item.kind)||key==='actual_ship'&&item.kind!=='实际'||key.startsWith('eta_')&&item.kind==='实际')fail('请区分预计、已确认及实际时间');const source=required(item.source,label+'信息来源',200);const confirmed_at=dateTime(item.confirmed_at||'');if(!confirmed_at)fail('请填写'+label+'信息确认时间');const sync_record=clean(item.sync_record,1000);details.dates[key]={date:value,kind:item.kind,source,confirmed_at,updated_at:previous?.date===value?previous.updated_at||now():now(),sync_record:previous?.date&&previous.date!==value&&sync_record===previous.sync_record?'':sync_record};}
+   if(value){if(!['预计','已确认','实际'].includes(item.kind)||key==='actual_ship'&&item.kind!=='实际'||key.startsWith('eta_')&&item.kind==='实际')fail('请区分预计、已确认及实际时间');const source=required(item.source,label+'信息来源',200);const confirmed_at=dateTime(item.confirmed_at||'');if(!confirmed_at&&!(previous?.imported&&previous.date===value&&previous.kind===item.kind&&previous.source===source))fail('请填写'+label+'信息确认时间');const sync_record=clean(item.sync_record,1000);details.dates[key]={date:value,kind:item.kind,source,confirmed_at,updated_at:previous?.date===value?previous.updated_at||now():now(),sync_record:previous?.date&&previous.date!==value&&sync_record===previous.sync_record?'':sync_record,...(!confirmed_at&&previous?.imported?{imported:true}:{})};}
    if(previous?.date&&previous.date!==value){const reason=required(body.change_reason,'日期变更原因',1000);changes.push({field:label,before:previous,after:details.dates[key]||null,reason});}
   }
   return writeFollowup(db,row,body,actor,'更新订单资料',{before:row.details,after:details,date_changes:changes,logistics_id:logistics},()=>[],{...row,details,logistics_id:logistics});

@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import ts from 'typescript';
+const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
+const workflow=moduleUrl('lib/order-followup.ts'),rules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)}),crm=moduleUrl('lib/crm.ts');
+const importer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(crm),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(rules)});
+const {importOrders}=await import(importer),{importDate,importStage,ORDER_IMPORT_LIMIT}=await import(rules);
+const {followupEndpoint}=await import(moduleUrl('lib/order-followup-server.ts',{"'./order-import-server'":JSON.stringify(importer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(crm),"'./order-followup'":JSON.stringify(workflow)}));
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
+const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+const admin={id:'admin',role:'admin',name:'管理员'},sales={id:'sales',role:'sales',name:'商务甲'},other={id:'other',role:'sales',name:'商务乙'},staff={id:'staff',role:'operations',name:'后勤甲'};
+for(const u of [admin,sales,other,staff])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.name,u.role,'unchanged','2026-10-22');
+for(const [id,name,owner] of [['lead1','唯一客户','sales'],['lead2','同名客户','sales'],['lead3','同名客户','other'],['lead4','未分配客户',null]])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-22')").run(id,name,owner,id);
+sqlite.prepare("INSERT INTO crm_followup_staff(user_id,created,created_by) VALUES('staff','2026-10-22','admin')").run();
+const snapshot=()=>JSON.stringify(['crm_users','crm_leads','crm_deals','crm_assignments','crm_notes'].map(t=>sqlite.prepare('SELECT * FROM '+t).all())),before=snapshot();
+const base={project:'历史项目',order_number:'OLD-01',customer_name:'唯一客户',logistics:'后勤甲',stage:'6',history_note:'过去已生产完成，待核实发货资料',planned_ship:'2025-12-01',actual_ship:'2025-12-03'};
+const call=(rows,mode='preview',extra={})=>importOrders(db,admin,admin,{rows,mode,filename:'历史项目.csv',...extra});
+const count=()=>sqlite.prepare('SELECT COUNT(*) AS n FROM crm_followup_orders').get().n;
+let result=await call([base,{...base,order_number:' old-01 '}]);assert.deepEqual(result.summary,{total:2,ready:1,skipped:1,invalid:0});assert.equal(count(),0,'Preview must not create records');
+for(const patch of [{customer_name:'不存在'},{customer_name:'同名客户'},{customer_name:'未分配客户'},{commercial:'商务乙'},{logistics:'商务甲'},{stage:'随便'},{planned_ship:'2026-02-30'},{archived:'1'},{project:''},{project:'x'.repeat(201)}]){const r=await call([{...base,...patch}]);assert.equal(r.summary.invalid,1,JSON.stringify(patch));}
+assert.equal((await call([{...base,customer_name:'同名客户',commercial:'sales'}])).summary.ready,1);
+assert.equal((await call([{...base,customer_name:'同名客户',lead_id:'lead2'}])).summary.ready,1);
+assert.equal((await call([{...base,lead_id:'lead2'}])).summary.invalid,1);
+assert.equal((await call([{...base,logistics:''}], 'preview',{default_logistics_id:'admin'})).summary.ready,1);
+await assert.rejects(call([base,{...base,order_number:'OLD-02',customer_name:'missing'}],'import'),/未写入/);assert.equal(count(),0);
+await assert.rejects(followupEndpoint(db,sales,sales,'followup/import','POST',{rows:[base],mode:'import'}),e=>e.status===403);
+await assert.rejects(followupEndpoint(db,{id:'other',role:'operations'},other,'followup/import','POST',{rows:[base],mode:'import'}),e=>e.status===403);
+result=await call([base,{...base,order_number:' old-01 '}],'import');assert.deepEqual(result,{inserted:1,skipped:1,total:2});
+const existing=sqlite.prepare("SELECT * FROM crm_followup_orders WHERE order_number='OLD-01'").get();assert.equal(existing.stage,5);assert.equal(existing.archived,0);assert(JSON.parse(existing.steps).every(s=>s.status==='待处理'));const details=JSON.parse(existing.details);assert.equal(details.history_note,base.history_note);assert.equal(details.dates.actual_ship.kind,'实际');assert.equal(details.dates.actual_ship.confirmed_at,'');assert.equal(details.dates.actual_ship.imported,true);
+assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM crm_followup_events').get().n,1);
+assert.equal((await call([{...base,project:'覆盖尝试'}],'import')).inserted,0);assert.deepEqual(sqlite.prepare("SELECT * FROM crm_followup_orders WHERE id=?").get(existing.id),existing);
+const many=Array.from({length:ORDER_IMPORT_LIMIT},(_,i)=>({...base,order_number:'BULK-'+i}));assert.equal((await call(many,'import')).inserted,500);assert.equal(count(),501);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM crm_followup_events').get().n,501);
+await assert.rejects(call([...many,base]),/500/);
+const failingDb={...db,batch:statements=>db.batch([statements[0],db.prepare('INSERT INTO missing_table VALUES(1)')])};
+await assert.rejects(importOrders(failingDb,admin,admin,{rows:[{...base,order_number:'ROLLBACK'}],mode:'import'}));assert.equal(count(),501,'Failed audit batch must roll back all new orders');
+assert.equal(importDate('2026/1/2'),'2026-01-02');assert.equal(importDate('2026年1月2日'),'2026-01-02');assert.equal(importDate('46000'),'2025-12-09');assert.equal(importDate('46000',true),'2029-12-10');assert.throws(()=>importDate('2026-02-30'));assert.equal(importStage('12. 订单归档'),11);assert.equal(importStage('未知'),-1);
+// Imported confirmation times remain unknown; unrelated edits must preserve both dates and history.
+const imported=sqlite.prepare('SELECT * FROM crm_followup_orders WHERE id=?').get(existing.id);
+await followupEndpoint(db,admin,admin,'followup/orders/'+existing.id+'/details','POST',{version:imported.version,details:{...JSON.parse(imported.details),customer_contact:'补充联系人'}});
+const afterEdit=JSON.parse(sqlite.prepare('SELECT details FROM crm_followup_orders WHERE id=?').get(existing.id).details);assert.equal(afterEdit.history_note,base.history_note);assert.equal(afterEdit.dates.actual_ship.confirmed_at,'');
+assert.equal(snapshot(),before);assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: no-write preview, strict identity and staff matching, all-or-nothing validation, 500-row atomic import, rollback, idempotent case-insensitive deduplication, read-only sales, historical progress without fabricated completion, date parsing/1904 calendar, audit and existing-data preservation');
