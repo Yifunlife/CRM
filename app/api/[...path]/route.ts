@@ -114,7 +114,7 @@ async function handle(req: Request) {
   if (path.startsWith("leads/") && !write) {
    const lead: any = await db.prepare("SELECT l.*,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE l.id=?").bind(path.split("/")[1]).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权查看",404);
-   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results});
+   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results});
   }
   if (path === "followup" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
@@ -136,6 +136,18 @@ async function handle(req: Request) {
    if(!lead||!business||business.source!==lead.source)throw new Problem('业务范围必须与客资来源匹配');
    if(await db.prepare('SELECT id FROM crm_deals WHERE lead_id=? LIMIT 1').bind(body.id).first())throw new Problem('已有成交记录的客资不能更改业务范围');
    await db.prepare('UPDATE crm_leads SET business_scope=? WHERE id=?').bind(business.id,lead.id).run();return json({ok:true});
+  }
+  if(path==='receipts'&&(req.method==='POST'||req.method==='PATCH')){
+   if(user.role!=='admin')throw new Problem('只有管理员可以确认或撤销实际收款',403);
+   if(req.method==='PATCH'){await db.prepare('UPDATE crm_receipts SET cancelled=1 WHERE id=?').bind(clean(body.id,100)).run();return json({ok:true});}
+   const deal:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(clean(body.deal_id,100)).first();
+   if(!deal)throw new Problem('请先确认有效成交单');
+   const reference=clean(body.reference,100),currency=clean(body.currency,3),date=clean(body.received_date,10),amount=String(body.amount||''),today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+   const minor=Math.round(Number(amount)*100);
+   if(!reference||!['CNY','USD'].includes(currency)||!/^\d+(\.\d{1,2})?$/.test(amount)||!Number.isSafeInteger(minor)||minor<=0||minor>1_000_000_000_000)throw new Problem('请填写唯一收款凭证号、人民币或美元及有效正数金额（最多两位小数）');
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>today)throw new Problem('请填写不晚于今天的有效收款日期');
+   if(await db.prepare('SELECT id FROM crm_receipts WHERE reference=?').bind(reference).first())throw new Problem('此收款凭证号已登记，不可重复计算');
+   await db.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),reference,deal.id,minor,currency,date,now(),user.id).run();return json({ok:true});
   }
   if(path==='deals'&&req.method==='POST'){
    if(user.role!=='admin')throw new Problem('只有管理员可以确认成交单',403);

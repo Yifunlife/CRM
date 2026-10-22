@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 const origin='http://127.0.0.1:8792';
 const login=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({username:'reviewadmin',password:'local-review-only'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
 async function request(path,body,method=body===undefined?'GET':'POST'){const r=await fetch(origin+'/api/'+path,{method,headers:{cookie,origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()};}
-const scope='meta-product',config={members:[{user_id:'test-a',state:'参与',share:70},{user_id:'test-b',state:'参与',share:30}],rule:{performance:30,maxChange:10,minimum:5,automatic:true}};
+const scope='meta-product',config={members:[{user_id:'test-a',state:'参与',share:70},{user_id:'test-b',state:'参与',share:30}],rule:{performance:30,maxChange:10,minimum:5,automatic:true,receipts:false}};
 assert.equal((await request('allocation/config',{scope,config})).status,200);
 const marker=Date.now(),rows=Array.from({length:10},(_,i)=>({'客户名称':`本地测试${marker}-${i}`,'邮箱':`test-${marker}-${i}@example.invalid`}));
 const imported=await request('import',{source:'Meta',business_scope:scope,filename:'isolated-allocation-test',rows});assert.equal(imported.status,200);assert.equal(imported.data.autoAssigned,10);

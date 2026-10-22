@@ -1,4 +1,4 @@
-import {BUSINESS_SCOPES,defaultConfig,monthNow,nextMonth,validMonth,validateConfig,suggest,effectiveShares,type Config} from './allocation';
+import {BUSINESS_SCOPES,defaultConfig,monthNow,nextMonth,validMonth,validateConfig,suggest,receiptShares,effectiveShares,type Config} from './allocation';
 import {id,now} from './crm';
 export class AllocationError extends Error {constructor(message:string,public status=400){super(message);}}
 async function configFor(db:D1Database,scope:string):Promise<Config>{const row:any=await db.prepare('SELECT payload FROM crm_allocation_configs WHERE scope=?').bind(scope).first();return row?JSON.parse(row.payload):defaultConfig();}
@@ -20,12 +20,15 @@ async function report(db:D1Database,scope:string,month:string){
  const weights=effectiveShares(config,plan,users.filter(u=>u.active).map(u=>u.id));
  const deals=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_deals WHERE business_scope=? AND cancelled=0 AND substr(deal_date,1,7)=? GROUP BY owner_id').bind(scope,month).all<any>()).results;
  const assigned=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_assignments WHERE business_scope=? AND allocation_month=? GROUP BY owner_id').bind(scope,month).all<any>()).results;
+ const cash=(await db.prepare("SELECT d.owner_id,SUM(CASE WHEN r.currency='CNY' THEN r.amount_minor ELSE 0 END) cny,SUM(CASE WHEN r.currency='USD' THEN r.amount_minor ELSE 0 END) usd,COUNT(DISTINCT d.id) paid_orders FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.business_scope=? AND d.cancelled=0 AND r.cancelled=0 AND substr(r.received_date,1,7)=? GROUP BY d.owner_id").bind(scope,month).all<any>()).results;
+ const receiptPolicy=config.rule.receipts!==false&&month>='2026-10';
  const conversion=(await db.prepare('SELECT l.owner_id,COUNT(DISTINCT l.id) AS assigned,COUNT(DISTINCT CASE WHEN d.id IS NOT NULL THEN l.id END) AS converted FROM crm_leads l LEFT JOIN crm_deals d ON d.lead_id=l.id AND d.cancelled=0 AND d.business_scope=l.business_scope AND d.owner_id=l.owner_id WHERE l.business_scope=? AND l.owner_id IS NOT NULL GROUP BY l.owner_id').bind(scope).all<any>()).results;
  const confirmed:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE key=?').bind(scope+':'+next).first();
  const participants=config.members.filter(m=>m.state!=='参与'||users.some(u=>u.id===m.user_id&&u.active));
- let proposal:any[]=[],warning='';try{proposal=suggest(participants,Object.fromEntries(weights.map(w=>[w.user_id,w.share])),Object.fromEntries(deals.map(d=>[d.owner_id,d.n])),config.rule);}catch(e:any){warning=e.message;}
+ const tiers:Record<string,number>={};for(const p of plan?.shares||[])tiers[p.user_id]=p.tier||0;
+ let proposal:any[]=[],warning='';try{proposal=receiptPolicy?receiptShares(participants,tiers,Object.fromEntries(cash.map(r=>[r.owner_id,r])),Object.fromEntries(weights.map(w=>[w.user_id,w.share]))):suggest(participants,Object.fromEntries(weights.map(w=>[w.user_id,w.share])),Object.fromEntries(deals.map(d=>[d.owner_id,d.n])),config.rule);}catch(e:any){warning=e.message;}
  const livePlan=await planFor(db,scope,monthNow()),liveCurrent=effectiveShares(config,livePlan,users.filter(u=>u.active).map(u=>u.id));
- return {scope,month,next,config,users,liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
+ return {scope,month,next,config,users,cash,receiptPolicy,liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
 }
 export async function allocationEndpoint(db:D1Database,user:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/'))return undefined;
@@ -50,9 +53,11 @@ export async function allocationEndpoint(db:D1Database,user:any,path:string,meth
   const r=await report(db,scope,month);if(r.confirmed)throw new AllocationError('该月方案已确认，不能重复覆盖');if(r.warning||!r.proposal.length)throw new AllocationError(r.warning||'请先设置参与人员');
   if(!Array.isArray(body.shares))throw new AllocationError('请填写下月占比');
   const expected=r.proposal.map(p=>p.user_id),seen=new Set<string>();let total=0;
-  for(const row of body.shares){const p=r.proposal.find(p=>p.user_id===row.user_id);if(!p||seen.has(row.user_id)||!Number.isFinite(row.share)||row.share<r.config.rule.minimum||row.share>100||Math.abs(row.share-p.current)>r.config.rule.maxChange+0.0001||Math.abs(row.share*100-Math.round(row.share*100))>1e-6)throw new AllocationError('占比须符合最低比例、每月调整上限，且人员不能重复');seen.add(row.user_id);total+=row.share;}
+  for(const row of body.shares){const p=r.proposal.find(p=>p.user_id===row.user_id);if(!p||seen.has(row.user_id)||!Number.isFinite(row.share)||row.share<(r.receiptPolicy?0:r.config.rule.minimum)||row.share>100||(r.receiptPolicy?Math.abs(row.share-p.share)>0.0001:Math.abs(row.share-p.current)>r.config.rule.maxChange+0.0001)||Math.abs(row.share*100-Math.round(row.share*100))>1e-6)throw new AllocationError(r.receiptPolicy?'占比须与当月收款规则计算结果一致，且人员不能重复':'占比须符合最低比例、每月调整上限，且人员不能重复');seen.add(row.user_id);total+=row.share;}
   if(seen.size!==expected.length||Math.abs(total-100)>0.001)throw new AllocationError('所有参与人员的下月占比必须合计100%');
-  const payload={shares:body.shares,report:r,rule:r.config.rule};
+  const payload={shares:body.shares.map((p:any)=>({user_id:p.user_id,share:p.share,...(r.receiptPolicy?{tier:r.proposal.find(v=>v.user_id===p.user_id)?.tier||0}:{})})),report:r,rule:r.config.rule};
+  // Preserve leave/paused tiers in the frozen snapshot without allocating them leads.
+  if(r.receiptPolicy){const prior=await planFor(db,scope,r.month);for(const m of r.config.members.filter(m=>!payload.shares.some((p:any)=>p.user_id===m.user_id)))payload.shares.push({user_id:m.user_id,share:0,inactive:true,tier:prior?.shares.find((p:any)=>p.user_id===m.user_id)?.tier||0});}
   await db.prepare('INSERT INTO crm_allocation_plans(key,scope,month,payload,confirmed,confirmed_by) VALUES(?,?,?,?,?,?)').bind(scope+':'+r.next,scope,r.next,JSON.stringify(payload),now(),user.id).run();return {ok:true,month:r.next};
  }
  throw new AllocationError('分配操作不存在',404);

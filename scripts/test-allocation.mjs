@@ -5,9 +5,15 @@ import ts from 'typescript';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replace(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const allocationUrl=moduleUrl('lib/allocation.ts'),crmUrl=moduleUrl('lib/crm.ts');
 const a=await import(allocationUrl),server=await import(moduleUrl('lib/allocation-server.ts',{"'./allocation'":JSON.stringify(allocationUrl),"'./crm'":JSON.stringify(crmUrl)}));
-const config={members:[{user_id:'a',state:'参与',share:50},{user_id:'b',state:'参与',share:50},{user_id:'c',state:'请假',share:0}],rule:{performance:30,maxChange:10,minimum:5,automatic:false}};
+const config={members:[{user_id:'a',state:'参与',share:50},{user_id:'b',state:'参与',share:50},{user_id:'c',state:'请假',share:0}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:false}};
 const users=[{id:'a',role:'sales',active:1},{id:'b',role:'sales',active:1},{id:'c',role:'sales',active:1}];
 a.validateConfig(config,users);
+const leaveConfig={...config,members:config.members.map(m=>({...m,state:m.user_id==='b'?'请假':m.state}))};
+a.validateConfig(leaveConfig,users);
+assert.deepEqual(a.effectiveShares(leaveConfig,null,['a','b','c']),[{user_id:'a',share:100}]);
+assert.deepEqual(a.suggest(leaveConfig.members,{a:100},{a:1,b:100},config.rule).map(p=>[p.user_id,p.share,p.deals]),[['a',100,1]]);
+assert.deepEqual(a.effectiveShares(config,null,['a','b','c']).map(p=>p.share),[50,50]);
+assert.deepEqual(leaveConfig.members.map(m=>m.share),[50,50,0]);
 assert.deepEqual(a.suggest(config.members,{a:50,b:50},{a:8,b:2},config.rule).map(p=>p.share),[59,41]);
 assert.deepEqual(a.suggest(config.members,{a:59,b:41},{},config.rule).map(p=>p.share),[59,41]);
 assert.deepEqual(a.suggest(config.members,{a:50,b:50},{a:100,b:0},config.rule).map(p=>p.share),[60,40]);
@@ -54,3 +60,40 @@ sqlite.prepare("UPDATE crm_deals SET cancelled=1").run();assert.equal((await ser
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id=?").run(owner);const remaining=(await server.allocationWeights(db,scope)).weights;assert.equal(remaining.length,1);assert.equal(remaining[0].share,100);
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: monthly formula, zero deals, change limits, minimum, rounding, roles, scoped distribution, paused/disabled users, duplicate allocation, existing ownership, order counting, cohort conversion, confirmation and frozen plans.');
+
+const trio=['a','b','c'].map(user_id=>({user_id,state:'参与',share:0}));
+const cash=(cny=0,usd=0)=>({cny,usd});
+assert.deepEqual(a.receiptShares(trio,{}, {b:cash(5_000_000),c:cash(0,1_000_000)}).map(r=>r.share),[26.67,36.67,36.66]);
+assert.equal(a.receiptShares(trio,{}, {a:cash(4_999_999,999_999)})[0].qualified,false);
+assert.equal(a.receiptShares(trio,{}, {a:cash(5_000_000)})[0].qualified,true);
+assert.equal(a.receiptShares(trio,{}, {a:cash(0,1_000_000)})[0].qualified,true);
+assert.deepEqual(a.receiptShares(trio,{a:1},{b:cash(5_000_000),c:cash(5_000_000)}).map(r=>r.share),[20,40,40]);
+assert.equal(a.receiptShares(trio,{a:3},{a:cash(5_000_000),b:cash(5_000_000),c:cash(5_000_000)})[0].tier,2);
+assert.deepEqual(a.receiptShares(trio,{a:5,b:5,c:5},{}).map(r=>r.share),[33.34,33.33,33.33]);
+assert.equal(a.receiptShares(trio,{a:5},{b:cash(5_000_000),c:cash(5_000_000)})[0].share,0);
+assert.equal(a.receiptShares(trio.map(m=>({...m,state:m.user_id==='a'?'请假':m.state})),{a:3},{a:cash(5_000_000)}).length,2);
+a.validateConfig({members:trio.map(m=>({...m,state:'请假'})),rule:{...config.rule,receipts:true,automatic:true}},users);
+const NativeDate=Date;
+try{
+ globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-11-05T04:00:00Z']));}static now(){return new NativeDate('2026-11-05T04:00:00Z').getTime();}};
+ const scope2='douyin-local';sqlite.prepare('UPDATE crm_users SET active=1').run();
+ await endpoint('allocation/config','POST',{scope:scope2,config:{members:trio,rule:{...config.rule,receipts:true}}});
+ for(const uid of ['a','b','c']){insert.run('cash-'+uid,'收款测试'+uid,scope2,'cash-'+uid,uid,'',0);deal.run('cash-order-'+uid,'cash-no-'+uid,'cash-'+uid,uid,scope2,'2026-09-05','now','admin',0);}
+ const receipt=sqlite.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by,cancelled) VALUES(?,?,?,?,?,?,?,?,?)');
+ receipt.run('r1','ref1','cash-order-b',2_000_000,'CNY','2026-10-01','now','admin',0);
+ receipt.run('r2','ref2','cash-order-b',3_000_000,'CNY','2026-10-15','now','admin',0);
+ receipt.run('r3','ref3','cash-order-c',1_000_000,'USD','2026-10-15','now','admin',0);
+ receipt.run('r4','ref4','cash-order-a',9_000_000,'CNY','2026-10-15','now','admin',1);
+ receipt.run('r5','ref5','cash-order-a',9_000_000,'CNY','2026-11-01','now','admin',0);
+ const r=await endpoint('allocation/report','GET',{},admin,'?scope='+scope2+'&month=2026-10');
+ assert.equal(r.deals.length,0);assert.equal(r.cash.find(v=>v.owner_id==='b').cny,5_000_000);assert.equal(r.cash.find(v=>v.owner_id==='b').paid_orders,1);
+ assert.deepEqual(r.proposal.map(p=>p.share),[26.67,36.67,36.66]);
+ await assert.rejects(endpoint('allocation/confirm','POST',{scope:scope2,month:'2026-10',shares:r.proposal.map(p=>({user_id:p.user_id,share:33.33}))}),/占比/);
+ await endpoint('allocation/confirm','POST',{scope:scope2,month:'2026-10',shares:r.proposal.map(({user_id,share})=>({user_id,share}))});
+ const frozen=JSON.parse(sqlite.prepare('SELECT payload FROM crm_allocation_plans WHERE key=?').get(scope2+':2026-11').payload);
+ assert.equal(frozen.shares.find(p=>p.user_id==='a').tier,1);
+ sqlite.prepare("UPDATE crm_receipts SET cancelled=1 WHERE id='r1'").run();
+ assert.ok(Math.abs((await server.allocationWeights(db,scope2)).weights.find(p=>p.user_id==='a').share-26.67)<1e-8);
+ assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
+}finally{globalThis.Date=NativeDate;}
+console.log('PASS: receipt currency thresholds, no currency mixing, partial payments and distinct orders, cash month vs deal month, cancelled receipts, monthly tiers, cap, recovery, all-fail equal split, leave and immutable monthly snapshots.');
