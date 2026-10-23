@@ -1,5 +1,5 @@
 import {AllocationError} from './allocation-server';
-import {id,now} from './crm';
+import {id,now,can,permissionOverrides} from './crm';
 import {ORDER_STEPS,ORDER_FIELDS,LOGISTICS_FIELDS,ORDER_DATES,blankSteps,orderToday} from './order-followup';
 import {ORDER_IMPORT_COLUMNS,ORDER_IMPORT_LIMIT,importStage} from './order-import';
 const norm=(value:string)=>value.trim().toLowerCase();
@@ -8,7 +8,7 @@ export async function importOrders(db:D1Database,user:any,actor:any,body:any){
  if(!['preview','import'].includes(body.mode))throw new AllocationError('导入操作无效');
  if(new TextEncoder().encode(JSON.stringify(body.rows)).byteLength>1_500_000)throw new AllocationError('本批内容超过1.5MB，请拆分文件');
  const filename=typeof body.filename==='string'?body.filename.trim().slice(0,200):'历史项目表格';
- const users=(await db.prepare('SELECT id,name,username,role FROM crm_users WHERE active=1').all()).results as any[];
+ const users=(await db.prepare('SELECT id,name,username,role,permissions FROM crm_users WHERE active=1').all()).results as any[];
  const staff=(await db.prepare('SELECT user_id FROM crm_followup_staff').all()).results as any[];
  const leads=(await db.prepare('SELECT id,name,owner_id FROM crm_leads').all()).results as any[];
  const existing=new Set((await db.prepare('SELECT order_number FROM crm_followup_orders').all()).results.map((o:any)=>norm(o.order_number)));
@@ -41,7 +41,7 @@ export async function importOrders(db:D1Database,user:any,actor:any,body:any){
   const fallback=typeof body.default_logistics_id==='string'?body.default_logistics_id:'';
   const logisticsMatches=row.logistics?people(row.logistics):users.filter(u=>u.id===fallback);
   const logistics=logisticsMatches.length===1?logisticsMatches[0]:null;
-  if(!logistics||logistics.role!=='admin'&&!staff.some(s=>s.user_id===logistics.id))errors.push('后勤负责人需唯一匹配管理员或指定后勤账号，可选择默认后勤');
+  if(!logistics||!can(logistics,'followup_edit')&&!(permissionOverrides(logistics).followup_edit!==false&&staff.some(s=>s.user_id===logistics.id)))errors.push('后勤负责人需唯一匹配管理员或指定后勤账号，可选择默认后勤');
   const stage=importStage(row.stage||'');if(stage<0)errors.push('当前阶段须为1–12或完整阶段名称');
   const details:any={dates:{},history_note:row.history_note||''};
   for(const [field] of [...ORDER_FIELDS,...LOGISTICS_FIELDS])details[field]=row[field]||'';

@@ -13,11 +13,11 @@ export function validMonth(month:string){return /^\d{4}-(0[1-9]|1[0-2])$/.test(m
 export function validateConfig(config:Config,users:{id:string;role:string;active:number}[]){
  if(!config || !Array.isArray(config.members) || !config.rule)throw new Error('分配设置格式不正确');
  const ids=new Set<string>();
- for(const m of config.members){if(ids.has(m.user_id)||!users.some(u=>u.id===m.user_id&&u.role==='sales'))throw new Error('请选择业务员，且每组不能重复');ids.add(m.user_id);if(!['参与','请假','暂停'].includes(m.state)||!Number.isFinite(m.share)||m.share<0||m.share>100||Math.abs(m.share*100-Math.round(m.share*100))>1e-6)throw new Error('占比必须为0至100，最多两位小数');if(m.state==='参与'&&!users.some(u=>u.id===m.user_id&&u.active))throw new Error('停用账号不能参与分配');}
+ for(const m of config.members){if(ids.has(m.user_id)||!users.some(u=>u.id===m.user_id&&['sales','ceo'].includes(u.role)))throw new Error('请选择业务员，且每组不能重复');ids.add(m.user_id);if(!['参与','请假','暂停'].includes(m.state)||!Number.isFinite(m.share)||m.share<0||m.share>100||Math.abs(m.share*100-Math.round(m.share*100))>1e-6)throw new Error('占比必须为0至100，最多两位小数');if(m.state==='参与'&&!users.some(u=>u.id===m.user_id&&u.active))throw new Error('停用账号不能参与分配');}
  const r=config.rule;
  for(const v of [r.performance,r.maxChange,r.minimum])if(!Number.isFinite(v)||v<0||v>100)throw new Error('规则参数必须为0至100');
  if(typeof r.automatic!=='boolean')throw new Error('自动分配设置无效');
- const active=config.members.filter(m=>m.state==='参与');
+ const active=config.members.filter(m=>m.state==='参与'&&users.some(u=>u.id===m.user_id&&u.role==='sales'));
  const activeTotal=active.reduce((sum,m)=>sum+m.share,0),baseTotal=config.members.reduce((sum,m)=>sum+m.share,0);
  if(r.receipts===false&&active.length&&(activeTotal<=0||(Math.abs(activeTotal-100)>0.001&&Math.abs(baseTotal-100)>0.001)))throw new Error('参与人员的基础占比必须合计100%');
  if(r.receipts===false&&(active.some(m=>m.share/activeTotal*100<r.minimum)||active.length*r.minimum>100))throw new Error('参与人员的基础占比不能低于最低占比');

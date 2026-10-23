@@ -1,0 +1,1 @@
+ALTER TABLE `crm_users` ADD `permissions` text DEFAULT '{}' NOT NULL;

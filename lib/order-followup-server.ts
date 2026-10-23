@@ -1,12 +1,12 @@
 import {importOrders} from './order-import-server';
 import {AllocationError} from './allocation-server';
-import {id,now,clean} from './crm';
+import {id,now,clean,can,permissionOverrides} from './crm';
 import {ORDER_STEPS,ORDER_FIELDS,LOGISTICS_FIELDS,ORDER_DATES,blankSteps} from './order-followup';
-export async function followupManager(db:D1Database,user:any){return user.role==='admin'||!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first();}
+export async function followupManager(db:D1Database,user:any){const current=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)return false;user={...user,...current};return can(user,'followup_edit')||(permissionOverrides(user).followup_edit!==false&&!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first());}
 export async function followupOrder(db:D1Database,user:any,orderId:string){
  const manager=await followupManager(db,user);
  const row:any=await db.prepare('SELECT * FROM crm_followup_orders WHERE id=?').bind(orderId).first();
- if(!row||(!manager&&row.commercial_id!==user.id))throw new AllocationError('订单不存在或无权查看',404);
+ if(!row||(!manager&&!can(user,'followup_all')&&row.commercial_id!==user.id))throw new AllocationError('订单不存在或无权查看',404);
  return {row:{...row,details:JSON.parse(row.details),steps:JSON.parse(row.steps)},manager};
 }
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
@@ -29,16 +29,16 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  if(path==='followup'&&method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
  const manager=await followupManager(db,user);
- if(!manager&&user.role!=='sales')fail('此账号没有跟单访问权限，请联系管理员',403);
+ if(!manager&&!can(user,'followup_all')&&user.role!=='sales')fail('此账号没有跟单访问权限，请联系管理员',403);
  if(path==='followup'&&method==='GET'){
-  const where=manager?'':' WHERE o.commercial_id=?',args=manager?[]:[user.id];
+  const all=manager||can(user,'followup_all'),where=all?'':' WHERE o.commercial_id=?',args=all?[]:[user.id];
   const orders=(await db.prepare('SELECT o.*,l.name AS customer_name,c.name AS commercial_name,s.name AS logistics_name FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users c ON c.id=o.commercial_id JOIN crm_users s ON s.id=o.logistics_id'+where+' ORDER BY o.archived,o.updated DESC').bind(...args).all()).results.map((o:any)=>({...o,details:JSON.parse(o.details),steps:JSON.parse(o.steps)}));
   const tasks=(await db.prepare('SELECT t.*,u.name AS owner_name FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_users u ON u.id=t.owner_id'+where+' ORDER BY t.due_at,t.created').bind(...args).all()).results;
   const people=manager?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 ORDER BY name').all()).results:[];
   const staff=user.role==='admin'?(await db.prepare('SELECT user_id FROM crm_followup_staff').all()).results.map((s:any)=>s.user_id):[];
   const deals=manager?(await db.prepare('SELECT d.id,d.order_number,d.lead_id,d.owner_id,l.name AS customer_name FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE d.cancelled=0 AND NOT EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) ORDER BY d.created DESC').all()).results:[];
   const leads=manager?(await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE owner_id IS NOT NULL ORDER BY name').all()).results:[];
-  const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id)) ORDER BY u.name").all()).results:[];
+  const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR json_extract(u.permissions,'$.followup_edit')=1 OR (json_extract(u.permissions,'$.followup_edit') IS NULL AND EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id))) ORDER BY u.name").all()).results:[];
   return {orders,tasks,people,staff,deals,leads,logistics,can_manage:manager,is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
  }
  if(path==='followup/import'&&method==='POST'){
@@ -58,7 +58,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const project=required(body.project,'项目名称',200),number=required(body.order_number,'合同／订单编号',100);
   const lead:any=await db.prepare('SELECT id,owner_id FROM crm_leads WHERE id=?').bind(body.lead_id).first();if(!lead||!lead.owner_id)fail('请选择已分配业务员的CRM客户');
   const commercial=await person(db,lead.owner_id,'商务负责人'),logistics=await person(db,body.logistics_id,'后勤负责人');
-  const logisticsUser:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,logisticsUser))fail('后勤负责人需为管理员或指定后勤账号');
+  const logisticsUser:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,logisticsUser))fail('后勤负责人需为管理员或指定后勤账号');
   let dealId=null;
   if(body.deal_id){const d:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(body.deal_id).first();if(!d||d.lead_id!==lead.id||d.order_number!==number||d.owner_id!==commercial)fail('成交订单、客户、商务或编号不一致');dealId=d.id;}
   if(await db.prepare('SELECT id FROM crm_followup_orders WHERE order_number=?').bind(number).first())fail('此订单已经建立跟单，请打开已有记录');
@@ -82,7 +82,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   if(!input||typeof input!=='object'||!input.dates||typeof input.dates!=='object')fail('资料格式无效');
   for(const [key] of [...ORDER_FIELDS,...LOGISTICS_FIELDS]){if(input[key]!==undefined&&typeof input[key]!=='string')fail('资料内容须为文字');details[key]=clean(input[key],2000);}
   const logistics=await person(db,body.logistics_id||row.logistics_id,'后勤负责人');
-  const assigned:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,assigned))fail('后勤负责人需为管理员或指定后勤账号');
+  const assigned:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,assigned))fail('后勤负责人需为管理员或指定后勤账号');
   const changes:any[]=[];
   for(const [key,label] of ORDER_DATES){
    const item=input.dates[key]||{},value=date(item.date||''),previous=row.details.dates?.[key];

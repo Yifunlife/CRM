@@ -1,10 +1,10 @@
 import {AD_ACCOUNT_PLATFORMS,opToday} from './operations';
 import {AD_PLATFORMS,AD_STATUSES,type AdPlatform} from './advertising';
-import {id,now,clean} from './crm';
+import {id,now,clean,can} from './crm';
 import {AllocationError} from './allocation-server';
 export async function advertisingEndpoint(db:D1Database,user:any,path:string,method:string,body:any){
  if(path!=='advertising')return undefined;
- if(!['admin','operations'].includes(user.role))throw new AllocationError('广告投放需要运营或管理员权限',403);
+ if(!can(user,method==='GET'?'advertising_view':'advertising_edit'))throw new AllocationError('广告投放需要运营或管理员权限',403);
  if(method==='GET')return (await db.prepare('SELECT a.*,u.name AS owner_name FROM crm_advertising a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.date DESC,a.created DESC').all()).results;
  if(!['POST','PATCH'].includes(method))throw new AllocationError('操作不存在',404);
  const platform=clean(body.platform,40) as AdPlatform,name=clean(body.name,200),date=clean(body.date,10),status=clean(body.status,20);

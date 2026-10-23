@@ -2,7 +2,7 @@ import {followupEndpoint,followupManager} from '../../../lib/order-followup-serv
 import {followupFiles} from '../../../lib/order-followup-files';
 import {databaseBackup} from '../../../lib/database-backup';
 import {customerFiles} from '../../../lib/customer-files';
-import {editAccount,resetAccountPassword} from '../../../lib/account-edit';
+import {editAccount,resetAccountPassword,setAccountPermissions} from '../../../lib/account-edit';
 import {initializeEmployeeLogin} from '../../../lib/employee-login';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
@@ -13,7 +13,7 @@ import {advertisingEndpoint} from '../../../lib/advertising-server';
 import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
 import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
 import { env } from "cloudflare:workers";
-import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead } from "../../../lib/crm";
+import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead,can } from "../../../lib/crm";
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra } });
 class Problem extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -48,10 +48,17 @@ async function handle(req: Request) {
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
   const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
-  if(path==='admin/backup'&&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
+  const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
+  if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
+  if(path==='assign'||path==='allocation/distribute')permissionDenied('leads_allocate');
+  if(path==='allocation/report')permissionDenied('performance_view');
+  if(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project'))permissionDenied('customers_edit');
+  if(path==='advertising'||path.startsWith('operations/'))permissionDenied(write?'advertising_edit':'advertising_view');
+  if(path==='users/permissions'&&req.method==='POST')return json(await setAccountPermissions(db,user,body));
+  if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
@@ -63,7 +70,7 @@ async function handle(req: Request) {
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:user.role==='sales'||await followupManager(db,user)});
+  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:user.role==='sales'||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
   if (path === "password" && req.method === "POST") {
    if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
@@ -74,12 +81,12 @@ async function handle(req: Request) {
   if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
   if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
   if (path === "users") {
-   if (!write) return json(user.role === "sales" ? [] : (await db.prepare("SELECT id,username,name,role,active,created FROM crm_users ORDER BY created").all()).results);
+   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,role,permissions,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
    if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);
    if (req.method === "POST") {
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
-    if (!["admin","operations","sales"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
+    if (!["admin","operations","sales","ceo"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
     const userId = id();
@@ -107,7 +114,7 @@ async function handle(req: Request) {
    if(path==="google/preview"&&req.method==="POST"){try{return json(await previewGoogle(db,env));}catch(e:any){const message=e.name==='TimeoutError'?'Google连接超时，请稍后重试':e.message;await db.prepare("UPDATE crm_google_connection SET last_error=? WHERE id='main'").bind(clean(message,200)).run();throw new Problem(message);}}
    if(path==="google/disconnect"&&req.method==="POST"){await db.batch([db.prepare("UPDATE crm_google_connection SET refresh_token='',email='',connected='',checked='',last_error='' WHERE id='main'"),db.prepare("DELETE FROM crm_google_oauth")]);return json({ok:true});}
   }
-  const scope = user.role === "sales" ? " WHERE l.owner_id=?" : "";
+  const scope = !can(user,'customers_all') ? " WHERE l.owner_id=?" : "";
   if (path === "leads" && !write) {
    const result = await db.prepare("SELECT l.*,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id"+scope+" ORDER BY l.created DESC,l.id LIMIT 10000").bind(...(scope ? [user.id] : [])).all(); return json(result.results.map((r: any) => ({...r,detail:JSON.parse(r.detail)})));
   }
@@ -129,7 +136,7 @@ async function handle(req: Request) {
    if (!["",...GRADES].includes(body.grade)) throw new Problem("请选择VIP、A、B、C或未评级");
    await db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id).run();return json({ok:true});
   }
-  if (user.role === "sales") throw new Problem("此操作需要运营或管理员权限",403);
+  if (user.role === 'sales'&&!can(user,'customers_all')) throw new Problem('此操作需要对应功能权限',403);
   if(path==='import-assignments'&&req.method==='POST')return json(await syncAssignments(db,user,body));
   if(path==='business-scope'&&req.method==='POST'){
    const lead:any=await db.prepare('SELECT id,source FROM crm_leads WHERE id=?').bind(body.id).first(),business=BUSINESS_SCOPES.find(v=>v.id===body.scope);

@@ -1,9 +1,9 @@
 import {OP_PLATFORMS,type OpPlatform,opToday,deriveFollowerChanges,advertisingSpend} from './operations';
-import {id,now,clean} from './crm';
+import {id,now,clean,can} from './crm';
 import {AllocationError} from './allocation-server';
 export async function operationsEndpoint(db:D1Database,user:any,path:string,method:string,body:any){
  if(!['operations/accounts','operations/daily'].includes(path))return undefined;
- if(!['admin','operations'].includes(user.role))throw new AllocationError('需要运营或管理员权限',403);
+ if(!can(user,method==='GET'?'advertising_view':'advertising_edit'))throw new AllocationError('需要运营或管理员权限',403);
  const accounts=path==='operations/accounts';
  if(method==='GET'){
   if(accounts)return (await db.prepare('SELECT a.*,u.name AS owner_name FROM crm_operation_accounts a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.platform,a.name').all()).results;

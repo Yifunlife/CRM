@@ -17,4 +17,22 @@ export async function verifyPassword(password: string, stored: string) {
  for (let i = 0; i < stored.length; i++) difference |= stored.charCodeAt(i) ^ (actual.charCodeAt(i) || 0);
  return difference === 0;
 }
-export function authorizedLead(user: { role: string; id: string }, lead: { owner_id: string | null }) { return user.role !== "sales" || lead.owner_id === user.id; }
+export function authorizedLead(user: { role: string; id: string; permissions?:any }, lead: { owner_id: string | null }) { return can(user,'customers_all') || lead.owner_id === user.id; }
+
+export const PERMISSION_FIELDS = [
+ ['customers_all','全公司客资','查看所有业务员的客资与客户沟通记录'],
+ ['customers_edit','客资维护','新增、导入、评级及填写客户跟进'],
+ ['leads_allocate','客资分配','手动或按已确认比例分配客资'],
+ ['performance_view','业绩查看','查看全公司月度业绩和分配比例'],
+ ['followup_all','全公司跟单','查看全部订单、进度、待办和附件'],
+ ['followup_edit','跟单维护','建立、导入和更新订单跟单'],
+ ['advertising_view','广告查看','查看广告投放数据'],
+ ['advertising_edit','广告维护','维护广告投放数据'],
+] as const;
+export type PermissionKey=typeof PERMISSION_FIELDS[number][0];
+export function permissionDefaults(role:string):Record<PermissionKey,boolean>{
+ const admin=role==='admin',operations=role==='operations',ceo=role==='ceo';
+ return {customers_all:admin||operations||ceo,customers_edit:admin||operations||role==='sales',leads_allocate:admin||operations||ceo,performance_view:admin||operations||ceo,followup_all:admin||ceo,followup_edit:admin,advertising_view:admin||operations,advertising_edit:admin||operations};
+}
+export function permissionOverrides(user:any):Partial<Record<PermissionKey,boolean>>{try{const p=typeof user.permissions==='string'?JSON.parse(user.permissions):user.permissions;return p&&typeof p==='object'&&!Array.isArray(p)?p:{};}catch{return {};}}
+export function can(user:any,key:PermissionKey){return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}

@@ -1,10 +1,10 @@
 import {BUSINESS_SCOPES,defaultConfig,monthNow,nextMonth,validMonth,validateConfig,suggest,receiptShares,effectiveShares,type Config} from './allocation';
-import {id,now} from './crm';
+import {id,now,can} from './crm';
 export class AllocationError extends Error {constructor(message:string,public status=400){super(message);}}
 async function configFor(db:D1Database,scope:string):Promise<Config>{const row:any=await db.prepare('SELECT payload FROM crm_allocation_configs WHERE scope=?').bind(scope).first();return row?JSON.parse(row.payload):defaultConfig();}
 async function planFor(db:D1Database,scope:string,month:string){const row:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE scope=? AND month<=? ORDER BY month DESC LIMIT 1').bind(scope,month).first();return row?{...row,...JSON.parse(row.payload)}:null;}
-async function activeUsers(db:D1Database){return (await db.prepare("SELECT id,name,role,active FROM crm_users WHERE role='sales' ORDER BY name").all<any>()).results;}
-export async function allocationWeights(db:D1Database,scope:string){const config=await configFor(db,scope),plan=await planFor(db,scope,monthNow()),users=await activeUsers(db);return {config,weights:effectiveShares(config,plan,users.filter(u=>u.active).map(u=>u.id))};}
+async function activeUsers(db:D1Database){return (await db.prepare("SELECT id,name,role,active FROM crm_users WHERE role IN ('sales','ceo') ORDER BY name").all<any>()).results;}
+export async function allocationWeights(db:D1Database,scope:string){const config=await configFor(db,scope),plan=await planFor(db,scope,monthNow()),users=await activeUsers(db);return {config,weights:effectiveShares(config,plan,users.filter(u=>u.active&&u.role==='sales').map(u=>u.id))};}
 export async function distribute(db:D1Database,ids:string[],scope:string,actor:string){
  const {weights}=await allocationWeights(db,scope);if(!weights.length)throw new AllocationError('此业务范围没有参与分配的有效业务员');
  const month=monthNow(),created=now(),statements:D1PreparedStatement[]=[];
@@ -17,22 +17,22 @@ export async function distribute(db:D1Database,ids:string[],scope:string,actor:s
 }
 async function report(db:D1Database,scope:string,month:string){
  const config=await configFor(db,scope),users=await activeUsers(db),plan=await planFor(db,scope,month),next=nextMonth(month);
- const weights=effectiveShares(config,plan,users.filter(u=>u.active).map(u=>u.id));
+ const weights=effectiveShares(config,plan,users.filter(u=>u.active&&u.role==='sales').map(u=>u.id));
  const deals=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_deals WHERE business_scope=? AND cancelled=0 AND substr(deal_date,1,7)=? GROUP BY owner_id').bind(scope,month).all<any>()).results;
  const assigned=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_assignments WHERE business_scope=? AND allocation_month=? GROUP BY owner_id').bind(scope,month).all<any>()).results;
  const cash=(await db.prepare("SELECT d.owner_id,SUM(CASE WHEN r.currency='CNY' THEN r.amount_minor ELSE 0 END) cny,SUM(CASE WHEN r.currency='USD' THEN r.amount_minor ELSE 0 END) usd,COUNT(DISTINCT d.id) paid_orders FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.business_scope=? AND d.cancelled=0 AND r.cancelled=0 AND substr(r.received_date,1,7)=? GROUP BY d.owner_id").bind(scope,month).all<any>()).results;
  const receiptPolicy=config.rule.receipts!==false&&month>='2026-10';
  const conversion=(await db.prepare('SELECT l.owner_id,COUNT(DISTINCT l.id) AS assigned,COUNT(DISTINCT CASE WHEN d.id IS NOT NULL THEN l.id END) AS converted FROM crm_leads l LEFT JOIN crm_deals d ON d.lead_id=l.id AND d.cancelled=0 AND d.business_scope=l.business_scope AND d.owner_id=l.owner_id WHERE l.business_scope=? AND l.owner_id IS NOT NULL GROUP BY l.owner_id').bind(scope).all<any>()).results;
  const confirmed:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE key=?').bind(scope+':'+next).first();
- const participants=config.members.filter(m=>m.state!=='参与'||users.some(u=>u.id===m.user_id&&u.active));
+ const participants=config.members.filter(m=>m.state!=='参与'||users.some(u=>u.id===m.user_id&&u.active&&u.role==='sales'));
  const tiers:Record<string,number>={};for(const p of plan?.shares||[])tiers[p.user_id]=p.tier||0;
  let proposal:any[]=[],warning='';try{proposal=receiptPolicy?receiptShares(participants,tiers,Object.fromEntries(cash.map(r=>[r.owner_id,r])),Object.fromEntries(weights.map(w=>[w.user_id,w.share]))):suggest(participants,Object.fromEntries(weights.map(w=>[w.user_id,w.share])),Object.fromEntries(deals.map(d=>[d.owner_id,d.n])),config.rule);}catch(e:any){warning=e.message;}
- const livePlan=await planFor(db,scope,monthNow()),liveCurrent=effectiveShares(config,livePlan,users.filter(u=>u.active).map(u=>u.id));
+ const livePlan=await planFor(db,scope,monthNow()),liveCurrent=effectiveShares(config,livePlan,users.filter(u=>u.active&&u.role==='sales').map(u=>u.id));
  return {scope,month,next,config,users,cash,receiptPolicy,liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
 }
 export async function allocationEndpoint(db:D1Database,user:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/'))return undefined;
- if(user.role==='sales')throw new AllocationError('此操作需要运营或管理员权限',403);
+ if(!can(user,path==='allocation/distribute'?'leads_allocate':'performance_view')&&user.role!=='admin')throw new AllocationError('此操作需要运营或管理员权限',403);
  const scope=String(body.scope||url.searchParams.get('scope')||BUSINESS_SCOPES[0].id);
  if(!BUSINESS_SCOPES.some(s=>s.id===scope))throw new AllocationError('请选择有效业务范围');
  if(path==='allocation/report'&&method==='GET'){const month=url.searchParams.get('month')||monthNow();if(!validMonth(month)||month>monthNow())throw new AllocationError('请选择本月或过去月份');return report(db,scope,month);}
