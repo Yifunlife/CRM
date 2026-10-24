@@ -86,7 +86,7 @@ async function handle(req: Request) {
    if (req.method === "POST") {
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
-    if (!["admin","operations","sales","ceo"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
+    if (!["admin","operations","sales","ceo","management"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
     const userId = id();

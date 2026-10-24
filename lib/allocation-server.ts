@@ -3,7 +3,7 @@ import {id,now,can} from './crm';
 export class AllocationError extends Error {constructor(message:string,public status=400){super(message);}}
 async function configFor(db:D1Database,scope:string):Promise<Config>{const row:any=await db.prepare('SELECT payload FROM crm_allocation_configs WHERE scope=?').bind(scope).first();return row?JSON.parse(row.payload):defaultConfig();}
 async function planFor(db:D1Database,scope:string,month:string){const row:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE scope=? AND month<=? ORDER BY month DESC LIMIT 1').bind(scope,month).first();return row?{...row,...JSON.parse(row.payload)}:null;}
-async function activeUsers(db:D1Database){return (await db.prepare("SELECT id,name,role,active FROM crm_users WHERE role IN ('sales','ceo') ORDER BY name").all<any>()).results;}
+async function activeUsers(db:D1Database){return (await db.prepare("SELECT id,name,role,active FROM crm_users WHERE role IN ('sales','ceo','management') ORDER BY name").all<any>()).results;}
 export async function allocationWeights(db:D1Database,scope:string){const config=await configFor(db,scope),plan=await planFor(db,scope,monthNow()),users=await activeUsers(db);return {config,weights:effectiveShares(config,plan,users.filter(u=>u.active&&u.role==='sales').map(u=>u.id))};}
 export async function distribute(db:D1Database,ids:string[],scope:string,actor:string){
  const {weights}=await allocationWeights(db,scope);if(!weights.length)throw new AllocationError('此业务范围没有参与分配的有效业务员');

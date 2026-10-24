@@ -24,7 +24,7 @@ export async function resetAccountPassword(db:D1Database,actor:any,body:any){
 
 export async function setAccountPermissions(db:D1Database,actor:any,body:any){
  if(actor.role!=='admin')throw new AllocationError('只有管理员可以设置账号权限',403);
- if(Object.keys(body).some(k=>!['id','role','permissions'].includes(k))||!['sales','operations','ceo','admin'].includes(body.role))throw new AllocationError('请选择有效角色和权限');
+ if(Object.keys(body).some(k=>!['id','role','permissions'].includes(k))||!['sales','operations','ceo','admin','management'].includes(body.role))throw new AllocationError('请选择有效角色和权限');
  const target:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(body.id).first();
  if(!target)throw new AllocationError('账号不存在',404);
  if(target.role==='admin'||body.role==='admin')throw new AllocationError('管理员账号权限固定，不能在此新增或撤销管理员权限');

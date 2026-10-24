@@ -49,3 +49,21 @@ const revoked=sqlite.prepare("SELECT id,role,permissions FROM crm_users WHERE id
 await assert.rejects(followupEndpoint(db,revoked,revoked,'followup','GET',{}),e=>e.status===403);
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: CEO defaults, granular permissions, own/all visibility, admin-only settings, administrator protection, unknown/dependent permission rejection, cross-owner read-only followup, allocation vs rule separation, logistics grant revocation and unchanged credentials/ownership.');
+
+assert.deepEqual(permissionDefaults('management'),permissionDefaults('ceo'));
+const beforeManagement=sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='other'").get();
+await setAccountPermissions(db,admin,{id:'other',role:'management',permissions:permissionDefaults('management')});
+const management=sqlite.prepare("SELECT id,role,permissions FROM crm_users WHERE id='other'").get();
+assert.equal(authorizedLead(management,{owner_id:'sales'}),true);
+assert.equal(can(management,'leads_allocate'),true);assert.equal(can(management,'performance_view'),true);
+assert.equal(can(management,'customers_edit'),false);assert.equal(can(management,'followup_edit'),false);
+assert.deepEqual(sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='other'").get(),beforeManagement);
+assert.equal(sqlite.prepare("SELECT owner_id FROM crm_leads WHERE id='lead2'").get().owner_id,'other');
+assert.equal((await allocationEndpoint(db,management,'allocation/report','GET',{},new URL('https://test.invalid/api/allocation/report'))).receiptPolicy,true);
+await assert.rejects(allocationEndpoint(db,management,'allocation/config','POST',{},new URL('https://test.invalid/api/allocation/config')),e=>e.status===403);
+await assert.rejects(setAccountPermissions(db,management,{id:'other',role:'admin',permissions:permissionDefaults('admin')}),e=>e.status===403);
+await followupEndpoint(db,admin,admin,'followup','POST',{project:'Other owner order',order_number:'MANAGEMENT-READ-ALL',lead_id:'lead1',logistics_id:'admin'});
+const managementOrders=await followupEndpoint(db,management,management,'followup','GET',{});
+assert.equal(managementOrders.orders.length,2);assert.equal(managementOrders.can_manage,false);
+await assert.rejects(followupEndpoint(db,management,management,'followup','POST',{project:'Denied'}),e=>e.status===403);
+console.log('PASS: management role matches CEO defaults, reads company-wide projects and performance, allocates leads without rule/account/followup maintenance or self-escalation, and preserves credentials and ownership.');
