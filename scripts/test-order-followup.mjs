@@ -16,7 +16,7 @@ const admin={id:'admin',role:'admin',name:'管理员'},staff={id:'staff',role:'o
 for(const u of [admin,staff,sales,other])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.name,u.role,'unchanged','2026-10-22');
 for(const [id,owner] of [['lead1','sales'],['lead2','other']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-22')").run(id,id,owner,id);
 const untouched=()=>JSON.stringify(['crm_users','crm_leads','crm_deals','crm_assignments','crm_notes'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
-const before=untouched();
+let before=untouched();
 const call=(path,method='GET',body={},user=admin,actor=user)=>followupEndpoint(db,user,actor,path,method,body);
 assert.equal(await call('followup','POST',{id:'lead1',content:'原客户沟通跟进',status:'已联系待回复'},sales),undefined,'Customer follow-up writes must reach the original handler');
 await assert.rejects(call('followup','GET',{},staff),e=>e.status===403);
@@ -36,6 +36,11 @@ await assert.rejects(call('followup','POST',{project:'重复',order_number:'TEST
 await assert.rejects(call(endpoint+'/archive','POST',{version:1,note:'测试',checks:[0,1,2,3]}),/先完成/);
 let order=await get();
 const details={dates:{planned_ship:{date:'2026-11-01',kind:'预计',source:'工厂确认',confirmed_at:'2026-10-22T00:00:00.000Z'},actual_ship:{date:'2026-11-02',kind:'实际',source:'出库记录',confirmed_at:'2026-11-02T00:00:00.000Z'},eta_port:{date:'2026-11-20',kind:'预计',source:'船公司',confirmed_at:'2026-11-02T00:00:00.000Z'}},forwarder_mode:'客户安排',forwarder_contact:'测试货代',release_confirmation:'商务及财务确认记录',bill_no:'TEST-BILL',acceptance:'验收记录'};
+await assert.rejects(call(endpoint+'/details','POST',{version:order.version,details},staff),/管理员.*发货/);
+// Explicitly seed an approved contract for the existing shipping-stage regression.
+sqlite.exec("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES('shipping-deal','TEST-01','lead1','sales','meta-full','2026-10-22','2026-10-22','admin'); UPDATE crm_followup_orders SET deal_id='shipping-deal' WHERE order_number='TEST-01'; INSERT INTO crm_workflow_contracts(deal_id,currency,total_minor,schedule,updated,updated_by) VALUES('shipping-deal','CNY',100,'[]','2026-10-22','admin');");
+sqlite.prepare('INSERT INTO crm_workflow_releases(order_id,deal_id,contract_version,special,reason,created,created_by) VALUES(?,?,?,?,?,?,?)').run(one.id,'shipping-deal',1,1,'测试管理员放行','2026-10-22','admin');
+before=untouched();
 await call(endpoint+'/details','POST',{version:order.version,details},staff);
 await assert.rejects(call(endpoint+'/details','POST',{version:order.version,details}),e=>e.status===409);
 order=await get();

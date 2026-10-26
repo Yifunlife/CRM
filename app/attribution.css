@@ -1,0 +1,14 @@
+.attribution-page td { white-space: normal; overflow-wrap: anywhere; max-width: 340px; }
+.attribution-page td:last-child { min-width: 86px; }
+.attribution-page .checkbox { overflow-wrap: anywhere; }
+
+.attribution-page .attribution-summary td:not(:first-child), .attribution-page .attribution-summary th { white-space: nowrap; overflow-wrap: normal; }
+.attribution-page .attribution-scroll-hint { display: none; }
+@media (max-width: 720px) {
+ .attribution-page .table-wrap table { min-width: 760px; }
+ .attribution-page td:first-child { min-width: 160px; }
+ .attribution-page .table-wrap .attribution-summary { min-width: 1040px; }
+ .attribution-page .attribution-scroll-hint { display: block; margin: 0 0 8px; }
+ .attribution-page button, .attribution-page summary, .attribution-page .checkbox { min-height: 44px; }
+ .attribution-page input:not([type=checkbox]), .attribution-page select, .attribution-page textarea { min-height: 44px; font-size: 16px; }
+}

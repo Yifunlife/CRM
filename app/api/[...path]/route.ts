@@ -1,3 +1,8 @@
+import {phase1Endpoint} from '../../../lib/followup-phase1-server';
+import {notificationEndpoint} from '../../../lib/followup-notifications';
+import {attributionEndpoint,closingOutcome} from '../../../lib/attribution-server';
+import {customerIdentityEndpoint} from '../../../lib/customer-identity-server';
+import {workflowEndpoint,workflowAudit,validateLeadFollowup} from '../../../lib/workflow-server';
 import {followupEndpoint,followupManager} from '../../../lib/order-followup-server';
 import {followupFiles} from '../../../lib/order-followup-files';
 import {databaseBackup} from '../../../lib/database-backup';
@@ -61,6 +66,11 @@ async function handle(req: Request) {
   if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
+  const attributionResult=await attributionEndpoint(db,user,actor,path,req.method,body,url);if(attributionResult!==undefined)return json(attributionResult);
+  const identityResult=await customerIdentityEndpoint(db,user,actor,path,req.method,body);if(identityResult!==undefined)return json(identityResult);
+  const workflowResult=await workflowEndpoint(db,user,actor,path,req.method,body);if(workflowResult!==undefined)return json(workflowResult);
+  const notificationResult=await notificationEndpoint(db,user,actor,path,req.method,body);if(notificationResult!==undefined)return json(notificationResult);
+  const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined)return json(phase1Result);
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
@@ -97,7 +107,7 @@ async function handle(req: Request) {
    if (req.method === "PATCH") {
     if ('name' in body || 'username' in body) return json(await editAccount(db,user,body));
     if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
-    await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id)]);return json({ok:true});
+    await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id),workflowAudit(db,actor,body.active?'启用账号':'停用账号待交接',body.id,{active:body.active})]);return json({ok:true});
    }
   }
   if (path.startsWith("google/")) {
@@ -127,8 +137,10 @@ async function handle(req: Request) {
    const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
    if (!STATUSES.includes(body.status) || !clean(body.content)) throw new Problem("请填写跟进结果并选择状态");
+   await validateLeadFollowup(db,lead,body);
    const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
-   await db.batch([db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
+   const outcomeStatements=await closingOutcome(db,lead,body,actor);
+   await db.batch([...outcomeStatements,db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
   if (path === "grade" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
@@ -146,7 +158,7 @@ async function handle(req: Request) {
   }
   if(path==='receipts'&&(req.method==='POST'||req.method==='PATCH')){
    if(user.role!=='admin')throw new Problem('只有管理员可以确认或撤销实际收款',403);
-   if(req.method==='PATCH'){await db.prepare('UPDATE crm_receipts SET cancelled=1 WHERE id=?').bind(clean(body.id,100)).run();return json({ok:true});}
+   if(req.method==='PATCH'){const reason=clean(body.reason);if(!reason)throw new Problem('请填写撤销收款原因；实际退款请单独登记');const result=await db.batch([db.prepare('UPDATE crm_receipts SET cancelled=1 WHERE id=? AND cancelled=0').bind(clean(body.id,100)),workflowAudit(db,actor,'撤销收款',body.id,{reason},true)]);if(!result[0].meta.changes)throw new Problem('有效收款不存在');return json({ok:true});}
    const deal:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(clean(body.deal_id,100)).first();
    if(!deal)throw new Problem('请先确认有效成交单');
    const reference=clean(body.reference,100),currency=clean(body.currency,3),date=clean(body.received_date,10),amount=String(body.amount||''),today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -154,7 +166,7 @@ async function handle(req: Request) {
    if(!reference||!['CNY','USD'].includes(currency)||!/^\d+(\.\d{1,2})?$/.test(amount)||!Number.isSafeInteger(minor)||minor<=0||minor>1_000_000_000_000)throw new Problem('请填写唯一收款凭证号、人民币或美元及有效正数金额（最多两位小数）');
    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>today)throw new Problem('请填写不晚于今天的有效收款日期');
    if(await db.prepare('SELECT id FROM crm_receipts WHERE reference=?').bind(reference).first())throw new Problem('此收款凭证号已登记，不可重复计算');
-   await db.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),reference,deal.id,minor,currency,date,now(),user.id).run();return json({ok:true});
+   await db.batch([db.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),reference,deal.id,minor,currency,date,now(),actor.id),workflowAudit(db,actor,'确认收款',deal.id,{reference,amount_minor:minor,currency,received_date:date})]);return json({ok:true});
   }
   if(path==='deals'&&req.method==='POST'){
    if(user.role!=='admin')throw new Problem('只有管理员可以确认成交单',403);
@@ -167,7 +179,7 @@ async function handle(req: Request) {
   }
   if(path==='deals'&&req.method==='PATCH'){
    if(user.role!=='admin')throw new Problem('只有管理员可以撤销成交单',403);
-   await db.prepare('UPDATE crm_deals SET cancelled=1 WHERE id=?').bind(body.id).run();return json({ok:true});
+   const reason=clean(body.reason);if(!reason)throw new Problem('请填写撤销成交原因');const result=await db.batch([db.prepare('UPDATE crm_deals SET cancelled=1 WHERE id=? AND cancelled=0').bind(body.id),workflowAudit(db,actor,'撤销成交',body.id,{reason},true)]);if(!result[0].meta.changes)throw new Problem('有效成交不存在');return json({ok:true});
   }
   if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
   if (path === "assign" && req.method === "POST") {
@@ -208,6 +220,6 @@ async function handle(req: Request) {
    for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客资分配页面处理剩余记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
   }
   throw new Problem("操作不存在",404);
- } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
+ } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); const guardMessages=['成交与对应跟单须关联同一项目','接收账号已停用','接收人不再是业务员','接收人已无后勤维护权限','任务或订单已结束','订单已归档','标记已成交前需管理员确认有效成交单','退款金额超过可退金额或收款已撤销','已有退款的收款不能撤销','存在有效收款或跟单，不能直接撤销成交','请先由管理员核实应收并确认发货放行；收款变化后须重新确认'];const guard=guardMessages.find(m=>String(e?.message).includes(m)||String(e?.cause?.message).includes(m));if(guard)return json({error:guard},409);console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
 }
 export const GET=handle,POST=handle,PATCH=handle,PUT=handle;

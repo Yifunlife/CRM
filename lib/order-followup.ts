@@ -16,7 +16,7 @@ export const ORDER_FIELDS=[
  ['supply_scope','产品名称、规格、数量及供货范围'],['drawing_version','客户确认图纸／方案版本'],['quote_reference','报价编号／确认版本'],['costing_reference','核算及审批记录'],['delivery_address','交货地点／收货地址'],['delivery_requirements','交货要求与约定交期'],['payment_nodes','付款节点'],['payment_status','当前付款确认情况'],['customer_contact','客户联系人及联系方式'],['design_contact','设计负责人及交付时间'],['engineering_contact','工程／技术负责人'],['installation_contact','安装负责人及现场联系人'],['special_requirements','包装、运输、报关、安装特殊要求'],['handover_gaps','交接缺项、补充人及完成时间']
 ] as const;
 export const LOGISTICS_FIELDS=[['forwarder_mode','货代安排（我方／客户／待确认）'],['forwarder_contact','货代联系人及联系方式'],['pickup','提货／装柜时间及地点'],['transport_requirements','目的地、收货信息与运输要求'],['commercial_confirmation','商务费用确认记录'],['release_confirmation','商务、财务付款及发货确认记录'],['container_no','柜号'],['seal_no','封条号'],['bill_no','提单号／物流单号'],['missing_documents','待补资料及预计取得时间'],['receipt','收货确认及问题'],['acceptance','交付验收记录']] as const;
-export const ORDER_DATES=[['planned_ship','计划发货'],['actual_ship','实际发货'],['eta_port','预计到港'],['eta_site','预计到客户现场']] as const;
+export const ORDER_DATES=[['planned_ship','计划发货'],['actual_ship','实际发货'],['eta_port','预计到港'],['eta_site','预计到客户现场'],['inspection','预计验货'],['installation','安装日期']] as const;
 export const orderToday=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 export const blankSteps=()=>ORDER_STEPS.map(()=>({status:'待处理',checks:[] as number[],note:'',by:'',at:'',for_date:''}));
 export function orderReminders(order:any,tasks:any[],today=orderToday()){

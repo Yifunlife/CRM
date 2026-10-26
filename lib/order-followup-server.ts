@@ -60,7 +60,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const commercial=await person(db,lead.owner_id,'商务负责人'),logistics=await person(db,body.logistics_id,'后勤负责人');
   const logisticsUser:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,logisticsUser))fail('后勤负责人需为管理员或指定后勤账号');
   let dealId=null;
-  if(body.deal_id){const d:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(body.deal_id).first();if(!d||d.lead_id!==lead.id||d.order_number!==number||d.owner_id!==commercial)fail('成交订单、客户、商务或编号不一致');dealId=d.id;}
+  if(body.deal_id){const d:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(body.deal_id).first();if(!d||d.lead_id!==lead.id||d.order_number!==number)fail('成交订单、客户、商务或编号不一致');dealId=d.id;}
   if(await db.prepare('SELECT id FROM crm_followup_orders WHERE order_number=?').bind(number).first())fail('此订单已经建立跟单，请打开已有记录');
   const orderId=id(),time=now(),token=id(),details={dates:{}},steps=blankSteps();
   try{await db.batch([db.prepare('INSERT INTO crm_followup_orders(id,order_number,project,lead_id,deal_id,commercial_id,logistics_id,details,steps,change_token,created,created_by,updated,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(orderId,number,project,lead.id,dealId,commercial,logistics,JSON.stringify(details),JSON.stringify(steps),token,time,actor.id,time,actor.id),event(db,orderId,token,actor,'建立跟单',{project,order_number:number,lead_id:lead.id,deal_id:dealId},time)]);}catch(e:any){if(String(e.message).includes('UNIQUE'))fail('此订单已经建立跟单');throw e;}
@@ -78,7 +78,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  const action=match[2];
  if(row.archived&&action!=='reopen')fail('订单已归档，请先重新打开',409);
  if(action==='details'){
-  const details:any={dates:{},history_note:row.details.history_note||''},input=body.details;
+  const details:any={dates:{},history_note:row.details.history_note||'',delegate_id:row.details.delegate_id||''},input=body.details;
   if(!input||typeof input!=='object'||!input.dates||typeof input.dates!=='object')fail('资料格式无效');
   for(const [key] of [...ORDER_FIELDS,...LOGISTICS_FIELDS]){if(input[key]!==undefined&&typeof input[key]!=='string')fail('资料内容须为文字');details[key]=clean(input[key],2000);}
   const logistics=await person(db,body.logistics_id||row.logistics_id,'后勤负责人');
@@ -111,6 +111,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   return writeFollowup(db,row,body,actor,'更新阶段',{step:index,before:row.steps[index],after:steps[index],current_stage:current},()=>[],{...row,steps,stage:current});
  }
  if(action==='tasks'){
+  if(body.id){const previous:any=await db.prepare('SELECT meta FROM crm_followup_tasks WHERE id=? AND order_id=?').bind(body.id,row.id).first();if(previous&&JSON.parse(previous.meta||'{}').phase1)fail('请在跟单记录中继续跟进此事项，保留金额及过程资料');}
   const kind=body.kind;if(!['待办','异常','客户消息','金额事项'].includes(kind))fail('请选择事项类型');
   const index=stage(body.step),title=required(body.title,'问题／事项',300),impact=required(body.impact,'影响或处理背景'),contact=required(body.contact_reply,'已联系部门、负责人及回复'),next=required(body.next_action,'下一步处理办法'),owner=await person(db,body.owner_id,'处理负责人'),due=dateTime(body.due_at||''),follow=dateTime(body.next_followup||'');if(!due||!follow)fail('请填写完成时间及下次跟进时间');
   if(!['待处理','已解决'].includes(body.status))fail('事项状态无效');

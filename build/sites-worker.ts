@@ -1,8 +1,14 @@
+import {refreshFollowupNotifications} from '../lib/followup-notifications';
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 
 export default {
+  async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
+    if (env.CRM_BACKEND_ORIGIN) return;
+    if (!env.DB) throw new Error('CRM database binding is missing');
+    await refreshFollowupNotifications(env.DB);
+  },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     // Keep the original company URL and desktop bridge working after cutover.
     if (env.CRM_BACKEND_ORIGIN === 'https://yifun-crm.yifunlife.workers.dev') {
