@@ -8,7 +8,7 @@ for(const name of ['甲','乙'])assert.equal((await request('users',{username:'t
 const users=(await request('users')).data,owner=users.find(u=>u.name==='测试甲'+key),receiver=users.find(u=>u.name==='测试乙'+key);
 assert.equal((await request('import',{source:'Meta',business_scope:'meta-full',filename:'workflow-isolated-test',rows:[{'客户名称':'隔离测试'+key,'邮箱':key+'@example.invalid'}]})).status,200);
 const lead=(await request('leads')).data.find(l=>l.name==='隔离测试'+key);
-assert.equal((await request('allocation/config',{scope:'meta-full',config:{members:[{user_id:owner.id,state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:true}}})).status,200);
+assert.equal((await request('allocation/config',{scope:'all',config:{members:[{user_id:owner.id,state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:true}}})).status,200);
 assert.equal((await request('allocation/distribute',{ids:[lead.id],scope:'meta-full'})).status,200);
 assert.equal((await request('followup',{id:lead.id,status:'已成交',content:'错误成交'})).status,400);
 assert.equal((await request('followup',{id:lead.id,status:'正在沟通',content:'未填日期'})).status,400);

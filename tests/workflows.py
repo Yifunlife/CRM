@@ -23,7 +23,7 @@ r=ops.call('import',{'source':'独立站','rows':[rows[0]]});assert r['reviewed'
 leads=ops.call('leads');first=next(l for l in leads if l['name']=='测试客户甲' and l['source']=='Meta');second=next(l for l in leads if l['name']=='测试客户乙');dup=next(l for l in leads if l['source']=='独立站')
 ops.call('assign',{'ids':[dup['id']],'owner_id':ids['testa']},expect=409)
 def allocate(lead,owner,scope='meta-full'):
- admin.call('allocation/config',{'scope':scope,'config':{'members':[{'user_id':owner,'state':'参与','share':0}],'rule':{'performance':30,'maxChange':10,'minimum':5,'automatic':False}}})
+ admin.call('allocation/config',{'scope':'all','config':{'members':[{'user_id':owner,'state':'参与','share':0}],'rule':{'performance':30,'maxChange':10,'minimum':5,'automatic':False}}})
  ops.call('business-scope',{'id':lead['id'],'scope':scope})
  ops.call('allocation/distribute',{'ids':[lead['id']],'scope':scope})
 allocate(first,ids['testa'])

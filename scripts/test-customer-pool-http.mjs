@@ -8,7 +8,7 @@ const key=Date.now();
 for(const name of ['A','B'])await ok('users',{username:'pool'+name.toLowerCase()+key,name:'测试业务员'+name,role:'sales',password:'pool-test-employee-only'});
 const users=await ok('users'),members=users.filter(u=>u.username.endsWith(String(key)));
 const config={members:members.map(u=>({user_id:u.id,state:'参与',share:0})),rule:{automatic:true,receipts:true,performance:30,maxChange:10,minimum:5}};
-await ok('allocation/config',{scope:'whatsapp',config});
+await ok('allocation/config',{scope:'all',config});
 const ids=[];
 for(let i=0;i<4;i++){
  const id=crypto.randomUUID();ids.push(id);const raw='测试咨询：'+['迪拜亲子乐园，咨询200平方米儿童区设备','智利商场室内乐园，询问设计与报价','原有客户再次询问追加产品','员工提交的消息缺少联系方式，等待补充'][i];

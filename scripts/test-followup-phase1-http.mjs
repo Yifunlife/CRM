@@ -9,7 +9,7 @@ const key=Date.now();
 for(const [username,name,role] of [['phase1sales'+key,'商务测试','sales'],['phase1staff'+key,'后勤测试','operations'],['phase1other'+key,'其他商务','sales']])await ok('users',{username,name:name+key,role,password:'local-phase1-employee-only'});
 const users=await ok('users'),sales=users.find(u=>u.username==='phase1sales'+key),staff=users.find(u=>u.username==='phase1staff'+key),other=users.find(u=>u.username==='phase1other'+key),admin=users.find(u=>u.username==='admin');
 await ok('followup/staff',{user_id:staff.id,enabled:true});
-await ok('allocation/config',{scope:'meta-full',config:{members:[{user_id:sales.id,state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:true}}});
+await ok('allocation/config',{scope:'all',config:{members:[{user_id:sales.id,state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:true}}});
 await ok('import',{source:'Meta',business_scope:'meta-full',filename:'phase1-isolated-test',rows:[{客户名称:'海湾亲子乐园（隔离测试）',邮箱:key+'@example.invalid'}]});
 const lead=(await ok('leads')).find(l=>l.email===key+'@example.invalid');await ok('allocation/distribute',{ids:[lead.id],scope:'meta-full'});
 const o=await ok('followup',{project:'海湾亲子乐园 · 第一批设备',order_number:'QA-'+key,lead_id:lead.id,logistics_id:staff.id});

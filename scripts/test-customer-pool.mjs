@@ -14,7 +14,7 @@ const admin={id:'admin',role:'admin'},sales={id:'a',role:'sales'},other={id:'b',
 for(const u of [admin,sales,other,ops,{id:'paused',role:'sales'},{id:'off',role:'sales'}])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01',u.id==='off'?0:1);
 const members=[{user_id:'a',state:'参与',share:99},{user_id:'b',state:'参与',share:1},{user_id:'paused',state:'暂停',share:0},{user_id:'off',state:'参与',share:0}];
 const config={members,rule:{automatic:true,performance:30,maxChange:10,minimum:5,receipts:true}};
-function configure(value=config){sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run('whatsapp',JSON.stringify(value),'now','admin');}
+function configure(value=config){sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run('all',JSON.stringify(value),'now','admin');}
 const call=(path,body={},user=admin,method='POST')=>customerPoolEndpoint(db,user,user,'customer-pool'+path,method,body);
 const report=(user=admin)=>call('',{},user,'GET');
 const pool=id=>sqlite.prepare('SELECT * FROM crm_customer_pool WHERE id=?').get(id);

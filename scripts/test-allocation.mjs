@@ -31,9 +31,9 @@ const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('
 for(const [id,role] of [['admin','admin'],['a','sales'],['b','sales'],['c','sales']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
 const admin={id:'admin',role:'admin'},scope='meta-full',url=new URL('https://test.invalid/api/allocation/config');
 const endpoint=(path,method='POST',body={},role=admin,query='')=>server.allocationEndpoint(db,role,path,method,body,new URL(url.origin+'/api/'+path+query));
-await assert.rejects(endpoint('allocation/config','POST',{scope,config},{id:'a',role:'sales'}),/权限/);
-await assert.rejects(endpoint('allocation/config','POST',{scope,config},{id:'admin',role:'operations'}),/管理员/);
-await endpoint('allocation/config','POST',{scope,config});
+await assert.rejects(endpoint('allocation/config','POST',{scope:'all',config},{id:'a',role:'sales'}),/权限/);
+await assert.rejects(endpoint('allocation/config','POST',{scope:'all',config},{id:'admin',role:'operations'}),/管理员/);
+await endpoint('allocation/config','POST',{scope:'all',config});
 const insert=sqlite.prepare("INSERT INTO crm_leads(id,name,source,business_scope,detail,fingerprint,created,owner_id,original_owner,review) VALUES(?,?,'Meta',?,'{}',?,'2026-10-01',?,?,?)");
 for(let i=0;i<100;i++)insert.run('lead'+i,'客户'+i,scope,'fp'+i,null,'',0);
 insert.run('existing','已有客户',scope,'old','c','',0);insert.run('review','重复待核查',scope,'review',null,'',1);insert.run('original','原负责人',scope,'original',null,'历史业务员',0);insert.run('other','其他范围','meta-product','other',null,'',0);
@@ -77,7 +77,7 @@ const NativeDate=Date;
 try{
  globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-11-05T04:00:00Z']));}static now(){return new NativeDate('2026-11-05T04:00:00Z').getTime();}};
  const scope2='douyin-local';sqlite.prepare('UPDATE crm_users SET active=1').run();
- await endpoint('allocation/config','POST',{scope:scope2,config:{members:trio,rule:{...config.rule,receipts:true}}});
+ await endpoint('allocation/config','POST',{scope:'all',config:{members:trio,rule:{...config.rule,receipts:true}}});
  for(const uid of ['a','b','c']){insert.run('cash-'+uid,'收款测试'+uid,scope2,'cash-'+uid,uid,'',0);deal.run('cash-order-'+uid,'cash-no-'+uid,'cash-'+uid,uid,scope2,'2026-09-05','now','admin',0);}
  const receipt=sqlite.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by,cancelled) VALUES(?,?,?,?,?,?,?,?,?)');
  receipt.run('r1','ref1','cash-order-b',2_000_000,'CNY','2026-10-01','now','admin',0);
@@ -95,13 +95,13 @@ try{
 }finally{globalThis.Date=NativeDate;}
 console.log('PASS: receipt currency thresholds, no currency mixing, partial payments and distinct orders, cash month vs deal month, cancelled receipts, legacy formula compatibility and receipts no longer changing allocation.');
 
-// Leadership who sell participate only after being added to this business scope.
+// Leadership who sell participate only after being added to the common roster.
 for(const [uid,role] of [['manager','management'],['manager-outside','management'],['chief','ceo'],['chief-outside','ceo']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(uid,uid,uid,role,'unused','2026-01-01');
 for(const [participant,role] of [['manager','management'],['chief','ceo']]){
 const managerScope='meta-product',managerConfig={members:[{user_id:'a',state:'参与',share:50},{user_id:participant,state:'参与',share:50}],rule:{...config.rule,receipts:true}};
 const managerUsers=[...users,{id:'manager',role:'management',active:1},{id:'chief',role:'ceo',active:1}];
 a.validateConfig({...managerConfig,rule:{...config.rule,receipts:false}},managerUsers);
-await endpoint('allocation/config','POST',{scope:managerScope,config:managerConfig});
+await endpoint('allocation/config','POST',{scope:'all',config:managerConfig});
 const managerReport=await endpoint('allocation/report','GET',{},admin,'?scope='+managerScope);
 const expectedManagerShares=[{user_id:'a',share:50},{user_id:participant,share:50}];
 assert.deepEqual(managerReport.liveCurrent,expectedManagerShares);
@@ -110,16 +110,16 @@ assert.deepEqual(managerReport.proposal.map(({user_id,share})=>({user_id,share})
 assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,expectedManagerShares);
 for(let i=0;i<4;i++)insert.run(participant+'-lead-'+i,'管理层分配测试'+i,managerScope,participant+'-fp-'+i,null,'',0);
 assert.equal((await endpoint('allocation/distribute','POST',{scope:managerScope,ids:Array.from({length:4},(_,i)=>participant+'-lead-'+i)})).assigned,4);
-assert.deepEqual(sqlite.prepare("SELECT owner_id,COUNT(*) n FROM crm_leads WHERE id LIKE ? GROUP BY owner_id ORDER BY owner_id").all(participant+'-lead-%').map(r=>[r.owner_id,r.n]),[['a',2],[participant,2]]);
+assert.deepEqual(sqlite.prepare("SELECT owner_id,COUNT(*) n FROM crm_leads WHERE id LIKE ? GROUP BY owner_id ORDER BY owner_id").all(participant+'-lead-%').map(r=>[r.owner_id,r.n]),[[participant,4]]);
 for(const state of ['请假','暂停']){
- await endpoint('allocation/config','POST',{scope:managerScope,config:{...managerConfig,members:managerConfig.members.map(m=>m.user_id===participant?{...m,state}:m)}});
+ await endpoint('allocation/config','POST',{scope:'all',config:{...managerConfig,members:managerConfig.members.map(m=>m.user_id===participant?{...m,state}:m)}});
  assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,[{user_id:'a',share:100}]);
 }
-await endpoint('allocation/config','POST',{scope:managerScope,config:managerConfig});
+await endpoint('allocation/config','POST',{scope:'all',config:managerConfig});
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id=?").run(participant);
 assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,[{user_id:'a',share:100}]);
 assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE id=?").get(participant).role,role);
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
-console.log('PASS: '+role+' participates in scoped allocation and monthly shares, retains its role, and respects leave, pause, disabled accounts and scope membership.');
+console.log('PASS: '+role+' participates in global allocation and monthly shares, retains its role, and respects leave, pause, disabled accounts and common roster membership.');
 sqlite.prepare('DELETE FROM crm_assignments WHERE lead_id LIKE ?').run(participant+'-lead-%');
 }

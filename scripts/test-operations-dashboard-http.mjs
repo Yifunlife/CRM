@@ -13,7 +13,7 @@ const account=await ok('operations/accounts',{name:'测试·投放账号'+key,pl
 await ok('advertising',{name:'测试·看板广告费用'+key,platform:'Meta',date,status:'投放中',owner_id:ops.id,budget:'300',spent:'100',account_id:account.id},oc);
 const ad=(await ok('advertising',undefined,oc)).find(a=>a.name==='测试·看板广告费用'+key);
 const campaign=await ok('attribution/campaigns',{name:'测试·运营看板广告'+key,platform:'Meta',account_id:account.id,reason:'本地测试活动'});
-await ok('allocation/config',{scope:'whatsapp',config:{members:[{user_id:sales.id,state:'参与',share:0}],rule:{automatic:true,performance:30,maxChange:10,minimum:5,receipts:true}}});
+await ok('allocation/config',{scope:'all',config:{members:[{user_id:sales.id,state:'参与',share:0}],rule:{automatic:true,performance:30,maxChange:10,minimum:5,receipts:true}}});
 const ids=[];
 for(let i=0;i<2;i++){
  const id=crypto.randomUUID();ids.push(id);await ok('customer-pool/submit',{id,source:'WhatsApp／其他',raw:'测试·广告客户咨询'+i},oc);

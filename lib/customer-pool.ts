@@ -52,16 +52,16 @@ export async function processCustomerPool(db:D1Database,at=now()){
    if(lead.review)throw new Error('此客资已被标记待核查，请先处理');
    if(!lead.owner_id){
     const {config,weights}=await allocationWeights(db,lead.business_scope);
-    if(!config.rule.automatic)throw new Error('本组自动分配未开启，请在分配设置启用后重试');
-    if(!weights.length)throw new Error('本组暂无正常接收人员，请在分配设置配置人员');
+    if(!config.rule.automatic)throw new Error('全渠道自动分配未开启，请在分配设置启用后重试');
+    if(!weights.length)throw new Error('全渠道暂无正常接收人员，请在分配设置配置人员');
     await distribute(db,[lead.id],lead.business_scope,actor);
    }
    await db.batch([
     db.prepare("UPDATE crm_customer_pool SET state='已入CRM',lead_id=?,last_error='',updated=?,version=version+1 WHERE id=? AND state='待分配' AND version=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS NOT NULL)").bind(lead.id,at,row.id,row.version,lead.id),
-    event(db,row.id,actor,'平均分配完成',{lead_id:lead.id,policy:'equal-v1'})
+    event(db,row.id,actor,'平均分配完成',{lead_id:lead.id,policy:'equal-global-v1'})
    ]);
   }catch(e:any){
-   const message=clean(e.message,300),created=await db.prepare('SELECT id FROM crm_leads WHERE id=?').bind(row.id).first(),needsReview=!created&&!message.includes('本组');
+   const message=clean(e.message,300),created=await db.prepare('SELECT id FROM crm_leads WHERE id=?').bind(row.id).first(),needsReview=!created&&!message.includes('全渠道');
    await db.batch([
     db.prepare("UPDATE crm_customer_pool SET state=?,last_error=?,updated=?,version=version+1 WHERE id=? AND state='待分配' AND version=?").bind(needsReview?'待确认':'待分配',message,at,row.id,row.version),
     ...(row.last_error!==message?[event(db,row.id,actor,'处理待办',{reason:message})]:[])

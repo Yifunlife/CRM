@@ -186,7 +186,7 @@ async function handle(req: Request) {
   }
   if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
   if (path === "assign" && req.method === "POST") {
-   throw new Problem("新增客户已统一平均分配，请刷新页面使用本组平均分配；已有客户交接请使用交接流程",409);
+   throw new Problem("新增客户已统一平均分配，请刷新页面使用全渠道共同平均分配；已有客户交接请使用交接流程",409);
   }
   if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
   if (path === "import" && req.method === "POST") {
@@ -214,7 +214,7 @@ async function handle(req: Request) {
     const leadId=id();if(!original&&!review&&businessScope)autoIds.push(leadId);
     statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(leadId,name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now(),businessScope));inserted++;
    }
-   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客资分配页面处理剩余记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
+   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客户管理处理剩余待分配记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
   }
   throw new Problem("操作不存在",404);
  } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); const guardMessages=['成交与对应跟单须关联同一项目','接收账号已停用','接收人不再是业务员','接收人已无后勤维护权限','任务或订单已结束','订单已归档','标记已成交前需管理员确认有效成交单','退款金额超过可退金额或收款已撤销','已有退款的收款不能撤销','存在有效收款或跟单，不能直接撤销成交','请先由管理员核实应收并确认发货放行；收款变化后须重新确认'];const guard=guardMessages.find(m=>String(e?.message).includes(m)||String(e?.cause?.message).includes(m));if(guard)return json({error:guard},409);console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }

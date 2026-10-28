@@ -1,3 +1,4 @@
+export const GLOBAL_ALLOCATION_SCOPE = 'all';
 export const BUSINESS_SCOPES = [
  {id:'douyin-local',name:'抖音本地推',source:'抖音'},
  {id:'meta-product',name:'Meta 场景＋单品',source:'Meta'},
