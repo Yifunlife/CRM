@@ -1,0 +1,136 @@
+/* Office layout: retain the existing brand palette and business components. */
+.office-app {
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.office-app [hidden] { display: none !important; }
+.office-app h1 { font-size: 24px; line-height: 1.35; margin-bottom: 6px; font-weight: 600; }
+.office-app h2 { font-size: 16px; line-height: 1.5; margin-bottom: 16px; font-weight: 600; }
+.office-app h3 { font-size: 14px; font-weight: 600; }
+.office-app > aside { padding: 20px 14px 16px; }
+.office-app > aside > nav { margin-top: 20px; gap: 4px; overflow-y: auto; min-height: 0; }
+.office-app > aside > nav button { min-height: 40px; padding: 9px 12px; }
+.office-app > aside .nav-submenu button { padding: 7px 12px 7px 40px; min-height: 36px; }
+.office-app > aside .profile { padding-top: 14px; }
+.office-app .workspace { min-width: 0; }
+.office-app .workspace > header { height: 56px; padding: 0 24px; gap: 16px; }
+.office-app .workspace-breadcrumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.office-app .content { padding: 24px; max-width: 1920px; }
+.office-app .page-heading { margin-bottom: 20px; align-items: flex-start; }
+.office-app .page-heading > div:first-child { min-width: 0; }
+.office-app .page-heading p { font-size: 13px; }
+.office-app .panel { padding: 20px; margin-bottom: 20px; }
+.office-app button { min-height: 36px; padding: 6px 12px; font-weight: 500; }
+.office-app button.text { min-height: 32px; padding: 0; }
+.office-app button.icon { padding: 6px; }
+.office-app input:not([type=checkbox]), .office-app select { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
+.office-app label { font-size: 14px; font-weight: 500; margin-bottom: 16px; }
+.office-app label > input, .office-app label > select, .office-app label > textarea { margin-top: 6px; }
+.office-app .form-row { gap: 16px; }
+.office-app .notice { margin-bottom: 16px; overflow-wrap: anywhere; }
+.office-app table { font-size: 14px; }
+.office-app th { font-size: 13px; font-weight: 600; }
+.office-app th, .office-app td { padding: 11px 12px; }
+.office-app .table-wrap { overscroll-behavior-x: contain; }
+.office-app .table-wrap:focus-visible { outline-offset: 2px; }
+.office-app .empty { padding: 36px 20px; }
+.office-app .empty button { margin-top: 16px; }
+.office-app .office-progress { position: fixed; right: 24px; bottom: 20px; z-index: 30; padding: 10px 16px; border: 1px solid var(--line); border-radius: 7px; background: var(--white); color: var(--ink); }
+.office-app .customer-statistics { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--white); overflow: hidden; margin-bottom: 16px; }
+.office-app .customer-statistics button { flex: 1; min-width: 0; border: 0; border-right: 1px solid var(--line); border-radius: 0; padding: 12px 16px; gap: 12px; }
+.office-app .customer-statistics button:last-child { border-right: 0; }
+.office-app .customer-statistics strong { font-size: 22px; font-weight: 600; }
+.office-app .customer-grade-filters { gap: 6px; margin-bottom: 12px; }
+.office-app .customer-grade-filters button { min-height: 30px; padding: 3px 9px; }
+.office-app .customer-overview > .tabs { gap: 20px; flex-wrap: nowrap; margin-bottom: 14px; }
+.office-app .customer-overview > .tabs button { flex-shrink: 0; padding: 8px 0; min-height: 38px; }
+.office-app .customer-overview .filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(100px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.office-app .customer-overview .filters:has(select[aria-label=负责人]) { grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(100px, 1fr)); }
+.office-app .customer-overview .filters .search { min-width: 0; }
+.office-app .customer-overview .filters select { width: 100%; min-width: 0; }
+.office-app .customer-results { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.office-app .customer-results strong { font-variant-numeric: tabular-nums; }
+.office-app .customer-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.office-app .customer-filter-chips button { min-height: 28px; padding: 3px 8px; font-size: 12px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.office-app .customer-filter-chips svg { flex-shrink: 0; }
+.office-app .customer-table { max-height: max(260px, calc(100dvh - 480px)); }
+.office-app .customer-table table { min-width: 980px; }
+.office-app .customer-table thead th { position: sticky; top: 0; z-index: 2; }
+.office-app .customer-table td { vertical-align: top; }
+.office-app .customer-table .customer { max-width: 250px; white-space: normal; overflow-wrap: anywhere; }
+.office-app .customer-table .summary { min-width: 170px; }
+.office-app .customer-table th:last-child, .office-app .customer-table td:last-child { position: sticky; right: 0; background: var(--white); border-left: 1px solid var(--line); min-width: 66px; }
+.office-app .customer-table th:last-child { z-index: 3; background: #f7f9fc; }
+.office-app .customer-table tr:hover td:last-child { background: var(--canvas); }
+.office-app .customer-overview .allocation { padding: 10px 12px; margin-bottom: 10px; }
+.office-app .pagination { margin-top: 12px; }
+.office-app .customer-detail { max-width: 1440px; margin: 0 auto; }
+.office-app .customer-detail .back { margin-bottom: 12px; }
+.office-app .customer-detail h1 { overflow-wrap: anywhere; }
+.office-app .customer-next-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); margin-bottom: 16px; }
+.office-app .customer-next-action span, .office-app .customer-next-action strong { display: block; }
+.office-app .customer-next-action strong { margin-top: 4px; font-size: 14px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; }
+.office-app .customer-detail-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.office-app .customer-detail-tabs button { background: transparent; border: 0; border-radius: 0; color: var(--muted); padding: 10px 0; }
+.office-app .customer-detail-tabs [aria-selected=true] { color: var(--green); box-shadow: inset 0 -2px var(--green); font-weight: 600; }
+.office-app .customer-followup-layout, .office-app .customer-finance-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.office-app .customer-followup-layout > .history:only-child { grid-column: 1 / -1; }
+.office-app .customer-followup-layout .history article:first-of-type { padding-top: 0; }
+.office-app .customer-followup-layout .history article p { overflow-wrap: anywhere; }
+.office-app .customer-detail dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+.office-app .customer-detail dl > div { grid-template-columns: 120px minmax(0, 1fr); }
+.office-app .customer-detail dt { font-size: 13px; }
+.office-app .customer-save { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 20px; }
+.office-app .followup-list .table-wrap { max-height: 65vh; }
+.office-app .followup-list th { position: sticky; top: 0; z-index: 1; }
+.office-app .followup-tabs { gap: 16px; }
+.office-app .followup-tabs button { padding: 10px 0; }
+.office-app .mobile-nav-toggle, .office-app .mobile-nav-close, .office-app .navigation-backdrop { display: none; }
+@media (max-width: 1100px) {
+  .office-app .content { padding: 20px; }
+  .office-app .customer-overview .filters, .office-app .customer-overview .filters:has(select[aria-label=负责人]) { grid-template-columns: minmax(200px, 2fr) repeat(2, minmax(120px, 1fr)); }
+  .office-app .customer-statistics button { padding: 10px; gap: 6px; flex-direction: column; align-items: flex-start; }
+  .office-app .customer-followup-layout, .office-app .customer-finance-layout { grid-template-columns: 1fr; gap: 0; }
+  .office-app .customer-detail dl { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .office-app h1 { font-size: 22px; }
+  .office-app > aside { position: fixed; inset: 0 auto 0 0; height: 100dvh; width: min(280px, 85vw); z-index: 50; padding: 20px 14px; visibility: hidden; }
+  .office-app.navigation-open > aside { visibility: visible; }
+  .office-app > aside .brand img { width: 160px; }
+  .office-app > aside > nav { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; margin-top: 20px; }
+  .office-app > aside > nav button { width: 100%; font-size: 14px; min-height: 44px; }
+  .office-app > aside .nav-group { flex-basis: auto; }
+  .office-app > aside .nav-submenu { flex-direction: column; flex-wrap: nowrap; background: transparent; padding: 0; }
+  .office-app > aside .profile { position: static; margin-top: auto; border-top: 1px solid #315789; }
+  .office-app > aside .profile-role { display: block; }
+  .office-app > aside .profile-dropdown { top: auto; bottom: calc(100% + 12px); left: 0; right: auto; }
+  .office-app .mobile-nav-close { display: inline-flex; position: absolute; right: 12px; top: 20px; color: #e4edf9; }
+  .office-app .mobile-nav-toggle { display: inline-flex; flex-shrink: 0; }
+  .office-app .navigation-backdrop { display: block; position: fixed; inset: 0; z-index: 40; width: 100%; height: 100%; border: 0; border-radius: 0; background: rgb(15 30 52 / 42%); }
+  .office-app .workspace > header { min-height: 56px; height: auto; flex-wrap: nowrap; gap: 8px; padding: 8px 12px; }
+  .office-app .workspace > header .followup-actions { flex-wrap: nowrap; }
+  .office-app .workspace > header .followup-actions > .small { display: none; }
+  .office-app .workspace-breadcrumb > .muted { display: none; }
+  .office-app .content { padding: 16px 12px; }
+  .office-app .page-heading { flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .office-app .panel { padding: 16px; margin-bottom: 16px; }
+  .office-app button { min-height: 40px; }
+  .office-app .customer-statistics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .office-app .customer-statistics button { flex-direction: row; align-items: center; border-bottom: 1px solid var(--line); }
+  .office-app .customer-statistics button:last-child { border-bottom: 0; }
+  .office-app .customer-statistics button:nth-child(even) { border-right: 0; }
+  .office-app .customer-statistics button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .office-app .customer-overview .filters, .office-app .customer-overview .filters:has(select[aria-label=负责人]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .office-app .customer-overview .filters .search { grid-column: 1 / -1; }
+  .office-app .customer-grade-filters { display: none; }
+  .office-app .customer-table { max-height: 65vh; }
+  .office-app .customer-grade-filters button, .office-app .customer-filter-chips button { min-height: 36px; }
+  .office-app .customer-results { align-items: flex-start; }
+  .office-app .customer-next-action { grid-template-columns: 1fr; gap: 12px; }
+  .office-app .customer-detail-tabs { gap: 20px; }
+  .office-app .customer-detail dl > div { grid-template-columns: 100px minmax(0, 1fr); }
+  .office-app .followup-list .table-wrap { max-height: none; }
+  .office-app .office-progress { right: 12px; bottom: 12px; }
+}

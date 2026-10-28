@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./office.css";
 
 export const metadata: Metadata = {
   title: "亦玩客资管理",
