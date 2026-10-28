@@ -2,6 +2,10 @@ export const BUSINESS_SCOPES = [
  {id:'douyin-local',name:'抖音本地推',source:'抖音'},
  {id:'meta-product',name:'Meta 场景＋单品',source:'Meta'},
  {id:'meta-full',name:'Meta 全案',source:'Meta'},
+ {id:'google',name:'Google 广告',source:'Google 广告'},
+ {id:'website',name:'独立站',source:'独立站'},
+ {id:'whatsapp',name:'WhatsApp／其他',source:'WhatsApp／其他'},
+ {id:'alibaba',name:'阿里',source:'阿里'},
 ];
 export type Member = {user_id:string; state:'参与'|'请假'|'暂停'; share:number};
 export type Rule = {performance:number; maxChange:number; minimum:number; automatic:boolean; receipts?:boolean};
@@ -17,10 +21,6 @@ export function validateConfig(config:Config,users:{id:string;role:string;active
  const r=config.rule;
  for(const v of [r.performance,r.maxChange,r.minimum])if(!Number.isFinite(v)||v<0||v>100)throw new Error('规则参数必须为0至100');
  if(typeof r.automatic!=='boolean')throw new Error('自动分配设置无效');
- const active=config.members.filter(m=>m.state==='参与'&&users.some(u=>u.id===m.user_id&&u.role==='sales'));
- const activeTotal=active.reduce((sum,m)=>sum+m.share,0),baseTotal=config.members.reduce((sum,m)=>sum+m.share,0);
- if(r.receipts===false&&active.length&&(activeTotal<=0||(Math.abs(activeTotal-100)>0.001&&Math.abs(baseTotal-100)>0.001)))throw new Error('参与人员的基础占比必须合计100%');
- if(r.receipts===false&&(active.some(m=>m.share/activeTotal*100<r.minimum)||active.length*r.minimum>100))throw new Error('参与人员的基础占比不能低于最低占比');
  if(r.automatic&&!config.members.length)throw new Error('设置参与人员后才能启用自动分配');
 }
 // Project onto bounded percentages, then round in basis points without losing the 100% total.
@@ -55,4 +55,10 @@ export function receiptShares(members:Member[],tiers:Record<string,number>,cash:
  const rounded=raw.map(v=>Math.floor(v*100+1e-8));let remainder=10000-rounded.reduce((a,b)=>a+b,0);
  for(const i of raw.map((v,i)=>({i,f:v*100-rounded[i]})).sort((a,b)=>b.f-a.f)){if(remainder>0){rounded[i.i]++;remainder--;}}
  return rows.map((r,i)=>({...r,share:rounded[i]/100}));
+}
+
+// New allocations ignore historical performance weights; snapshots remain available for audit.
+export function equalShares(config:Config,activeIds:string[]){
+ const members=config.members.filter(m=>m.state==='参与'&&activeIds.includes(m.user_id));
+ return members.map(m=>({user_id:m.user_id,share:100/members.length}));
 }

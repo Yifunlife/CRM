@@ -1,3 +1,5 @@
+import {customerChange,customerChanges} from '../../../lib/customer-changes';
+import {customerPoolEndpoint} from '../../../lib/customer-pool';
 import {phase1Endpoint} from '../../../lib/followup-phase1-server';
 import {notificationEndpoint} from '../../../lib/followup-notifications';
 import {attributionEndpoint,closingOutcome} from '../../../lib/attribution-server';
@@ -11,7 +13,7 @@ import {editAccount,resetAccountPassword,setAccountPermissions} from '../../../l
 import {initializeEmployeeLogin} from '../../../lib/employee-login';
 import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
 import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
-import {BUSINESS_SCOPES,monthNow} from '../../../lib/allocation';
+import {BUSINESS_SCOPES} from '../../../lib/allocation';
 import {syncAssignments} from '../../../lib/assignment-sync';
 import {operationsEndpoint} from '../../../lib/operations-server';
 import {advertisingEndpoint} from '../../../lib/advertising-server';
@@ -66,6 +68,7 @@ async function handle(req: Request) {
   if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
+  const poolResult=await customerPoolEndpoint(db,user,actor,path,req.method,body);if(poolResult!==undefined)return json(poolResult);
   const attributionResult=await attributionEndpoint(db,user,actor,path,req.method,body,url);if(attributionResult!==undefined)return json(attributionResult);
   const identityResult=await customerIdentityEndpoint(db,user,actor,path,req.method,body);if(identityResult!==undefined)return json(identityResult);
   const workflowResult=await workflowEndpoint(db,user,actor,path,req.method,body);if(workflowResult!==undefined)return json(workflowResult);
@@ -131,7 +134,7 @@ async function handle(req: Request) {
   if (path.startsWith("leads/") && !write) {
    const lead: any = await db.prepare("SELECT l.*,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE l.id=?").bind(path.split("/")[1]).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权查看",404);
-   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results});
+   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results,changes:await customerChanges(db,user,can(user,'customers_all'),lead.id)});
   }
   if (path === "followup" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
@@ -140,13 +143,13 @@ async function handle(req: Request) {
    await validateLeadFollowup(db,lead,body);
    const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
    const outcomeStatements=await closingOutcome(db,lead,body,actor);
-   await db.batch([...outcomeStatements,db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
+   await db.batch([...outcomeStatements,customerChange(db,actor,lead.id,'status',body.status,clean(body.content)),db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
   if (path === "grade" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
    if (!["",...GRADES].includes(body.grade)) throw new Problem("请选择VIP、A、B、C或未评级");
-   await db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id).run();return json({ok:true});
+   await db.batch([customerChange(db,actor,body.id,'grade',body.grade),db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id)]);return json({ok:true});
   }
   if (user.role === 'sales'&&!can(user,'customers_all')) throw new Problem('此操作需要对应功能权限',403);
   if(path==='import-assignments'&&req.method==='POST')return json(await syncAssignments(db,user,body));
@@ -183,13 +186,7 @@ async function handle(req: Request) {
   }
   if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
   if (path === "assign" && req.method === "POST") {
-   const ids = [...new Set(body.ids || [])];if(!ids.length || ids.length>200)throw new Problem("每次选择1至200条客资");
-   const owner: any = await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role='sales'").bind(body.owner_id).first();if(!owner)throw new Problem("请选择有效的业务员账号");
-   const selected = await db.prepare("SELECT id,owner_id,original_owner,review,business_scope FROM crm_leads WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all();
-   if(selected.results.length!==ids.length || selected.results.some((r:any)=>r.owner_id || r.original_owner || r.review))throw new Problem("只能分配没有负责人的客资；表格中已分配的客资会保留负责人");
-   const rows:any[]=selected.results;
-   for(const scope of [...new Set(rows.map(row=>row.business_scope))]){if(!scope)throw new Problem('请先为客资指定业务范围');const {weights}=await allocationWeights(db,scope);if(!weights.some(w=>w.user_id===owner.id))throw new Problem('此业务员未参与所选客资业务范围的分配');}
-   await db.batch(ids.flatMap((leadId:any)=>[db.prepare("UPDATE crm_leads SET owner_id=? WHERE id=? AND owner_id IS NULL AND original_owner='' AND review=0 AND business_scope=?").bind(owner.id,leadId,rows.find(row=>row.id===leadId).business_scope),db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month) SELECT ?,id,?,?,?,business_scope,? FROM crm_leads WHERE id=? AND owner_id=? AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),user.id,owner.id,now(),monthNow(),leadId,owner.id,leadId)]));return json({ok:true});
+   throw new Problem("新增客户已统一平均分配，请刷新页面使用本组平均分配；已有客户交接请使用交接流程",409);
   }
   if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
   if (path === "import" && req.method === "POST") {

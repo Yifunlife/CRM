@@ -23,7 +23,7 @@ try{
  const unchanged=()=>JSON.stringify(oldTables.map(t=>sqlite.prepare('SELECT * FROM '+t).all()));const before=unchanged();
  const call=(path,body,user=admin)=>attributionEndpoint(db,user,user,'attribution/'+path,body===undefined?'GET':'POST',body,new URL('http://local/api/attribution/'+path));
  const report=(user=admin,query='?from=2026-10-01&to=2026-10-31')=>attributionEndpoint(db,user,user,'attribution/report','GET',{},new URL('http://local/api/attribution/report'+query));
- let r=await report();assert.equal(r.campaigns.length,0);assert(r.leads.every(l=>!l.attribution&&!l.quality));assert(r.deals.every(d=>!d.attribution));assert(r.summary.every(b=>b.roas===null),'Unattributed spend cannot imply zero campaign return');
+ let r=await report();assert.equal(r.campaigns.length,0);assert.ok(r.operations);assert(r.leads.every(l=>!l.attribution&&!l.quality));assert(r.deals.every(d=>!d.attribution));assert(r.summary.every(b=>b.roas===null),'Unattributed spend cannot imply zero campaign return');
  await assert.rejects(call('campaigns',{name:'活动',platform:'Meta',account_id:'account',reason:'平台确认'},ops),e=>e.status===403);
  const c=(await call('campaigns',{name:'已核实活动',platform:'Meta',account_id:'account',reason:'平台活动编号核对'})).id;
  const propose=(kind,entity_id,payload,user=admin,version=0)=>call('propose',{kind,entity_id,target_version:version,reason:'人工核对来源记录',...payload},user);
@@ -40,10 +40,10 @@ try{
  await assert.rejects(propose('deal','d2',{lead_id:'l1'},sales),/同一客户主体/);
  await call('quality',{lead_id:'l1',state:'有效',reason:'已核实真实需求',version:0},sales);
  await assert.rejects(call('quality',{lead_id:'l1',state:'无效',reason:'过期覆盖',version:0},sales),e=>e.status===409);
- r=await report(sales);let b=r.summary.find(b=>b.key===c&&b.currency==='USD');assert.equal(b.received_minor,30000);assert.equal(b.refunded_minor,5000);assert.equal(b.net_minor,25000);assert.equal(b.spent_minor,null);assert.equal(b.roas,null);assert.equal(b.valid_consultations,1);assert.equal(b.deals,1);
+ r=await report(sales);assert.equal(r.operations,null);let b=r.summary.find(b=>b.key===c&&b.currency==='USD');assert.equal(b.received_minor,30000);assert.equal(b.refunded_minor,5000);assert.equal(b.net_minor,25000);assert.equal(b.spent_minor,null);assert.equal(b.roas,null);assert.equal(b.valid_consultations,1);assert.equal(b.deals,1);
  assert(!r.leads.some(l=>l.id==='hidden'));assert(!r.requests.some(p=>p.entity_id==='hidden'||p.entity_id==='dh'));assert.equal(r.events.length,0);assert.equal(r.ads.length,0);
  const extendedSales={...sales,permissions:{customers_all:true,followup_all:true,advertising_view:false,advertising_edit:false}};
- const extended=await report(extendedSales);assert.equal(extended.leads.length,4);assert.equal(extended.full_scope,true);assert.equal(extended.ad_view,false);assert.equal(extended.events.length,0);assert.equal(extended.accounts.length,0);assert(extended.summary.every(b=>b.spent_minor===null&&b.roas===null),'Company lead access does not grant advertising access');
+ const extended=await report(extendedSales);assert.equal(extended.leads.length,4);assert.equal(extended.full_scope,true);assert.equal(extended.ad_view,false);assert.equal(extended.events.length,0);assert.equal(extended.accounts.length,0);assert.equal(extended.operations,null);assert(extended.summary.every(b=>b.spent_minor===null&&b.roas===null),'Company lead access does not grant advertising access');
  const preview=await attributionEndpoint(db,sales,admin,'attribution/report','GET',{},new URL('http://local/api/attribution/report'));assert(preview.leads.every(l=>l.owner_id===sales.id));assert.equal(preview.events.length,0,'Admin preview retains the selected salesperson scope');
  await assert.rejects(attributionEndpoint(db,sales,admin,'attribution/resolve','POST',{id:pending.id,version:1,decision:'确认',reason:'管理员业务员视角'},new URL('http://local/api/attribution/resolve')),e=>e.status===403);
  assert.equal(r.summary.find(b=>b.key===c&&b.currency==='CNY').received_minor,50000);

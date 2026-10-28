@@ -21,18 +21,22 @@ r=ops.call('import',{'source':'Meta','filename':'权限测试','rows':rows});ass
 r=ops.call('import',{'source':'Meta','filename':'权限测试','rows':rows});assert r['inserted']==0 and r['skipped']==2
 r=ops.call('import',{'source':'独立站','rows':[rows[0]]});assert r['reviewed']==1
 leads=ops.call('leads');first=next(l for l in leads if l['name']=='测试客户甲' and l['source']=='Meta');second=next(l for l in leads if l['name']=='测试客户乙');dup=next(l for l in leads if l['source']=='独立站')
-ops.call('assign',{'ids':[dup['id']],'owner_id':ids['testa']},expect=400)
-ops.call('assign',{'ids':[first['id']],'owner_id':ids['testa']})
-ops.call('assign',{'ids':[second['id']],'owner_id':ids['testb']})
+ops.call('assign',{'ids':[dup['id']],'owner_id':ids['testa']},expect=409)
+def allocate(lead,owner,scope='meta-full'):
+ admin.call('allocation/config',{'scope':scope,'config':{'members':[{'user_id':owner,'state':'参与','share':0}],'rule':{'performance':30,'maxChange':10,'minimum':5,'automatic':False}}})
+ ops.call('business-scope',{'id':lead['id'],'scope':scope})
+ ops.call('allocation/distribute',{'ids':[lead['id']],'scope':scope})
+allocate(first,ids['testa'])
+allocate(second,ids['testb'])
 assert [l['id'] for l in a.call('leads')]==[first['id']]
 assert [l['id'] for l in b.call('leads')]==[second['id']]
 a.call('leads/'+second['id'],expect=404)
 a.call('followup',{'id':second['id'],'content':'越权','status':'正在沟通'},expect=404)
 a.call('assign',{'ids':[dup['id']],'owner_id':ids['testa']},expect=403)
-ops.call('assign',{'ids':[first['id']],'owner_id':ids['testb']},expect=400)
+ops.call('assign',{'ids':[first['id']],'owner_id':ids['testb']},expect=409)
 a.call('followup',{'id':first['id'],'content':'客户希望了解报价','method':'WhatsApp','next_step':'准备资料','next_date':'2026-10-15','status':'正在沟通'})
 assert a.call('leads/'+first['id'])['notes'][0]['content']=='客户希望了解报价'
-ops.call('review',{'id':dup['id']});ops.call('assign',{'ids':[dup['id']],'owner_id':ids['testb']})
+ops.call('review',{'id':dup['id']});allocate(dup,ids['testb'],'website')
 a.call('followup',{'id':first['id'],'content':'无效来源','status':'正在沟通'},origin='https://bad.example',expect=403)
 admin.call('users',{'id':ids['testa'],'active':0},method='PATCH');a.call('leads',expect=401)
 r=ops.call('import',{'source':'阿里','preserve_owners':True,'rows':[{'客户名称':'阿里测试','邮箱':'ali@example.com','分配业务员':'testb'}]});assert r['inserted']==1

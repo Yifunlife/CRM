@@ -17,7 +17,7 @@ assert.deepEqual(leaveConfig.members.map(m=>m.share),[50,50,0]);
 assert.deepEqual(a.suggest(config.members,{a:50,b:50},{a:8,b:2},config.rule).map(p=>p.share),[59,41]);
 assert.deepEqual(a.suggest(config.members,{a:59,b:41},{},config.rule).map(p=>p.share),[59,41]);
 assert.deepEqual(a.suggest(config.members,{a:50,b:50},{a:100,b:0},config.rule).map(p=>p.share),[60,40]);
-assert.throws(()=>a.validateConfig({...config,members:[config.members[0]]},users),/100/);
+assert.doesNotThrow(()=>a.validateConfig({...config,members:[config.members[0]]},users),'legacy percentages no longer constrain equal allocation');
 assert.throws(()=>a.validateConfig({...config,members:[...config.members,config.members[0]]},users),/重复/);
 assert.throws(()=>a.validateConfig(config,[{...users[0],active:0},users[1],users[2]]),/停用/);
 assert.equal(a.nextMonth('2026-12'),'2027-01');
@@ -51,15 +51,15 @@ const owner=sqlite.prepare("SELECT owner_id FROM crm_leads WHERE id='lead0'").ge
 deal.run('d1','o1','lead0',owner,scope,previous+'-05','now','admin',0);deal.run('d2','o2','lead0',owner,scope,previous+'-06','now','admin',0);deal.run('d3','o3','lead0',owner,scope,previous+'-07','now','admin',1);deal.run('d4','o4','other','a','meta-product',previous+'-05','now','admin',0);
 const report=await endpoint('allocation/report','GET',{},admin,`?scope=${scope}&month=${previous}`);
 assert.equal(report.deals.reduce((n,r)=>n+r.n,0),2);assert.equal(report.conversion.find(r=>r.owner_id===owner).assigned,50);assert.equal(report.conversion.find(r=>r.owner_id===owner).converted,1);
-await assert.rejects(endpoint('allocation/confirm','POST',{scope,month:current,shares:[]}),/尚未结束/);
-await assert.rejects(endpoint('allocation/confirm','POST',{scope,month:previous,shares:[{user_id:'a',share:90},{user_id:'b',share:10}]}),/调整上限/);
-await endpoint('allocation/confirm','POST',{scope,month:previous,shares:report.proposal.map(({user_id,share})=>({user_id,share}))});
-await assert.rejects(endpoint('allocation/confirm','POST',{scope,month:previous,shares:[]}),/已确认/);
-assert.equal((await server.allocationWeights(db,scope)).weights.find(w=>w.user_id===owner).share,60);
-sqlite.prepare("UPDATE crm_deals SET cancelled=1").run();assert.equal((await server.allocationWeights(db,scope)).weights.find(w=>w.user_id===owner).share,60);
+await assert.rejects(endpoint('allocation/confirm','POST',{scope,month:current,shares:[]}),/统一平均分配/);
+const historical={shares:[{user_id:'a',share:90},{user_id:'b',share:10}],report:{users:[],deals:[]}};
+sqlite.prepare('INSERT INTO crm_allocation_plans(key,scope,month,payload,confirmed,confirmed_by) VALUES(?,?,?,?,?,?)').run(scope+':'+current,scope,current,JSON.stringify(historical),'now','admin');
+assert.deepEqual((await server.allocationWeights(db,scope)).weights.map(w=>w.share),[50,50]);
+sqlite.prepare("UPDATE crm_deals SET cancelled=1").run();assert.equal((await server.allocationWeights(db,scope)).weights.find(w=>w.user_id===owner).share,50);
+assert.equal(sqlite.prepare('SELECT payload FROM crm_allocation_plans WHERE key=?').get(scope+':'+current).payload,JSON.stringify(historical));
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id=?").run(owner);const remaining=(await server.allocationWeights(db,scope)).weights;assert.equal(remaining.length,1);assert.equal(remaining[0].share,100);
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
-console.log('PASS: monthly formula, zero deals, change limits, minimum, rounding, roles, scoped distribution, paused/disabled users, duplicate allocation, existing ownership, order counting, cohort conversion, confirmation and frozen plans.');
+console.log('PASS: monthly formula, zero deals, change limits, minimum, rounding, roles, scoped distribution, paused/disabled users, duplicate allocation, existing ownership, order counting, cohort conversion, equal allocation and preserved historical plans.');
 
 const trio=['a','b','c'].map(user_id=>({user_id,state:'参与',share:0}));
 const cash=(cny=0,usd=0)=>({cny,usd});
@@ -87,13 +87,39 @@ try{
  receipt.run('r5','ref5','cash-order-a',9_000_000,'CNY','2026-11-01','now','admin',0);
  const r=await endpoint('allocation/report','GET',{},admin,'?scope='+scope2+'&month=2026-10');
  assert.equal(r.deals.length,0);assert.equal(r.cash.find(v=>v.owner_id==='b').cny,5_000_000);assert.equal(r.cash.find(v=>v.owner_id==='b').paid_orders,1);
- assert.deepEqual(r.proposal.map(p=>p.share),[26.67,36.67,36.66]);
- await assert.rejects(endpoint('allocation/confirm','POST',{scope:scope2,month:'2026-10',shares:r.proposal.map(p=>({user_id:p.user_id,share:33.33}))}),/占比/);
- await endpoint('allocation/confirm','POST',{scope:scope2,month:'2026-10',shares:r.proposal.map(({user_id,share})=>({user_id,share}))});
- const frozen=JSON.parse(sqlite.prepare('SELECT payload FROM crm_allocation_plans WHERE key=?').get(scope2+':2026-11').payload);
- assert.equal(frozen.shares.find(p=>p.user_id==='a').tier,1);
+ assert.deepEqual(r.proposal.map(p=>p.share),[100/3,100/3,100/3]);
+ await assert.rejects(endpoint('allocation/confirm','POST',{scope:scope2,month:'2026-10',shares:[]}),/统一平均分配/);
  sqlite.prepare("UPDATE crm_receipts SET cancelled=1 WHERE id='r1'").run();
- assert.ok(Math.abs((await server.allocationWeights(db,scope2)).weights.find(p=>p.user_id==='a').share-26.67)<1e-8);
+ assert.deepEqual((await server.allocationWeights(db,scope2)).weights.map(p=>p.share),[100/3,100/3,100/3]);
  assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 }finally{globalThis.Date=NativeDate;}
-console.log('PASS: receipt currency thresholds, no currency mixing, partial payments and distinct orders, cash month vs deal month, cancelled receipts, monthly tiers, cap, recovery, all-fail equal split, leave and immutable monthly snapshots.');
+console.log('PASS: receipt currency thresholds, no currency mixing, partial payments and distinct orders, cash month vs deal month, cancelled receipts, legacy formula compatibility and receipts no longer changing allocation.');
+
+// Leadership who sell participate only after being added to this business scope.
+for(const [uid,role] of [['manager','management'],['manager-outside','management'],['chief','ceo'],['chief-outside','ceo']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(uid,uid,uid,role,'unused','2026-01-01');
+for(const [participant,role] of [['manager','management'],['chief','ceo']]){
+const managerScope='meta-product',managerConfig={members:[{user_id:'a',state:'参与',share:50},{user_id:participant,state:'参与',share:50}],rule:{...config.rule,receipts:true}};
+const managerUsers=[...users,{id:'manager',role:'management',active:1},{id:'chief',role:'ceo',active:1}];
+a.validateConfig({...managerConfig,rule:{...config.rule,receipts:false}},managerUsers);
+await endpoint('allocation/config','POST',{scope:managerScope,config:managerConfig});
+const managerReport=await endpoint('allocation/report','GET',{},admin,'?scope='+managerScope);
+const expectedManagerShares=[{user_id:'a',share:50},{user_id:participant,share:50}];
+assert.deepEqual(managerReport.liveCurrent,expectedManagerShares);
+assert.deepEqual(managerReport.current,expectedManagerShares);
+assert.deepEqual(managerReport.proposal.map(({user_id,share})=>({user_id,share})),expectedManagerShares);
+assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,expectedManagerShares);
+for(let i=0;i<4;i++)insert.run(participant+'-lead-'+i,'管理层分配测试'+i,managerScope,participant+'-fp-'+i,null,'',0);
+assert.equal((await endpoint('allocation/distribute','POST',{scope:managerScope,ids:Array.from({length:4},(_,i)=>participant+'-lead-'+i)})).assigned,4);
+assert.deepEqual(sqlite.prepare("SELECT owner_id,COUNT(*) n FROM crm_leads WHERE id LIKE ? GROUP BY owner_id ORDER BY owner_id").all(participant+'-lead-%').map(r=>[r.owner_id,r.n]),[['a',2],[participant,2]]);
+for(const state of ['请假','暂停']){
+ await endpoint('allocation/config','POST',{scope:managerScope,config:{...managerConfig,members:managerConfig.members.map(m=>m.user_id===participant?{...m,state}:m)}});
+ assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,[{user_id:'a',share:100}]);
+}
+await endpoint('allocation/config','POST',{scope:managerScope,config:managerConfig});
+sqlite.prepare("UPDATE crm_users SET active=0 WHERE id=?").run(participant);
+assert.deepEqual((await server.allocationWeights(db,managerScope)).weights,[{user_id:'a',share:100}]);
+assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE id=?").get(participant).role,role);
+assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
+console.log('PASS: '+role+' participates in scoped allocation and monthly shares, retains its role, and respects leave, pause, disabled accounts and scope membership.');
+sqlite.prepare('DELETE FROM crm_assignments WHERE lead_id LIKE ?').run(participant+'-lead-%');
+}

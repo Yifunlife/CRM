@@ -16,6 +16,7 @@ const original=database();
 original.exec("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('admin','admin','测试管理员','admin','unused','2026-10-01'); INSERT INTO crm_leads(id,name,source,detail,fingerprint,created,owner_id) VALUES('lead','测试客户','Meta','{}','test-fingerprint','2026-10-01','admin'); INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES('deal','TEST-001','lead','admin','meta-full','2026-10-01','2026-10-01','admin');");
 const insert=original.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,cancelled,created,created_by) VALUES(?,?,?,?,?,?,?,?,?)');
 for(let i=0;i<205;i++)insert.run('receipt-'+i,'reference-'+i,'deal',12345+i,i%2?'USD':'CNY','2026-10-02',i%3===0?1:0,'2026-10-02','admin');
+original.exec("INSERT INTO crm_customer_pool(id,source,raw,payload,created,updated,created_by,lead_id,state) VALUES('pool','Meta','原始测试资料','{}','2026-10-29','2026-10-29','admin','lead','已入CRM'); INSERT INTO crm_pool_events(id,intake_id,actor_id,kind,payload,created) VALUES('event','pool','admin','确认资料','{}','2026-10-29');");
 const rows=(db,table)=>db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
 const tables=original.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' ORDER BY name").all().map(r=>r.name);
 const before=Object.fromEntries(tables.map(table=>[table,rows(original,table)]));

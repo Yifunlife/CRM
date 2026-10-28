@@ -10,7 +10,7 @@ const users=await ok('users'),a=users.find(u=>u.username==='attra'+key),b=users.
 await ok('import',{source:'Meta',business_scope:'meta-full',filename:'attribution-isolated-test',rows:[{客户名称:'归因隔离样本 · 首期项目',邮箱:key+'a@example.invalid'},{客户名称:'归因隔离样本 · 再次咨询',邮箱:key+'b@example.invalid'},{客户名称:'其他业务员的咨询',邮箱:key+'c@example.invalid'}]});
 const leads=(await ok('leads')).filter(l=>l.email.startsWith(String(key))),first=leads.find(l=>l.email.includes('a@')),lost=leads.find(l=>l.email.includes('b@')),hidden=leads.find(l=>l.email.includes('c@'));
 await ok('allocation/config',{scope:'meta-full',config:{members:[{user_id:a.id,state:'参与',share:50},{user_id:b.id,state:'参与',share:50}],rule:{performance:30,maxChange:10,minimum:5,automatic:false,receipts:true}}});
-for(const [l,u]of [[first,a],[lost,a],[hidden,b]])await ok('assign',{ids:[l.id],owner_id:u.id});
+for(const [l,u]of [[first,a],[lost,a],[hidden,b]]){await ok('allocation/config',{scope:'meta-full',config:{members:[{user_id:u.id,state:'参与',share:0}],rule:{performance:30,maxChange:10,minimum:5,automatic:false}}});await ok('allocation/distribute',{ids:[l.id],scope:'meta-full'});}
 const account=await ok('operations/accounts',{name:'隔离Meta账号'+key,platform:'Facebook',owner_id:admin.id});
 await ok('advertising',{name:'隔离活动费用'+key,platform:'Meta',date:'2026-10-01',status:'投放中',owner_id:admin.id,budget:'100',spent:'100',account_id:account.id});
 const ad=(await ok('advertising')).find(r=>r.name==='隔离活动费用'+key);

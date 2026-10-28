@@ -12,3 +12,7 @@
  .attribution-page button, .attribution-page summary, .attribution-page .checkbox { min-height: 44px; }
  .attribution-page input:not([type=checkbox]), .attribution-page select, .attribution-page textarea { min-height: 44px; font-size: 16px; }
 }
+
+.operations-checks{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.operations-checks span{font-variant-numeric:tabular-nums}.attribution-page .table-wrap{scrollbar-color:#bccadc #f4f7fb}.attribution-page :focus-visible{outline:2px solid var(--green);outline-offset:2px}.attribution-page input,.attribution-page textarea{caret-color:var(--green)}.attribution-page ::selection{background:#d6e4f7}
+
+.customer-change-scroll-hint{display:none}.customer-change-table{min-width:760px}.customer-change-table td:first-child{white-space:nowrap}.operations-customers td:nth-child(n+4){white-space:nowrap;overflow-wrap:normal}.operations-customers{min-width:960px}.operations-method{margin-bottom:20px}.attribution-page h2[tabindex]{scroll-margin-top:72px}@media(max-width:720px){.customer-change-scroll-hint{display:block}}
