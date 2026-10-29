@@ -2,11 +2,14 @@ import {AD_ACCOUNT_PLATFORMS,opToday} from './operations';
 import {AD_PLATFORMS,AD_STATUSES,type AdPlatform} from './advertising';
 import {id,now,clean,can} from './crm';
 import {AllocationError} from './allocation-server';
+import {metaAdReport} from './meta-ad-report-server';
 export async function advertisingEndpoint(db:D1Database,user:any,path:string,method:string,body:any){
- if(path!=='advertising')return undefined;
+ if(!['advertising','advertising/meta'].includes(path))return undefined;
  if(!can(user,method==='GET'?'advertising_view':'advertising_edit'))throw new AllocationError('广告投放需要运营或管理员权限',403);
+ if(path==='advertising/meta'){if(method!=='GET')throw new AllocationError('操作不存在',404);return metaAdReport(db);}
  if(method==='GET')return (await db.prepare('SELECT a.*,u.name AS owner_name FROM crm_advertising a JOIN crm_users u ON u.id=a.owner_id ORDER BY a.date DESC,a.created DESC').all()).results;
  if(!['POST','PATCH'].includes(method))throw new AllocationError('操作不存在',404);
+ if(method==='PATCH'&&String(body.id).startsWith('meta-daily:'))throw new AllocationError('Meta 导入费用请通过核对原始报表后重新导入更正，不能手工修改');
  const platform=clean(body.platform,40) as AdPlatform,name=clean(body.name,200),date=clean(body.date,10),status=clean(body.status,20);
  if(!Object.hasOwn(AD_PLATFORMS,platform)||!name||!AD_STATUSES.includes(status))throw new AllocationError('请填写广告名称并选择平台和进度');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new AllocationError('请填写有效的投放日期');

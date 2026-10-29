@@ -1,4 +1,7 @@
+import {refreshQuoteBridge} from '../lib/quote-bridge';
+import {refreshSalesSuite} from '../lib/sales-suite-server';
 import {processCustomerPool} from '../lib/customer-pool';
+import {syncGoogleForms} from '../lib/google-form-sync';
 import {refreshFollowupNotifications} from '../lib/followup-notifications';
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
@@ -10,6 +13,9 @@ export default {
     if (!env.DB) throw new Error('CRM database binding is missing');
     await refreshFollowupNotifications(env.DB);
     await processCustomerPool(env.DB);
+    await syncGoogleForms(env.DB);
+    await refreshSalesSuite(env.DB,env.QUOTE_DB);
+    await refreshQuoteBridge(env.DB,env.QUOTE_DB);
   },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     // Keep the original company URL and desktop bridge working after cutover.

@@ -27,9 +27,9 @@ export async function phase1Endpoint(db:D1Database,user:any,actor:any,path:strin
  if(!path.startsWith('followup-phase1/'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
  const manager=await followupManager(db,user),all=manager||can(user,'followup_all');
- if(!all&&user.role!=='sales')fail('没有跟单访问权限',403);
+ if(!all&&!['sales','followup'].includes(user.role))fail('没有跟单访问权限',403);
  if(path==='followup-phase1/report'&&method==='GET'){
-  const day=chinaDay(now()),args=all?[]:[user.id],where=all?'':' WHERE o.commercial_id=?';
+  const day=chinaDay(now()),args=all?[]:[user.id],where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=?';
   const orders=(await db.prepare('SELECT o.* FROM crm_followup_orders o'+where).bind(...args).all<any>()).results;
   const records=(await db.prepare('SELECT r.*,u.name AS actor_name FROM crm_followup_records r JOIN crm_followup_orders o ON o.id=r.order_id JOIN crm_users u ON u.id=r.created_by'+where+' ORDER BY r.occurred_at DESC,r.created DESC,r.rowid DESC').bind(...args).all<any>()).results.map(r=>({...r,payload:JSON.parse(r.payload)}));
   const checks=(await db.prepare('SELECT c.*,u.name AS actor_name FROM crm_followup_checks c JOIN crm_followup_orders o ON o.id=c.order_id JOIN crm_users u ON u.id=c.created_by'+where+' ORDER BY c.created DESC,c.rowid DESC').bind(...args).all<any>()).results;
@@ -37,9 +37,10 @@ export async function phase1Endpoint(db:D1Database,user:any,actor:any,path:strin
   return {day,projects:orders.map(o=>{const check=checks.find(c=>c.order_id===o.id&&c.day===day);return {order_id:o.id,checked:check?.order_version===o.version,check:check||null,latest:records.find(r=>r.order_id===o.id)||null,progress:records.filter(r=>r.order_id===o.id&&(chinaDay(r.occurred_at)===day||chinaDay(r.created)===day)),changes:changes.filter(e=>e.order_id===o.id),nodes:upcomingNodes({...o,details:JSON.parse(o.details)},day)};})};
  }
  const match=/^followup-phase1\/orders\/([a-z0-9-]+)\/(records|check|delegate)$/.exec(path);if(!match)fail('跟单操作不存在',404);
- const {row}=await followupOrder(db,user,match![1]);
+ const {row,manager:canManage}=await followupOrder(db,user,match![1]);
  if(method==='GET'&&match![2]==='records')return {records:(await db.prepare('SELECT r.*,u.name AS actor_name FROM crm_followup_records r JOIN crm_users u ON u.id=r.created_by WHERE r.order_id=? ORDER BY r.occurred_at DESC,r.created DESC,r.rowid DESC').bind(row.id).all<any>()).results.map(r=>({...r,payload:JSON.parse(r.payload)}))};
- if(!manager)fail('只有管理员及指定后勤可以维护跟单',403);
+ if(!canManage)fail('没有此订单的跟单维护权限',403);
+ if(!manager&&body.owner_id&&![user.id,row.commercial_id].includes(body.owner_id))fail('只能指定本订单的商务或跟单负责人',403);
  if(method!=='POST')fail('请求方式无效',405);
  if(row.archived)fail('订单已归档，请先重新打开',409);
  if(match![2]==='check'){
@@ -47,6 +48,7 @@ export async function phase1Endpoint(db:D1Database,user:any,actor:any,path:strin
   return writeFollowup(db,row,body,actor,'每日核对',{day,note},(token,at)=>[db.prepare('INSERT INTO crm_followup_checks(id,order_id,day,order_version,note,created,created_by) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_followup_orders WHERE id=? AND change_token=?)').bind(id(),row.id,day,row.version+1,note,at,actor.id,row.id,token)]);
  }
  if(match![2]==='delegate'){
+  if(!manager)fail('只有管理员及全公司跟单维护人员可以安排代办',403);
   const delegate=body.delegate_id?await person(db,body.delegate_id,'代办人'):'';
   if(delegate){const u:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(delegate).first();if(!await followupManager(db,u))fail('代办人须有跟单维护权限');}
   const reason=required(body.reason,'代办安排说明'),details={...row.details,delegate_id:delegate};
@@ -84,5 +86,5 @@ export async function phase1Endpoint(db:D1Database,user:any,actor:any,path:strin
  return writeFollowup(db,row,body,actor,'跟单过程记录',{record_id:recordId,category:category!.name,title,result,task_id:taskId},(token,at)=>[
   ...(taskId?[db.prepare('INSERT INTO crm_followup_tasks(id,order_id,kind,step,title,impact,contact_reply,next_action,owner_id,due_at,next_followup,status,resolution,confirmation,notified,meta,created,created_by,updated,updated_by) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_followup_orders WHERE id=? AND change_token=?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,step=excluded.step,title=excluded.title,impact=excluded.impact,contact_reply=excluded.contact_reply,next_action=excluded.next_action,owner_id=excluded.owner_id,due_at=excluded.due_at,next_followup=excluded.next_followup,status=excluded.status,resolution=excluded.resolution,confirmation=excluded.confirmation,meta=excluded.meta,updated=excluded.updated,updated_by=excluded.updated_by').bind(taskId,row.id,kind,category!.step,title,content+'\n'+result,contact,next,open?owner:previous?.owner_id||owner,due||previous?.due_at||'',follow||previous?.next_followup||'',body.status,open?'':result,money?.state==='已确认'?money.evidence:'',previous?.notified||'',JSON.stringify({phase1:true,record_id:recordId,category:category!.key,priority:body.priority,money}),previous?.created||at,previous?.created_by||actor.id,at,actor.id,row.id,token)]:[]),
   db.prepare('INSERT INTO crm_followup_records(id,order_id,category,occurred_at,payload,task_id,created,created_by) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_followup_orders WHERE id=? AND change_token=?)').bind(recordId,row.id,category!.key,occurred,JSON.stringify(payload),taskId,at,actor.id,row.id,token)
- ]);
+ ],category!.key==='factory'&&row.details.execution?{...row,details:{...row.details,execution:{...row.details.execution,last_factory_at:[row.details.execution.last_factory_at||'',occurred.slice(0,10)].sort().at(-1)}}}:undefined);
 }

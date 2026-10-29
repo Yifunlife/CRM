@@ -1,4 +1,4 @@
-import {passwordHash,PERMISSION_FIELDS} from './crm';
+import {passwordHash,PERMISSION_FIELDS,SALES_PERSONAL_ONLY} from './crm';
 import {AllocationError} from './allocation-server';
 export async function editAccount(db:D1Database,actor:any,body:any){
  if(actor.role!=='admin')throw new AllocationError('只有管理员可以编辑账号',403);
@@ -24,12 +24,14 @@ export async function resetAccountPassword(db:D1Database,actor:any,body:any){
 
 export async function setAccountPermissions(db:D1Database,actor:any,body:any){
  if(actor.role!=='admin')throw new AllocationError('只有管理员可以设置账号权限',403);
- if(Object.keys(body).some(k=>!['id','role','permissions'].includes(k))||!['sales','operations','ceo','admin','management'].includes(body.role))throw new AllocationError('请选择有效角色和权限');
+ if(Object.keys(body).some(k=>!['id','role','permissions'].includes(k))||!['sales','operations','ceo','admin','management','followup'].includes(body.role))throw new AllocationError('请选择有效角色和权限');
  const target:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(body.id).first();
  if(!target)throw new AllocationError('账号不存在',404);
  if(target.role==='admin'||body.role==='admin')throw new AllocationError('管理员账号权限固定，不能在此新增或撤销管理员权限');
  const p=body.permissions;if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).length!==PERMISSION_FIELDS.length||PERMISSION_FIELDS.some(([k])=>typeof p[k]!=='boolean')||Object.keys(p).some(k=>!PERMISSION_FIELDS.some(([key])=>key===k)))throw new AllocationError('请完整设置所有功能权限');
- if((p.leads_allocate||p.performance_view||p.customers_edit&&body.role!=='sales')&&!p.customers_all||p.followup_edit&&!p.followup_all||p.advertising_edit&&!p.advertising_view)throw new AllocationError('维护或分配功能需要同时开放对应查看权限');
+ if(body.role==='followup'&&PERMISSION_FIELDS.some(([k])=>k!=='followup_edit'&&p[k]))throw new AllocationError('跟单员仅可维护分配给本人的订单，不能开放全公司或业务员权限');
+ if(body.role==='sales'&&SALES_PERSONAL_ONLY.some(k=>p[k]))throw new AllocationError('业务员仅使用本人客户功能；全公司管理请使用相应管理角色');
+ if((p.leads_allocate||p.performance_view||p.customers_edit&&body.role!=='sales')&&!p.customers_all||p.followup_edit&&body.role!=='followup'&&!p.followup_all||p.advertising_edit&&!p.advertising_view)throw new AllocationError('维护或分配功能需要同时开放对应查看权限');
  await db.prepare('UPDATE crm_users SET role=?,permissions=? WHERE id=?').bind(body.role,JSON.stringify(p),target.id).run();
  return {ok:true};
 }

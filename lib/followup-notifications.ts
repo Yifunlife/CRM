@@ -1,3 +1,4 @@
+import {assignmentReminders} from './assignment-reminders';
 import {can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {orderReminders} from './order-followup';
@@ -9,7 +10,7 @@ export async function refreshFollowupNotifications(db:D1Database,at=now()){
  const orders=(await db.prepare('SELECT * FROM crm_followup_orders WHERE archived=0').all<any>()).results;
  const tasks=(await db.prepare("SELECT t.* FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id WHERE o.archived=0 AND t.status='待处理'").all<any>()).results;
  const today=chinaDay(at),notices:any[]=[];
- const add=(o:any,key:string,title:string,content:string,recipients:string[])=>{for(const recipient of new Set(recipients.filter(r=>active.has(r))))notices.push({key:o.id+':'+key+':'+recipient,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});};
+ const add=(o:any,key:string,title:string,content:string,recipients:string[])=>{for(const recipient of new Set(recipients.filter(r=>active.has(r)&&(users.find(u=>u.id===r)?.role!=='followup'||o.logistics_id===r))))notices.push({key:o.id+':'+key+':'+recipient,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});};
  for(const raw of orders){
   const o={...raw,details:JSON.parse(raw.details),steps:JSON.parse(raw.steps)};
   // Calendar reminders are independent of work-week and response-time policies.
@@ -31,17 +32,20 @@ export async function notificationEndpoint(db:D1Database,user:any,actor:any,path
  if(!path.startsWith('followup-notifications'))return undefined;
  if(path==='followup-notifications'&&method==='GET'){
   await refreshFollowupNotifications(db);
-  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE n.recipient_id=? ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
-  return {notifications:rows,run:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first(),channel:'站内通知',email:'未启用'};
+  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE n.recipient_id=?'+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=n.order_id AND o.logistics_id=n.recipient_id)':'')+' ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
+  const enquiries=user.role==='followup'?[]:(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200").bind(user.id,user.id).all<any>()).results;
+  return {assignments:await assignmentReminders(db,user),notifications:[...rows,...enquiries].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first(),channel:'站内通知',email:'未启用'};
  }
  if(path==='followup-notifications/audit'&&method==='GET'){
   if(!can(user,'followup_all'))throw new AllocationError('只有管理者可以查看全公司通知状态',403);
-  return {notifications:(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id ORDER BY n.created DESC LIMIT 200').all()).results,run:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first()};
+  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id ORDER BY n.created DESC LIMIT 200').all<any>()).results;
+  const enquiries=can(user,'customers_all')?(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id ORDER BY n.created DESC LIMIT 200").all<any>()).results:[];
+  return {notifications:[...rows,...enquiries].sort((a,b)=>b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first()};
  }
  if(path==='followup-notifications/read'&&method==='POST'){
   if(user.id!==actor.id)throw new AllocationError('请切回本人视角标记已读',403);
   const result=await db.prepare("UPDATE crm_followup_notifications SET read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND recipient_id=?").bind(now(),String(body.id||''),user.id).run();
-  if(!result.meta.changes)throw new AllocationError('通知不存在',404);return {ok:true};
+  if(!result.meta.changes){const leadNotice=await db.prepare("UPDATE crm_lead_notifications SET read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND recipient_id=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(now(),String(body.id||''),user.id,user.id).run();if(!leadNotice.meta.changes)throw new AllocationError('通知不存在',404);}return {ok:true};
  }
  throw new AllocationError('通知操作不存在',404);
 }

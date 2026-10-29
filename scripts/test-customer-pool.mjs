@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),allocation=module('lib/allocation.ts'),server=module('lib/allocation-server.ts',{"'./crm'":crm,"'./allocation'":allocation});
-const {customerPoolEndpoint,processCustomerPool}=await import(module('lib/customer-pool.ts',{"'./crm'":crm,"'./allocation'":allocation,"'./allocation-server'":server,"'./attribution'":module('lib/attribution.ts')}));
+const {customerPoolEndpoint,processCustomerPool}=await import(module('lib/customer-pool.ts',{"'./crm'":crm,"'./allocation'":allocation,"'./allocation-server'":server,"'./attribution'":module('lib/attribution.ts'),"'./lead-notifications'":module('lib/lead-notifications.ts',{"'./crm'":crm}),"'./customer-progress'":module('lib/customer-progress.ts',{"'./crm'":crm})}));
 const {allocationWeights,distribute}=await import(server);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
@@ -38,7 +38,13 @@ assert.equal(pool(one).state,'已入CRM');assert.equal(lead(one).owner_id,'a');a
 assert.equal((await report(sales)).rows[0].can_open,true);
 await processCustomerPool(db);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,1);
 const two=await submit(2);await confirm(two,values(2));assert.equal(lead(two).owner_id,'b');
-assert.equal((await report(sales)).rows.find(r=>r.id===two).can_open,false,'submitter cannot open a lead assigned to someone else');
+assert.equal((await report(sales)).rows.find(r=>r.id===two),undefined,'submitter cannot read forms assigned to someone else');
+const broadSales={...sales,permissions:{customers_all:true,leads_allocate:true,advertising_view:true}};
+const broadReport=await report(broadSales);
+assert.equal(broadReport.manages,false);
+assert.ok(broadReport.rows.every(r=>r.owner_id===sales.id||(!r.owner_id&&r.created_by===sales.id)));
+assert.equal(broadReport.rows.find(r=>r.id===two),undefined);
+assert.deepEqual(broadReport.campaigns,[]);
 const saved=sqlite.prepare('SELECT id,owner_id,status,grade FROM crm_leads ORDER BY id').all();
 // Contact matches must be explicitly reviewed; old customer does not consume an allocation slot.
 const repeat=await submit(3);await assert.rejects(confirm(repeat,values(1)),/相同联系方式/);

@@ -5,17 +5,19 @@ import {AD_PLATFORMS} from '../lib/advertising';
 import './attribution.css';
 import {can} from '../lib/crm';
 import OperationsSummary from './operations-summary';
+import OperationsAccountSummary from './operations-account-summary';
+import {opToday} from '../lib/operations';
 import CustomerChangeList from './customer-change-list';
 const money=(n:number|null)=>n===null?'无查看权限':(n/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const values=(f:HTMLFormElement)=>Object.fromEntries(new FormData(f));
 export default function Attribution({user,api,openLead}:{user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void}){
- const [data,D]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[tab,T]=useState(can(user,'customers_all')&&can(user,'advertising_view')?'投放效果':'咨询核查'),[query,Q]=useState(''),[page,P]=useState(1),[selected,S]=useState(''),[revision,V]=useState(0),[from,F]=useState(''),[to,U]=useState('');
+ const [data,D]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[tab,T]=useState(can(user,'customers_all')&&can(user,'advertising_view')?'投放效果':'咨询核查'),[query,Q]=useState(''),[page,P]=useState(1),[selected,S]=useState(''),[revision,V]=useState(0),[from,F]=useState(opToday().slice(0,7)+'-01'),[to,U]=useState(opToday());
  const admin=user.role==='admin',reviewRef=useRef<HTMLElement>(null);
  const focusReview=()=>{reviewRef.current?.scrollIntoView({block:'start'});reviewRef.current?.focus({preventScroll:true});};
  const selectRow=(key:string)=>{S(key);if(key===selected)focusReview();};
  useEffect(()=>{if(selected)focusReview();},[selected,tab]);
  async function refresh(){D(await api('attribution/report?'+new URLSearchParams({from,to})));}
- useEffect(()=>{let live=true;api('attribution/report').then(v=>{if(live)D(v);}).catch(e=>{if(live)E(e.message);});return()=>{live=false;};},[api,user.id]);
+ useEffect(()=>{let live=true;api('attribution/report?'+new URLSearchParams({from,to})).then(v=>{if(live)D(v);}).catch(e=>{if(live)E(e.message);});return()=>{live=false;};},[api,user.id]);
  async function run(action:()=>Promise<any>,success='已保存，列表已更新。'){B(true);E('');M('');try{await action();await refresh();V(v=>v+1);M(success);}catch(e:any){E(e.message);}finally{B(false);}}
  const nav=(v:string)=>{T(v);P(1);Q('');S('');M('');};
  if(!data)return <section className="panel" aria-busy={!error}>{error?<><p role="alert">{error}</p><button onClick={()=>run(refresh,'列表已刷新。')}>重试加载</button></>:<p role="status">正在读取归因与核查资料…</p>}</section>;
@@ -29,10 +31,11 @@ export default function Attribution({user,api,openLead}:{user:any;api:(path:stri
  const targetName=(r:any)=>r.kind==='lead'?leadName(r.entity_id):r.kind==='deal'?data.deals.find((d:any)=>d.id===r.entity_id)?.order_number:data.ads.find((a:any)=>a.id===r.entity_id)?.name;
  const proposalName=(r:any)=>r.kind==='lead'?`${r.payload.source_kind==='广告活动'?campaignLabel(r.payload.campaign_id):r.payload.source_kind}；辅助：${r.payload.assists.map(campaignLabel).join('、')||'无'}`:r.kind==='deal'?(r.payload.lead_id?leadName(r.payload.lead_id):'解除来源咨询'):(r.payload.campaign_id?campaignLabel(r.payload.campaign_id):'解除活动');
  return <div className="workflow-page attribution-page">
-  <div className="page-heading"><div><h1>{data.operations?'运营看板':'广告归因与未成交'}</h1><p>查看投放效果、客户变化，并核查来源和费用归属。</p></div><button disabled={busy} onClick={()=>run(refresh,'列表已刷新。')}>刷新</button></div>
+  <div className="page-heading"><div><h1>{data.operations?'运营看板':'广告归因与未成交'}</h1><p>查看获客质量、销售承接与成交回报，及时处理来源和费用问题。</p></div><button disabled={busy} onClick={()=>run(refresh,'列表已刷新。')}>刷新</button></div>
   {error&&<p className="notice" role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
-  <div className="toolbar">{[...(data.operations?['投放效果']:[]),'客户变化','咨询核查','成交归因',...(data.ad_view?['活动与费用']:[]),'待确认','期间收支',...(admin?['操作记录']:[])].map(t=><button key={t} aria-pressed={tab===t} className={tab===t?'primary':''} onClick={()=>nav(t)}>{t}</button>)}</div>
-  {tab==='投放效果'&&data.operations&&<section className="panel"><h2>按获客批次看转化</h2><form onSubmit={e=>{e.preventDefault();run(refresh,'获客批次已更新。');}}><div className="form-row"><label>获客开始日期<input type="date" value={from} onChange={e=>F(e.target.value)}/></label><label>获客结束日期<input type="date" value={to} onChange={e=>U(e.target.value)}/></label></div><button disabled={busy}>查询获客批次</button></form><OperationsSummary key={data.from+data.to} data={data} openLead={openLead} navigate={nav}/></section>}
+  <div className="toolbar">{[...(data.operations?['投放效果','账号内容运营']:[]),'客户变化','咨询核查','成交归因',...(data.ad_view?['活动与费用']:[]),'待确认','期间收支',...(admin?['操作记录']:[])].map(t=><button key={t} aria-pressed={tab===t} className={tab===t?'primary':''} onClick={()=>nav(t)}>{t}</button>)}</div>
+  {tab==='投放效果'&&data.operations&&<section className="panel acquisition-panel"><div className="acquisition-controls"><div className="acquisition-period">{['本月','上月','全部期间'].map(label=><button disabled={busy} key={label} onClick={()=>{const today=opToday(),start=today.slice(0,7)+'-01',last=new Date(Date.parse(start)-86400000).toISOString().slice(0,10),f=label==='本月'?start:label==='上月'?last.slice(0,7)+'-01':'',t=label==='上月'?last:today;F(f);U(t);B(true);E('');api('attribution/report?'+new URLSearchParams({from:f,to:t})).then(D).catch(e=>E(e.message)).finally(()=>B(false));}}>{label}</button>)}</div><form onSubmit={e=>{e.preventDefault();run(refresh,'获客批次已更新。');}}><div className="form-row"><label>获客开始日期<input type="date" value={from} onChange={e=>F(e.target.value)}/></label><label>获客结束日期<input type="date" value={to} onChange={e=>U(e.target.value)}/></label></div><button disabled={busy}>查询</button></form></div><OperationsSummary key={data.from+data.to} data={data} navigate={nav}/></section>}
+  {tab==='账号内容运营'&&data.operations&&<OperationsAccountSummary api={api}/>}
   {tab==='客户变化'&&<section className="panel"><h2>客户类别、跟进与来源变化</h2><CustomerChangeList changes={data.changes} openLead={openLead} campaigns={data.campaigns}/></section>}
   {['咨询核查','成交归因','活动与费用','待确认'].includes(tab)&&<section className="panel">
    <label>查找{tab==='咨询核查'?'客户、来源或渠道':tab==='成交归因'?'订单编号':tab==='活动与费用'?'广告名称':'提报人或依据'}<input value={query} onChange={e=>{Q(e.target.value);P(1);S('');}}/></label>

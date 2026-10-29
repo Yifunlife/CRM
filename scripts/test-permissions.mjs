@@ -67,3 +67,12 @@ const managementOrders=await followupEndpoint(db,management,management,'followup
 assert.equal(managementOrders.orders.length,2);assert.equal(managementOrders.can_manage,false);
 await assert.rejects(followupEndpoint(db,management,management,'followup','POST',{project:'Denied'}),e=>e.status===403);
 console.log('PASS: management role matches CEO defaults, reads company-wide projects and performance, allocates leads without rule/account/followup maintenance or self-escalation, and preserves credentials and ownership.');
+
+// Sales stays personal even when a historical permission record grants company-wide access.
+const broadSales={...other,permissions:JSON.stringify(Object.fromEntries(Object.keys(permissionDefaults('sales')).map(k=>[k,true])))};
+for(const key of ['customers_all','leads_allocate','performance_view','advertising_view','advertising_edit'])assert.equal(can(broadSales,key),false,key);
+assert.equal(can(broadSales,'customers_edit'),true);
+assert.equal(authorizedLead(broadSales,{owner_id:'sales'}),false);
+assert.equal(authorizedLead(broadSales,{owner_id:other.id}),true);
+await assert.rejects(setAccountPermissions(db,admin,{id:'staff',role:'sales',permissions:{...permissionDefaults('sales'),customers_all:true}}),/业务员仅使用本人/);
+console.log('PASS: historical broad sales grants cannot expose other customers or advertising; normal own-customer editing and management permissions remain available.');

@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+import {mkdtempSync,rmSync,readFileSync,readdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const dir=mkdtempSync(join(tmpdir(),'assignment-reminders-'));
+try{
+ await build({entryPoints:['lib/assignment-reminders.ts'],bundle:true,platform:'node',format:'esm',outfile:join(dir,'m.mjs'),logLevel:'silent'});
+ const {assignmentReminders,teamAssignmentSummary}=await import('file://'+join(dir,'m.mjs'));
+ const sql=new DatabaseSync(':memory:');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ const statement=(s,a=[])=>({bind:(...args)=>statement(s,args),all:async()=>({results:sql.prepare(s).all(...a)})});const db={prepare:s=>statement(s)};
+ sql.exec("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('a','a','A','sales','unused','now'),('b','b','B','sales','unused','now'); INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('l','模拟','Meta','a','{}','x','2026-10-01'); INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('as','l','a','a','2026-10-02');");
+ const a={id:'a',role:'sales'},b={id:'b',role:'sales'};
+ assert.equal((await assignmentReminders(db,a)).length,1);assert.equal((await assignmentReminders(db,b)).length,0);
+ assert.equal((await assignmentReminders(db,a)).length,1,'repeated reads do not resolve');
+ sql.exec("UPDATE crm_leads SET status='正在沟通',last_contact='2026-10-03' WHERE id='l'");assert.equal((await assignmentReminders(db,a)).length,1,'status-only does not resolve');
+ sql.exec("INSERT INTO crm_notes(id,lead_id,user_id,content,next_step,method,created) VALUES('old','l','a','old','','电话','2026-10-01'),('other','l','b','other','','电话','2026-10-03'),('empty','l','a','  ','','电话','2026-10-03')");assert.equal((await assignmentReminders(db,a)).length,1,'old/other/empty notes do not resolve');
+ sql.exec("INSERT INTO crm_notes(id,lead_id,user_id,content,next_step,method,created) VALUES('valid','l','a','已联系确认需求','','电话','2026-10-03')");assert.equal((await assignmentReminders(db,a)).length,0);
+ sql.exec("UPDATE crm_leads SET owner_id='b';INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('as2','l','a','b','2026-10-04')");assert.equal((await assignmentReminders(db,a)).length,0);assert.equal((await assignmentReminders(db,b)).length,1,'reassignment follows current owner');
+ assert.equal((await assignmentReminders(db,{id:'b',role:'followup'})).length,0);
+ const team=await teamAssignmentSummary(db,'2026-10');
+ assert.equal(team.find(r=>r.id==='a').allocated,1);assert.equal(team.find(r=>r.id==='a').pending.length,0);
+ assert.equal(team.find(r=>r.id==='b').allocated,1);assert.equal(team.find(r=>r.id==='b').pending_month,1);
+ sql.exec("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('duplicate','l','a','b','2026-10-04'),('boundary','l','a','b','2026-10-31T16:30:00Z')");
+ assert.equal((await teamAssignmentSummary(db,'2026-10','b'))[0].allocated,1,'deduplicates client per owner');
+ assert.equal((await teamAssignmentSummary(db,'2026-11','b'))[0].allocated,1,'Beijing month boundary');
+ assert.equal((await teamAssignmentSummary(db,'2026-09','b'))[0].pending.length,0,'later assignments excluded from selected month');
+ const nov=(await teamAssignmentSummary(db,'2026-11','b'))[0];assert.equal(nov.pending_month,1);assert.equal(nov.pending_history,0);assert.equal(nov.pending_unknown,0);assert.equal(nov.pending[0].owner_name,'B');assert.equal(nov.pending[0].latest_note.content,'已联系确认需求');
+ const dec=(await teamAssignmentSummary(db,'2026-12','b'))[0];assert.equal(dec.pending_history,1);assert.equal(dec.pending_month+dec.pending_history+dec.pending_unknown,dec.pending.length);
+ console.log('PASS: ownership isolation, persistent reads, status-only changes, follow-up evidence, reassignment and followup role.');
+}finally{rmSync(dir,{recursive:true,force:true});}

@@ -2,12 +2,14 @@ import {importOrders} from './order-import-server';
 import {AllocationError} from './allocation-server';
 import {id,now,clean,can,permissionOverrides} from './crm';
 import {ORDER_STEPS,ORDER_FIELDS,LOGISTICS_FIELDS,ORDER_DATES,blankSteps} from './order-followup';
-export async function followupManager(db:D1Database,user:any){const current=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)return false;user={...user,...current};return can(user,'followup_edit')||(permissionOverrides(user).followup_edit!==false&&!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first());}
+export async function followupManager(db:D1Database,user:any){const current=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current||current.role==='followup')return false;user={...user,...current};return can(user,'followup_edit')||(permissionOverrides(user).followup_edit!==false&&!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first());}
+export async function followupAssignee(db:D1Database,user:any){const current:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();return !!current&&(current.role==='followup'?can(current,'followup_edit'):await followupManager(db,current));}
 export async function followupOrder(db:D1Database,user:any,orderId:string){
+ const current:any=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)throw new AllocationError('订单不存在或无权查看',404);user={...user,...current};
  const manager=await followupManager(db,user);
  const row:any=await db.prepare('SELECT * FROM crm_followup_orders WHERE id=?').bind(orderId).first();
- if(!row||(!manager&&!can(user,'followup_all')&&row.commercial_id!==user.id))throw new AllocationError('订单不存在或无权查看',404);
- return {row:{...row,details:JSON.parse(row.details),steps:JSON.parse(row.steps)},manager};
+ if(!row||(!manager&&!can(user,'followup_all')&&(user.role==='followup'?row.logistics_id!==user.id:row.commercial_id!==user.id)))throw new AllocationError('订单不存在或无权查看',404);
+ return {row:{...row,details:JSON.parse(row.details),steps:JSON.parse(row.steps)},manager:manager||user.role==='followup'&&row.logistics_id===user.id&&can(user,'followup_edit')};
 }
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 function date(value:any){if(value==='')return '';if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value)fail('请填写有效日期');return value;}
@@ -29,17 +31,17 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  if(path==='followup'&&method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
  const manager=await followupManager(db,user);
- if(!manager&&!can(user,'followup_all')&&user.role!=='sales')fail('此账号没有跟单访问权限，请联系管理员',403);
+ if(!manager&&!can(user,'followup_all')&&!['sales','followup'].includes(user.role))fail('此账号没有跟单访问权限，请联系管理员',403);
  if(path==='followup'&&method==='GET'){
-  const all=manager||can(user,'followup_all'),where=all?'':' WHERE o.commercial_id=?',args=all?[]:[user.id];
+  const all=manager||can(user,'followup_all'),where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=?',args=all?[]:[user.id];
   const orders=(await db.prepare('SELECT o.*,l.name AS customer_name,c.name AS commercial_name,s.name AS logistics_name FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users c ON c.id=o.commercial_id JOIN crm_users s ON s.id=o.logistics_id'+where+' ORDER BY o.archived,o.updated DESC').bind(...args).all()).results.map((o:any)=>({...o,details:JSON.parse(o.details),steps:JSON.parse(o.steps)}));
   const tasks=(await db.prepare('SELECT t.*,u.name AS owner_name FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_users u ON u.id=t.owner_id'+where+' ORDER BY t.due_at,t.created').bind(...args).all()).results;
-  const people=manager?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 ORDER BY name').all()).results:[];
+  const people=manager?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 ORDER BY name').all()).results:user.role==='followup'?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 AND (id=? OR id IN (SELECT commercial_id FROM crm_followup_orders WHERE logistics_id=?)) ORDER BY name').bind(user.id,user.id).all()).results:[];
   const staff=user.role==='admin'?(await db.prepare('SELECT user_id FROM crm_followup_staff').all()).results.map((s:any)=>s.user_id):[];
   const deals=manager?(await db.prepare('SELECT d.id,d.order_number,d.lead_id,d.owner_id,l.name AS customer_name FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE d.cancelled=0 AND NOT EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) ORDER BY d.created DESC').all()).results:[];
   const leads=manager?(await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE owner_id IS NOT NULL ORDER BY name').all()).results:[];
-  const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR json_extract(u.permissions,'$.followup_edit')=1 OR (json_extract(u.permissions,'$.followup_edit') IS NULL AND EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id))) ORDER BY u.name").all()).results:[];
-  return {orders,tasks,people,staff,deals,leads,logistics,can_manage:manager,is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
+  const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR (u.role='followup' AND COALESCE(json_extract(u.permissions,'$.followup_edit'),1)=1) OR json_extract(u.permissions,'$.followup_edit')=1 OR (json_extract(u.permissions,'$.followup_edit') IS NULL AND EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id))) ORDER BY u.name").all()).results:user.role==='followup'?people.filter((p:any)=>p.id===user.id):[];
+  return {orders,tasks,can_mark_priority:['admin','ceo','management'].includes(user.role),people,staff,deals,leads,logistics,can_manage:manager,can_edit:manager||user.role==='followup'&&can(user,'followup_edit'),is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
  }
  if(path==='followup/import'&&method==='POST'){
   if(!manager)fail('只有管理员及指定后勤可以导入跟单',403);
@@ -48,6 +50,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  if(path==='followup/staff'&&method==='POST'){
   if(user.role!=='admin'||actor.role!=='admin')fail('只有管理员可以指定后勤账号',403);
   await person(db,body.user_id,'后勤账号');
+  const target:any=await db.prepare('SELECT role FROM crm_users WHERE id=?').bind(body.user_id).first();if(target.role==='followup')fail('跟单员请在订单中指定负责人，不开放全公司后勤权限');
   if(typeof body.enabled!=='boolean')fail('账号授权状态无效');
   if(body.enabled)await db.prepare('INSERT OR IGNORE INTO crm_followup_staff(user_id,created,created_by) VALUES(?,?,?)').bind(body.user_id,now(),actor.id).run();
   else await db.prepare('DELETE FROM crm_followup_staff WHERE user_id=?').bind(body.user_id).run();
@@ -58,7 +61,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const project=required(body.project,'项目名称',200),number=required(body.order_number,'合同／订单编号',100);
   const lead:any=await db.prepare('SELECT id,owner_id FROM crm_leads WHERE id=?').bind(body.lead_id).first();if(!lead||!lead.owner_id)fail('请选择已分配业务员的CRM客户');
   const commercial=await person(db,lead.owner_id,'商务负责人'),logistics=await person(db,body.logistics_id,'后勤负责人');
-  const logisticsUser:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,logisticsUser))fail('后勤负责人需为管理员或指定后勤账号');
+  const logisticsUser:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupAssignee(db,logisticsUser))fail('后勤负责人需为管理员或指定后勤账号');
   let dealId=null;
   if(body.deal_id){const d:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(body.deal_id).first();if(!d||d.lead_id!==lead.id||d.order_number!==number)fail('成交订单、客户、商务或编号不一致');dealId=d.id;}
   if(await db.prepare('SELECT id FROM crm_followup_orders WHERE order_number=?').bind(number).first())fail('此订单已经建立跟单，请打开已有记录');
@@ -66,27 +69,38 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   try{await db.batch([db.prepare('INSERT INTO crm_followup_orders(id,order_number,project,lead_id,deal_id,commercial_id,logistics_id,details,steps,change_token,created,created_by,updated,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(orderId,number,project,lead.id,dealId,commercial,logistics,JSON.stringify(details),JSON.stringify(steps),token,time,actor.id,time,actor.id),event(db,orderId,token,actor,'建立跟单',{project,order_number:number,lead_id:lead.id,deal_id:dealId},time)]);}catch(e:any){if(String(e.message).includes('UNIQUE'))fail('此订单已经建立跟单');throw e;}
   return {ok:true,id:orderId};
  }
- const match=/^followup\/orders\/([a-z0-9-]+)(?:\/(tasks|steps|details|archive|reopen))?$/.exec(path);if(!match)return fail('跟单操作不存在',404);
+ const match=/^followup\/orders\/([a-z0-9-]+)(?:\/(tasks|steps|details|archive|reopen|priority))?$/.exec(path);if(!match)return fail('跟单操作不存在',404);
  const {row,manager:canManage}=await followupOrder(db,user,match[1]);
  if(method==='GET'&&!match[2]){
   const events=(await db.prepare('SELECT e.*,u.name AS actor_name FROM crm_followup_events e JOIN crm_users u ON u.id=e.created_by WHERE order_id=? ORDER BY e.created DESC,e.rowid DESC').bind(row.id).all()).results.map((e:any)=>({...e,payload:JSON.parse(e.payload)}));
   const files=(await db.prepare('SELECT id,step,name,size,created FROM crm_followup_files WHERE order_id=? ORDER BY created DESC').bind(row.id).all()).results;
   return {order:row,events,files};
  }
- if(!canManage)fail('业务员仅可查看本人订单，不能修改跟单',403);
+ if(match[2]==='priority'){
+  if(!['admin','ceo','management'].includes(user.role)||!['admin','ceo','management'].includes(actor.role))fail('只有老板或管理层可以标记优先订单',403);
+  if(method!=='POST'||typeof body.priority!=='boolean')fail('请指定是否优先');
+  if(row.archived)fail('已归档订单不能标记优先',409);
+  const priority=body.priority?{by:actor.name||actor.id,at:now()}:null;
+  return writeFollowup(db,row,body,actor,body.priority?'标记优先订单':'取消优先订单',{before:row.details.priority||null,after:priority},()=>[],{...row,details:{...row.details,priority}});
+ }
+ if(!canManage)fail('没有此订单的跟单维护权限',403);
+ if(!manager&&body.owner_id&&![user.id,row.commercial_id].includes(body.owner_id))fail('只能指定本订单的商务或跟单负责人',403);
  if(method!=='POST')fail('此跟单操作不支持该请求',405);
  const action=match[2];
+ if(row.details.execution&&['steps','archive'].includes(action||''))fail('本订单已启用分类执行，请在订单执行中完成对应表单');
  if(row.archived&&action!=='reopen')fail('订单已归档，请先重新打开',409);
  if(action==='details'){
-  const details:any={dates:{},history_note:row.details.history_note||'',delegate_id:row.details.delegate_id||''},input=body.details;
+  const details:any={...row.details,priority:row.details.priority||null,dates:{},history_note:row.details.history_note||'',delegate_id:row.details.delegate_id||''},input=body.details;
   if(!input||typeof input!=='object'||!input.dates||typeof input.dates!=='object')fail('资料格式无效');
   for(const [key] of [...ORDER_FIELDS,...LOGISTICS_FIELDS]){if(input[key]!==undefined&&typeof input[key]!=='string')fail('资料内容须为文字');details[key]=clean(input[key],2000);}
+  if(row.details.contract_source)for(const key of ['supply_scope','payment_nodes','delivery_address','customer_contact','drawing_version','quote_reference','delivery_requirements','special_requirements'])details[key]=row.details[key];
   const logistics=await person(db,body.logistics_id||row.logistics_id,'后勤负责人');
-  const assigned:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupManager(db,assigned))fail('后勤负责人需为管理员或指定后勤账号');
+  if(!manager&&logistics!==row.logistics_id)fail('只有管理员及全公司跟单维护人员可以更换负责人',403);
+  const assigned:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=?').bind(logistics).first();if(!await followupAssignee(db,assigned))fail('后勤负责人需为管理员或指定后勤账号');
   const changes:any[]=[];
   for(const [key,label] of ORDER_DATES){
    const item=input.dates[key]||{},value=date(item.date||''),previous=row.details.dates?.[key];
-   if(value){if(!['预计','已确认','实际'].includes(item.kind)||key==='actual_ship'&&item.kind!=='实际'||key.startsWith('eta_')&&item.kind==='实际')fail('请区分预计、已确认及实际时间');const source=required(item.source,label+'信息来源',200);const confirmed_at=dateTime(item.confirmed_at||'');if(!confirmed_at&&!(previous?.imported&&previous.date===value&&previous.kind===item.kind&&previous.source===source))fail('请填写'+label+'信息确认时间');const sync_record=clean(item.sync_record,1000);details.dates[key]={date:value,kind:item.kind,source,confirmed_at,updated_at:previous?.date===value?previous.updated_at||now():now(),sync_record:previous?.date&&previous.date!==value&&sync_record===previous.sync_record?'':sync_record,...(!confirmed_at&&previous?.imported?{imported:true}:{})};}
+   if(value){if(!['预计','已确认','实际'].includes(item.kind)||['actual_ship','production_ordered','purchase_ordered'].includes(key)&&item.kind!=='实际'||key.startsWith('eta_')&&item.kind==='实际')fail('请区分预计、已确认及实际时间');if(['production_ordered','purchase_ordered'].includes(key)&&value>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}))fail('实际下单日期不能晚于今天');const source=required(item.source,label+'信息来源',200);const confirmed_at=dateTime(item.confirmed_at||'');if(!confirmed_at&&!(previous?.imported&&previous.date===value&&previous.kind===item.kind&&previous.source===source))fail('请填写'+label+'信息确认时间');const sync_record=clean(item.sync_record,1000);details.dates[key]={date:value,kind:item.kind,source,confirmed_at,updated_at:previous?.date===value?previous.updated_at||now():now(),sync_record:previous?.date&&previous.date!==value&&sync_record===previous.sync_record?'':sync_record,...(!confirmed_at&&previous?.imported?{imported:true}:{})};}
    if(previous?.date&&previous.date!==value){const reason=required(body.change_reason,'日期变更原因',1000);changes.push({field:label,before:previous,after:details.dates[key]||null,reason});}
   }
   return writeFollowup(db,row,body,actor,'更新订单资料',{before:row.details,after:details,date_changes:changes,logistics_id:logistics},()=>[],{...row,details,logistics_id:logistics});
@@ -134,7 +148,8 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  }
  if(action==='reopen'){
   if(!row.archived)fail('订单尚未归档');const reason=required(body.reason,'重新打开原因'),steps=[...row.steps];steps[11]={...steps[11],status:'待处理'};
-  return writeFollowup(db,row,body,actor,'重新打开订单',{reason},()=>[],{...row,steps,archived:0});
+  const details={...row.details};if(details.execution){details.execution={...details.execution,current_key:'archive',stages:{...details.execution.stages,archive:{...details.execution.stages.archive,status:'进行中',problem:reason}}};}
+  return writeFollowup(db,row,body,actor,'重新打开订单',{reason},()=>[],{...row,details,steps,archived:0});
  }
  fail('跟单操作不存在',404);
 }

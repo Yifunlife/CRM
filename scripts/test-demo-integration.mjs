@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';import {join} from 'node:path';import {build} from 'esbuild';
+const dir=mkdtempSync(join(tmpdir(),'crm-integration-'));
+try{
+ await build({entryPoints:['lib/order-execution-server.ts','lib/order-execution.ts','lib/order-followup-server.ts','lib/order-followup.ts','lib/quote-bridge.ts','lib/assignment-reminders.ts'],bundle:true,platform:'node',format:'esm',outdir:dir,outExtension:{'.js':'.mjs'},logLevel:'silent'});
+ const {executionEndpoint,executionQuote}=await import('file://'+join(dir,'order-execution-server.mjs')),{executionStages}=await import('file://'+join(dir,'order-execution.mjs')),{followupEndpoint}=await import('file://'+join(dir,'order-followup-server.mjs')),{orderReminders}=await import('file://'+join(dir,'order-followup.mjs')),{refreshQuoteBridge,quoteBridgeEndpoint}=await import('file://'+join(dir,'quote-bridge.mjs')),{teamAssignmentSummary}=await import('file://'+join(dir,'assignment-reminders.mjs'));
+ const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ const sourceSql=new DatabaseSync(':memory:');sourceSql.exec(`CREATE TABLE app_users(email TEXT,name TEXT,username TEXT,status TEXT,role TEXT);CREATE TABLE quotation_history(id TEXT PRIMARY KEY,contract_no TEXT,project_name TEXT,customer_name TEXT,created_by TEXT,generated_at TEXT,lineage_id TEXT,is_finalized INTEGER,archived_at TEXT,final_amount REAL,final_currency TEXT,confirmed_at TEXT,voided_at TEXT,project_status TEXT,quote_valid_until TEXT,snapshot_json TEXT);CREATE TABLE quotation_handovers(id TEXT,quotation_id TEXT,data_json TEXT,created_at TEXT);`);sourceSql.exec(readFileSync('../../报价系统/yifun-quote-system/drizzle/0032_quotation_crm_collaboration.sql','utf8'));
+ const adapter=sqlite=>{const st=(s,a=[])=>({bind:(...args)=>st(s,args),first:async()=>sqlite.prepare(s).get(...a)||null,all:async()=>({results:sqlite.prepare(s).all(...a)}),run:async()=>({meta:sqlite.prepare(s).run(...a)})});return {prepare:s=>st(s),batch:async statements=>{sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};};
+ const db=adapter(sql),src=adapter(sourceSql),admin={id:'admin',role:'admin',name:'管理员'},sales={id:'sales',role:'sales',name:'销售'},followup={id:'follow',role:'followup',name:'跟单员'},other={id:'other',role:'sales',name:'其他销售'};
+ for(const u of [admin,sales,followup,other])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.name,u.role,'unused','2026-10-01');
+ sql.exec("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('lead','测试客户','Meta','sales','{}','test','2026-10-01');INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('assignment','lead','admin','sales','2026-10-02');");
+ const protectedData=()=>JSON.stringify(['crm_users','crm_leads','crm_assignments','crm_notes','crm_deals'].map(t=>sql.prepare('SELECT * FROM '+t).all()));const before=protectedData();
+ const legacy=(path,body,u=admin)=>followupEndpoint(db,u,u,path,body?'POST':'GET',body||{});
+ async function make(number){const o=await legacy('followup',{project:'Same Project',order_number:number,lead_id:'lead',logistics_id:'follow'});return o.id;}
+ const oid=await make('TEST-01'),path='followup/orders/'+oid;
+ const get=async()=> (await legacy(path)).order;
+ const call=async(action,body,u=admin,version)=>executionEndpoint(db,src,u,u,path+'/execution/'+action,'POST',{...body,version:version??(await get()).version},new URL('https://local.test/'));
+ const profile={type:'replacement',production:false,inspection:false,shipping:'express',installation:'none',charge:'free',parent_contract:'PARENT',reason:'已核实仅免费补货'};
+ const keys=executionStages(profile).map(s=>s.key);assert.ok(!keys.includes('production')&&!keys.includes('inspection')&&!keys.includes('freight')&&!keys.includes('installation'));
+ const equipment=executionStages({...profile,type:'equipment',charge:'paid',production:true,inspection:true,shipping:'sea',installation:'ours'});assert.ok(equipment.some(s=>s.key==='inspection'));assert.ok(!equipment.some(s=>/设计|报价/.test(s.name)));
+ assert.ok(executionStages({...profile,type:'addition',charge:'paid',installation:'customer'}).find(s=>s.key==='installation').fields.some(f=>f.key==='guide'));
+ await assert.rejects(call('configure',{profile},other),e=>e.status===404);
+ await call('configure',{profile},followup);const oldSteps=(await get()).steps;
+ await assert.rejects(call('source',{},followup),e=>e.status===403);
+ const handover={contract_no:'PARENT',customer:'客户',amount:'0',currency:'USD',supply_scope:'护垫 1 件',payment_terms:'批准免费',delivery_notes:'快递',evidence:'核实原合同和补货单',delivery_address:'测试地址',customer_contact:'测试收件人',delivery_date:'2026-11-10'};
+ await call('source',handover,sales);
+ const form=s=>Object.fromEntries(s.fields.map(f=>[f.key,f.type==='date'?'2026-10-29':f.pass?.[0]||f.options?.[0]||'测试已核实依据']));
+ const stage=executionStages(profile)[0],payload={stage:stage.key,action:'complete',due:'2026-10-29',problem:'',next:'',values:form(stage)};
+ await assert.rejects(call('stage',{...payload,values:{}}),/填写/);
+ await assert.rejects(call('stage',{...payload,problem:'未解决'}),/待解决/);
+ await assert.rejects(call('stage',{...payload,stage:'archive'}),/先完成/);
+ const v=(await get()).version;await call('stage',payload);await assert.rejects(call('stage',payload,admin,v),e=>e.status===409);
+ await assert.rejects(call('source',handover),/固定/);
+ await assert.rejects(legacy(path+'/steps',{version:(await get()).version,step:11,status:'已完成'}),/订单执行/);
+ let order=await get();const imported=structuredClone(order.details.contract_source);await legacy(path+'/details',{version:order.version,details:{...order.details,supply_scope:'非法覆盖',payment_nodes:'非法覆盖'},logistics_id:'follow'});order=await get();assert.deepEqual(order.details.contract_source,imported);assert.equal(order.details.supply_scope,imported.supply_scope);assert.deepEqual(order.steps,oldSteps);
+ for(const stage of executionStages(profile).slice(1)){const values=form(stage);if(stage.key==='receipt'){await assert.rejects(call('stage',{stage:stage.key,action:'complete',due:'2026-10-29',values:{...values,condition:'曾有缺件或破损',issues:'无问题'}}),/缺件/);}await call('stage',{stage:stage.key,action:'complete',due:'2026-10-29',values});}
+ assert.equal((await get()).archived,1);await legacy(path+'/reopen',{version:(await get()).version,reason:'追加售后事项'});assert.equal((await get()).details.execution.stages.archive.status,'进行中');assert.equal((await get()).archived,0);
+ assert.deepEqual(protectedData(),before,'customers,assignments,users,notes and deals preserved');
+ const reminder={archived:0,details:{execution:{profile:{...profile,production:true},current_key:'production',current_name:'工厂进度',stages:{handover:{status:'已完成',at:'2026-10-01'},production:{status:'进行中',due:'2026-10-20',values:{contact_date:'2026-10-01'}}}},dates:{planned_ship:{date:'2026-10-31'}}}};
+ assert.ok(orderReminders(reminder,[],'2026-10-29').some(r=>r.key==='factory-weekly'));assert.ok(!orderReminders(reminder,[],'2026-10-29').some(r=>r.key==='planned_ship'));
+ // Real financial release is mandatory for paid orders, not a text-field check.
+ const paidId=await make('PAID');const paidPath='followup/orders/'+paidId;const paidGet=async()=>(await legacy(paidPath)).order;const paidCall=async(action,body)=>executionEndpoint(db,src,admin,admin,paidPath+'/execution/'+action,'POST',{...body,version:(await paidGet()).version},new URL('https://local.test'));
+ const paidProfile={...profile,type:'addition',charge:'paid'};await paidCall('configure',{profile:paidProfile});await paidCall('source',{...handover,contract_no:'PAID',amount:'100',drawing:'确认规格'});
+ for(const stage of executionStages(paidProfile).slice(0,2))await paidCall('stage',{stage:stage.key,action:'complete',due:'2026-10-29',values:form(stage)});
+ const release=executionStages(paidProfile).find(s=>s.key==='release');await assert.rejects(paidCall('stage',{stage:'release',action:'complete',due:'2026-10-29',values:form(release)}),/发货放行/);
+ // Matching requires exact project + contract; quote costs are never exposed or changed.
+ sourceSql.prepare("INSERT INTO quotation_history VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run('q1','Q-1-R01','Same Project','客户','cost@example.test','2026-10-29','family',0,null,null,'USD',null,null,'quoted','',JSON.stringify({products:[{id:'p',usd:100,cost:777777}],cart:{p:1},priceMode:'usd'}));
+ sourceSql.exec("INSERT INTO app_users VALUES('cost@example.test','核算','cost','active','cost_accountant');INSERT INTO quotation_crm_messages VALUES('ready-q1','q1','','quote','核算报价完成','{\"content\":\"报价核算完成\"}','核算','2026-10-29T01:00:00Z')");
+ sql.prepare("INSERT INTO crm_sales_projects(project_id,name,lead_id,stage_at,details,token,created,created_by,updated,updated_by) VALUES('project','Same Project','lead','2026-10-29',?,'t','2026-10-29','admin','2026-10-29','admin')").run(JSON.stringify({contract_no:'WRONG'}));
+ const quoteBefore=JSON.stringify(sourceSql.prepare('SELECT * FROM quotation_history').all());
+ assert.equal((await refreshQuoteBridge(db,src)).linked,0);
+ sql.exec("UPDATE crm_sales_projects SET details='{\"contract_no\":\"Q-1\"}'");
+ assert.equal((await refreshQuoteBridge(db,src)).linked,1);await refreshQuoteBridge(db,src);
+ assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_sales_quote_links').get().n,1);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE dedupe_key LIKE 'quote-ready:%'").get().n,1);
+ const link=sql.prepare('SELECT summary FROM crm_sales_quote_links').get();assert.ok(!link.summary.includes('777777'));assert.equal(sourceSql.prepare('SELECT sales_id FROM quotation_crm_links').get().sales_id,'sales');
+ sql.exec("UPDATE crm_sales_notifications SET read_at='read'");await refreshQuoteBridge(db,src);assert.equal(sql.prepare('SELECT resolved_at FROM crm_sales_notifications').get().resolved_at,'');
+ sql.prepare("INSERT INTO crm_sales_events VALUES('response','project','lead',NULL,'修改要求',?,'2026-10-29T02:00:00Z','2026-10-29T02:00:00Z','sales')").run(JSON.stringify({quote_id:'q1',content:'客户要求调整滑梯',next_action:'核算复核',evidence:'客户邮件'}));await refreshQuoteBridge(db,src);await refreshQuoteBridge(db,src);
+ assert.equal(sourceSql.prepare("SELECT COUNT(*) n FROM quotation_crm_messages WHERE direction='crm'").get().n,1);assert.ok(sql.prepare('SELECT resolved_at FROM crm_sales_notifications').get().resolved_at);assert.equal(JSON.stringify(sourceSql.prepare('SELECT * FROM quotation_history').all()),quoteBefore);
+ await assert.rejects(quoteBridgeEndpoint(db,src,other,other,'sales-suite/bridge','GET',{},new URL('https://local.test/?project=project')),e=>e.status===404);
+ sourceSql.exec("UPDATE quotation_history SET is_finalized=1,final_amount=100,confirmed_at='2026-10-29T03:00:00Z' WHERE id='q1'");
+ const handoverData={quotationId:'q1',contractNo:'Q-1-R01',confirmedAt:'2026-10-29T03:00:00Z',finalAmount:100,currency:'USD',paymentTerms:'合同30%定金',customerConfirmation:'客户签字确认',items:[{sku:'X',name:'设备',quantity:1,cost:888888}],files:[{id:'file1',filename:'客户签署合同.pdf'}]};
+ sourceSql.prepare('INSERT INTO quotation_handovers VALUES(?,?,?,?)').run('handover1','q1',JSON.stringify(handoverData),'2026-10-29');
+ const fixedSource=await executionQuote(db,src,sales,'q1');assert.equal(fixedSource.handover_id,'handover1');assert.ok(fixedSource.handover_url.endsWith('&id=handover1'));assert.ok(!JSON.stringify(fixedSource).includes('888888'));await assert.rejects(executionQuote(db,src,followup,'q1'),e=>e.status===403);
+ sourceSql.exec("UPDATE quotation_history SET final_amount=200 WHERE id='q1'");await assert.rejects(executionQuote(db,src,sales,'q1'),e=>e.status===409);assert.equal(fixedSource.amount_minor,10000);
+ const report=(await teamAssignmentSummary(db,'2026-10')).find(r=>r.id==='sales');assert.equal(report.allocated,report.followed_month+report.pending_month+report.transferred_month);assert.equal(report.allocated_rows.length,report.allocated);
+ writeFileSync('../outputs/demo-integration-20261029/new-feature-tests.json',JSON.stringify({passed:true,typedOrders:true,sourceReadOnly:true,conflicts:true,missingEvidenceBlocked:true,unapprovedShipmentBlocked:true,conditionalSteps:true,oldDataPreserved:true,weeklyReminder:true,bothKeysRequired:true,roundTripFeedback:true,idempotentNotifications:true,readDoesNotResolve:true,costsHidden:true,sourceQuoteUnchanged:true},null,2));
+ console.log('PASS: typed order forms, conditional paths, financial release gates, immutable handovers, reopen, weekly reminders, preserved legacy data; exact project/contract match, quote-ready notification, feedback round-trip, idempotency, cost privacy and unchanged quote source.');
+}finally{rmSync(dir,{recursive:true,force:true});}

@@ -141,6 +141,48 @@
       "when": 1793197633266,
       "tag": "0019_rare_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793225792883,
+      "tag": "0020_tranquil_argent",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793225861985,
+      "tag": "0021_lazy_starbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1793236521196,
+      "tag": "0022_soft_carlie_cooper",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793237097736,
+      "tag": "0023_nervous_captain_flint",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1793258805026,
+      "tag": "0024_elite_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1793259549661,
+      "tag": "0025_order_execution_release",
+      "breakpoints": true
     }
   ]
 }

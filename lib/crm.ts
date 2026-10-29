@@ -32,7 +32,8 @@ export const PERMISSION_FIELDS = [
 export type PermissionKey=typeof PERMISSION_FIELDS[number][0];
 export function permissionDefaults(role:string):Record<PermissionKey,boolean>{
  const admin=role==='admin',operations=role==='operations',leadership=['ceo','management'].includes(role);
- return {customers_all:admin||operations||leadership,customers_edit:admin||operations||role==='sales',leads_allocate:admin||operations||leadership,performance_view:admin||operations||leadership,followup_all:admin||leadership,followup_edit:admin,advertising_view:admin||operations,advertising_edit:admin||operations};
+ return {customers_all:admin||operations||leadership,customers_edit:admin||operations||role==='sales',leads_allocate:admin||operations||leadership,performance_view:admin||operations||leadership,followup_all:admin||leadership,followup_edit:admin||role==='followup',advertising_view:admin||operations,advertising_edit:admin||operations};
 }
 export function permissionOverrides(user:any):Partial<Record<PermissionKey,boolean>>{try{const p=typeof user.permissions==='string'?JSON.parse(user.permissions):user.permissions;return p&&typeof p==='object'&&!Array.isArray(p)?p:{};}catch{return {};}}
-export function can(user:any,key:PermissionKey){return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
+export const SALES_PERSONAL_ONLY:readonly PermissionKey[]=['customers_all','leads_allocate','performance_view','advertising_view','advertising_edit'];
+export function can(user:any,key:PermissionKey){if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}

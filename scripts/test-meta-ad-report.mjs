@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import ts from 'typescript';
+const moduleUrl=file=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
+const {metaTotals,metaPeriodRows}=await import(moduleUrl('lib/meta-ad-report.ts'));
+const metric=(account_id,date,spent,impressions=0,clicks=0,results=0,result_type='')=>({account_id,date,spent,impressions,clicks,results,result_type});
+const rows=[metric('full','2025-12-31',10),metric('full','2026-03-31',101,100,2,1,'lead'),metric('full','2026-04-01',202,200,1,2,'lead'),metric('toy','2026-04-01',303,300,3,4,'message'),metric('toy','2026-12-31',404),metric('full','2027-01-01',505)];
+assert.equal(metaTotals(rows).spent,1525);
+assert.deepEqual(metaTotals(rows).results,{lead:3,message:4});
+assert.equal(metaPeriodRows(rows,'quarter','','2026').find(r=>r.period==='2026-Q2').spent,505);
+assert.equal(metaPeriodRows(rows,'month','toy','2026').find(r=>r.period==='2026-04').spent,303);
+for(const period of ['month','quarter','year'])assert.equal(metaPeriodRows(rows,period).reduce((n,r)=>n+r.spent,0),1525);
+assert.deepEqual(metaPeriodRows(rows,'year','missing'),[]);
+assert.equal(Object.keys(metaTotals([metric('a','2026-01-01',1,1,0,10,'reach')]).results).length,0);
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+sqlite.exec("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('ops','ops','ops','operations','unused','2026-01-01'); INSERT INTO crm_operation_accounts(id,name,platform,currency,owner_id,created,created_by,updated,updated_by) VALUES('full','全案','Facebook','USD','ops','2026','ops','2026','ops');");
+const insert=sqlite.prepare('INSERT INTO crm_meta_ad_daily VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+const values=['one','full','ad1','2026-04-01','ad','c1','campaign','s1','set',101,10,2,1,'lead','{}','test.csv','hash','2026'];insert.run(...values);
+assert.throws(()=>insert.run(...['duplicate',...values.slice(1)]),/UNIQUE/);
+insert.run(...['two','full','ad2',...values.slice(3)]);
+class Statement{constructor(sql){this.sql=sql;}async all(){return {results:sqlite.prepare(this.sql).all()};}}
+const {metaAdReport}=await import(moduleUrl('lib/meta-ad-report-server.ts'));
+const report=await metaAdReport({prepare:sql=>new Statement(sql)});
+assert.equal(report.accounts[0].ad_count,2);assert.equal(report.daily.length,1);assert.equal(report.daily[0].spent,202);assert.equal(report.campaigns[0].spent,202);
+assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: month/quarter/year boundaries, account isolation, cents reconciliation, mixed results, empty ranges, non-additive reach excluded, unique ad/day keys and SQL rollups');

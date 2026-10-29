@@ -1,7 +1,9 @@
 import {SOURCE_KINDS} from './attribution';
+import {customerProgress} from './customer-progress';
 import {SOURCES,can,clean,emailKey,phoneKey,id,now} from './crm';
 import {BUSINESS_SCOPES} from './allocation';
 import {AllocationError,allocationWeights,distribute} from './allocation-server';
+import {enquiryNotification} from './lead-notifications';
 
 const manager=(user:any)=>can(user,'customers_all')&&can(user,'leads_allocate');
 const day=(at:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
@@ -27,7 +29,8 @@ export async function processCustomerPool(db:D1Database,at=now()){
     await db.batch([
      db.prepare("INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) SELECT ?,?,?,?,'新咨询','请核对本次需求并安排跟进',? WHERE EXISTS(SELECT 1 FROM crm_customer_pool WHERE id=? AND state='待分配' AND version=?)").bind('pool:'+row.id,lead.id,actor,`客户池新咨询｜${row.source}\n需求：${data.requirement}\n摘要：${data.summary}\n原始内容：${row.raw}`,at,row.id,row.version),
      db.prepare("UPDATE crm_customer_pool SET state='已入CRM',lead_id=?,last_error='',updated=?,version=version+1 WHERE id=? AND state='待分配' AND version=? AND EXISTS(SELECT 1 FROM crm_notes WHERE id=?)").bind(lead.id,at,row.id,row.version,'pool:'+row.id),
-     event(db,row.id,actor,'追加原客户咨询',{lead_id:lead.id,owner_id:lead.owner_id})
+     event(db,row.id,actor,'追加原客户咨询',{lead_id:lead.id,owner_id:lead.owner_id}),
+     enquiryNotification(db,'pool:'+row.id,lead.id,`客户再次询问｜${row.source}\n需求：${data.requirement}\n原始内容：${row.raw}`,at)
     ]);
     continue;
    }
@@ -73,14 +76,15 @@ export async function processCustomerPool(db:D1Database,at=now()){
 export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('customer-pool'))return undefined;
  const manages=manager(user),timestamp=now();
+ if(path==='customer-pool/progress'&&method==='GET')return customerProgress(db,user);
  if(path==='customer-pool'&&method==='GET'){
-  const rows=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id'+(manages?'':' WHERE p.created_by=? OR l.owner_id=?')+' ORDER BY p.created DESC,p.id LIMIT 300').bind(...(manages?[]:[user.id,user.id])).all<any>()).results;
+  const rows=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id'+(manages?'':user.role==='sales'?' WHERE l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL)':' WHERE p.created_by=? OR l.owner_id=?')+' ORDER BY p.created DESC,p.id LIMIT 300').bind(...(manages?[]:[user.id,user.id])).all<any>()).results;
   const today=day(timestamp),leads=(await db.prepare("SELECT l.id,l.name,l.owner_id,u.name AS owner_name,l.status,l.next_date,l.created FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE "+(manages?'1=1':'l.owner_id=?')).bind(...(manages?[]:[user.id])).all<any>()).results;
   const assigned=(await db.prepare("SELECT a.owner_id,u.name AS owner_name,COUNT(*) AS count FROM crm_assignments a JOIN crm_users u ON u.id=a.owner_id WHERE a.created>=? AND a.created<?"+(manages?'':' AND a.owner_id=?')+' GROUP BY a.owner_id').bind(...dayBounds(today),...(manages?[]:[user.id])).all<any>()).results;
   const todo=leads.filter(l=>l.next_date&&l.next_date<=today&&!['已成交','已结束','暂停跟进'].includes(l.status));
   const todayPool=manages?await db.prepare("SELECT COUNT(*) total,SUM(state='已入CRM') completed,SUM(state='待确认') review,SUM(state='待分配') pending FROM crm_customer_pool WHERE created>=? AND created<?").bind(...dayBounds(today)).first():null;
   const firstContact=leads.filter(l=>l.status==='待首次联系');
-  const campaigns=(await db.prepare('SELECT id,code,name,platform FROM crm_attribution_campaigns ORDER BY name,id').all()).results;
+  const campaigns=user.role==='sales'?[]:(await db.prepare('SELECT id,code,name,platform FROM crm_attribution_campaigns ORDER BY name,id').all()).results;
   return {campaigns,rows:rows.map(r=>({...r,can_open:manages||r.owner_id===user.id,followed:!!r.last_contact&&r.last_contact>=r.updated,payload:JSON.parse(r.payload)})),manages,today,todayPool,assigned,todoCount:todo.length,todo:todo.slice(0,100),firstContactCount:firstContact.length,firstContact:firstContact.slice(0,100),timezone:'Australia/Sydney',ai:false};
  }
  if(path==='customer-pool/submit'&&method==='POST'){

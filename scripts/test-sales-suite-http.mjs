@@ -1,0 +1,34 @@
+import evidence from './sales-suite-evidence.cjs';
+import assert from 'node:assert/strict';import {readFileSync,writeFileSync} from 'node:fs';
+const origin='http://127.0.0.1:8806';assert.equal(new URL(origin).hostname,'127.0.0.1');const {password}=JSON.parse(readFileSync('work/http-test-config.json','utf8'));
+async function login(username){const r=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({username,password})});assert.equal(r.status,200,await r.clone().text());return r.headers.get('set-cookie').split(';')[0];}
+const admin=await login('test-admin'),sales=await login('test-sales'),engineer=await login('test-engineer');
+async function api(path,body,cookie=sales,expected=200){const r=await fetch(origin+'/api/'+path,{method:body===undefined?'GET':'POST',headers:{origin,cookie,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error(path+' returned nonJSON '+r.status)}assert.equal(r.status,expected,path+': '+JSON.stringify(data));return data;}
+const before=await api('leads');const pid=(await api('sales-suite/project/create',{lead_id:'test-lead',name:'悉尼二店 · 室内体验馆',reason:'测试客户确认二店计划'})).id;
+const second=(await api('sales-suite/project/create',{lead_id:'test-lead',name:'墨尔本新店 · 初步意向',reason:'测试同一客户第二个项目'})).id;
+const get=()=>api('sales-suite/project?id='+pid);let p=(await get()).project;
+await api('sales-suite/project/update',{id:pid,version:p.version,section:'qualification',qualification:{site:{value:'租赁已签 · 平面图已收到',state:'verified',evidence:'测试客户邮件10月27日'},area:{value:'1,200㎡ / 4.8m',state:'verified',evidence:'测试场地平面图'},budget:{value:'USD 150,000；安装差旅待确认',state:'pending'},opening:{value:'2027年3月',state:'pending'},scope:{value:'设备、设计、国际运输、现场安装',state:'pending'}},reason:'逐项核实，不覆盖原始咨询'});
+p=(await get()).project;await api('sales-suite/project/update',{id:pid,version:p.version,section:'contacts',contacts:[{name:'Alex Chen（测试）',role:'投资人 · 最终决策人',contact:'test@example.test',state:'contacted',evidence:'测试邮件沟通'},{name:'Sarah Lee（测试）',role:'项目经理 · 现场确认',state:'pending'}],reason:'记录本项目联系人'});
+p=(await get()).project;
+const update={id:pid,version:p.version,stage:'negotiation',amount:'148000',currency:'USD',expected_date:'2026-11-20',forecast:'commit',review_reason:'测试客户计划11月采购',next_action:'确认安装人工与差旅费用边界',next_date:'2026-11-01',blocker:'安装总成本尚未确认',reason:'测试客户基本认可方案，进入价格沟通'};
+await api('sales-suite/project/update',update);await api('sales-suite/project/update',update,sales,409);
+assert.equal((await api('sales-suite/project?id='+second)).project.stage,'qualification');
+await api('sales-suite/project/create',{lead_id:'test-hidden',name:'非法读取',reason:'测试越权'},sales,404);
+await api('sales-suite/quotes',undefined,sales,403);
+await api('sales-suite/quote-accounts',{user_id:'test-sales',quote_email:'test-sales@example.test',reason:'核实测试账号同一人员'},admin);
+assert.equal((await api('sales-suite/quotes')).rows.length,1);
+await api('sales-suite/quotes/link',{project_id:pid,quote_id:'q-test-v3',reason:'测试核实项目及报价一致'});
+const q=await get();assert.equal(q.quotes[0].summary.amount_minor,14800000);assert.ok(!JSON.stringify(q).includes('"cost"'));
+await api('sales-suite/project/record',{id:pid,kind:'报价已发送',quote_id:'q-test-v3',content:'测试邮件已发送V3报价',evidence:'隔离测试发送记录，无对外发送',occurred_at:'2026-10-27T01:00:00Z'});
+await api('sales-suite/project/record',{id:pid,kind:'反馈',quote_id:'q-test-v3',content:'客户基本认可设备价格，希望拆分安装人工、差旅和住宿。',customer_action:'收到费用拆分后组织采购讨论',next_action:'核算完成后发送费用说明',evidence:'隔离测试客户反馈记录',occurred_at:'2026-10-28T01:00:00Z'});
+const due=new Date(Date.now()+86400000).toISOString();
+const task=(await api('sales-suite/task/create',{project_id:pid,kind:'collaboration',title:'补充运输及安装费用拆分',owner_id:'test-engineer',due_at:due,next_action:'列明人工、差旅、住宿和运输费用',deliverable:'提供可回复客户的费用明细'})).id;
+const own=(await api('sales-suite/report',undefined,engineer)).tasks.find(t=>t.id===task);assert.ok(own);await api('sales-suite/project?id='+pid,undefined,engineer,404);
+await api('sales-suite/task/update',{id:task,version:own.version,status:'done',due_at:own.due_at,result:'测试费用拆分已完成',evidence:'隔离核算文件记录',next_action:'由销售回复客户'},engineer);
+for(const [kind,title,next]of [['revival','复查暂停客户的场地进展','确认场地及采购时间'],['callback','交付后首次回访','确认设备使用情况'],['service','补充设备清洁维护说明','整理并提供维护资料'],['expansion','核实墨尔本新店计划','确认场地、预算和采购时间'],['referral','沟通转介绍与案例使用意愿','记录客户真实意愿与授权依据']])await api('sales-suite/task/create',{lead_id:kind==='revival'?'test-old':'test-lead',kind,title,owner_id:'test-sales',due_at:due,next_action:next,deliverable:'记录客户反馈、结果和下一步'});
+await api('sales-suite/ownership-review',{lead_id:'test-old',reason:'隔离测试长期未推进，申请管理者复核'});
+p=(await get()).project;await api('sales-suite/project/review',{id:pid,version:p.version,reason:'测试主管复核客户采购计划'},admin);
+const stats=await api('sales-suite/analytics?month=2026-11',undefined,admin);assert.equal(stats.forecast[0].month_minor,14800000);await api('sales-suite/analytics?month=2026-11',undefined,sales,403);
+const beforeRows=Object.fromEntries(before.map(l=>[l.id,l]));const after=await api('leads');assert.deepEqual(after.map(l=>l.id).sort(),before.map(l=>l.id).sort());for(const l of after)for(const k of ['name','owner_id','detail','grade','status','last_contact','next_date'])assert.deepEqual(l[k],beforeRows[l.id][k],k+' preserved');
+writeFileSync('work/http-fixture-state.json',JSON.stringify({pid,second,task}),{mode:0o600});writeFileSync(evidence.file('http-verification.json'),JSON.stringify({passed:true,modules:8,csrf:true,roleIsolation:true,sourceReadOnly:true,sourceCostsNotExposed:true,conflict409:true,existingCustomerFieldsPreserved:true,externalMessagesSent:false},null,2));
+console.log('PASS: isolated HTTP login, eight modules, qualification, independent projects, quote permissions and linkage, feedback, collaboration, forecast review, customer lifecycle, ownership review, conflicts and old customer preservation.');

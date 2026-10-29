@@ -1,5 +1,13 @@
+import {quoteBridgeEndpoint,refreshQuoteBridge} from '../../../lib/quote-bridge';
+import {executionEndpoint} from '../../../lib/order-execution-server';
+import {salesSuiteEndpoint} from '../../../lib/sales-suite-server';
+import {teamFollowupEndpoint} from '../../../lib/team-followup-server';
+import {salesHomeEndpoint} from '../../../lib/sales-home-server';
+import {salesPipelineEndpoint} from '../../../lib/sales-pipeline-server';
 import {customerChange,customerChanges} from '../../../lib/customer-changes';
 import {customerPoolEndpoint} from '../../../lib/customer-pool';
+import {syncGoogleForms} from '../../../lib/google-form-sync';
+import {importForms} from '../../../lib/form-intake';
 import {phase1Endpoint} from '../../../lib/followup-phase1-server';
 import {notificationEndpoint} from '../../../lib/followup-notifications';
 import {attributionEndpoint,closingOutcome} from '../../../lib/attribution-server';
@@ -58,6 +66,7 @@ async function handle(req: Request) {
   const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
   const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
+  if(user.role==='followup'&&!['me','logout','password','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications'))throw new Problem('跟单员仅可访问本人订单跟单',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
   if(path==='assign'||path==='allocation/distribute')permissionDenied('leads_allocate');
@@ -68,12 +77,19 @@ async function handle(req: Request) {
   if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
+  const bridgeResult=await quoteBridgeEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(bridgeResult!==undefined)return json(bridgeResult);
+  const suiteResult=await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(suiteResult!==undefined){if(req.method==='POST'&&['sales-suite/project/record','sales-suite/quotes/link','sales-suite/quotes/unlink','sales-suite/quotes/sync'].includes(path)){try{await refreshQuoteBridge(db,env.QUOTE_DB,body.project_id||body.id);}catch{(suiteResult as any).message='CRM记录已保存；报价端同步暂未完成，系统将自动重试。';}}return json(suiteResult);}
+  if(path==='followup-notifications/read'&&req.method==='POST'&&await db.prepare('SELECT id FROM crm_sales_notifications WHERE id=?').bind(String(body.id||'')).first())return json(await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,'sales-suite/notices/read','POST',body,url));
+  const homeResult=await salesHomeEndpoint(db,user,path,req.method);if(homeResult!==undefined)return json(homeResult);
+  const salesResult=await salesPipelineEndpoint(db,user,actor,path,req.method,body);if(salesResult!==undefined)return json(salesResult);
   const poolResult=await customerPoolEndpoint(db,user,actor,path,req.method,body);if(poolResult!==undefined)return json(poolResult);
   const attributionResult=await attributionEndpoint(db,user,actor,path,req.method,body,url);if(attributionResult!==undefined)return json(attributionResult);
+  const teamResult=await teamFollowupEndpoint(db,user,path,req.method);if(teamResult!==undefined)return json(teamResult);
   const identityResult=await customerIdentityEndpoint(db,user,actor,path,req.method,body);if(identityResult!==undefined)return json(identityResult);
   const workflowResult=await workflowEndpoint(db,user,actor,path,req.method,body);if(workflowResult!==undefined)return json(workflowResult);
-  const notificationResult=await notificationEndpoint(db,user,actor,path,req.method,body);if(notificationResult!==undefined)return json(notificationResult);
+  const notificationResult=await notificationEndpoint(db,user,actor,path,req.method,body);if(notificationResult!==undefined){if(req.method==='GET'&&user.role!=='followup'){const ns=(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel FROM crm_sales_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE "+(path.endsWith('/audit')&&can(user,'customers_all')?'1=1':"n.recipient_id=? AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+")")+" ORDER BY n.created DESC LIMIT 200").bind(...(path.endsWith('/audit')&&can(user,'customers_all')?[]:[user.id,user.id,user.id])).all()).results;(notificationResult as any).notifications=[...(notificationResult as any).notifications,...ns].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200);}return json(notificationResult);}
   const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined)return json(phase1Result);
+  const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined)return json(executionResult);
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
@@ -83,7 +99,7 @@ async function handle(req: Request) {
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:user.role==='sales'||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
+  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
   if (path === "password" && req.method === "POST") {
    if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
@@ -99,12 +115,13 @@ async function handle(req: Request) {
    if (req.method === "POST") {
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
-    if (!["admin","operations","sales","ceo","management"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
+    if (!["admin","operations","sales","ceo","management","followup"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
     const userId = id();
     const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
     if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
+    if(body.role==='followup')statements.push(db.prepare("UPDATE crm_users SET permissions=? WHERE id=?").bind(JSON.stringify({followup_edit:true}),userId));
     await db.batch(statements);return json({ok:true});
    }
    if (req.method === "PATCH") {
@@ -116,7 +133,13 @@ async function handle(req: Request) {
   if (path.startsWith("google/")) {
    if(user.role!=="admin")throw new Problem("只有管理员可以配置Google连接",403);
    const secret=(env as any).GOOGLE_TOKEN_KEY;
-   if(path==="google/status"&&!write){const c=await connection(db);return json({configured:!!(c?.client_id&&c.client_secret&&secret),client_id:c?.client_id||"",connected:!!c?.refresh_token,email:c?.email||"",connected_at:c?.connected||"",checked:c?.checked||"",sheet_id:GOOGLE_SHEET_ID,callback_url:url.origin+"/api/google/callback",last_error:c?.last_error||"",protected:!!secret});}
+   if(path==='google/forms/preview'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,preview:true,actor:actor.id}));
+   if(path==='google/forms/run'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,actor:actor.id}));
+   if(path==='google/forms/config'&&req.method==='POST'){
+    if(user.id!==actor.id||typeof body.enabled!=='boolean')throw new Problem('请使用本人管理员账号设置每日抓取',403);
+    await db.prepare("INSERT INTO crm_google_form_sync(id,enabled,actor_id) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled,actor_id=excluded.actor_id").bind(body.enabled?1:0,actor.id).run();return json({ok:true});
+   }
+   if(path==="google/status"&&!write){const c=await connection(db);return json({configured:!!(c?.client_id&&c.client_secret&&secret),client_id:c?.client_id||"",connected:!!c?.refresh_token,email:c?.email||"",connected_at:c?.connected||"",checked:c?.checked||"",sheet_id:GOOGLE_SHEET_ID,callback_url:url.origin+"/api/google/callback",last_error:c?.last_error||"",protected:!!secret,form_sync:await db.prepare("SELECT enabled,last_cutoff,finished,last_error,result FROM crm_google_form_sync WHERE id='main'").first()});}
    if(path==="google/config"&&req.method==="POST"){
     if(!secret)throw new Problem("服务器凭证保护尚未配置",503);
     const clientId=clean(body.client_id,300),clientSecret=clean(body.client_secret,2000);
@@ -134,7 +157,7 @@ async function handle(req: Request) {
   if (path.startsWith("leads/") && !write) {
    const lead: any = await db.prepare("SELECT l.*,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE l.id=?").bind(path.split("/")[1]).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权查看",404);
-   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY created DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results,changes:await customerChanges(db,user,can(user,'customers_all'),lead.id)});
+   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY n.created DESC,n.rowid DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results,changes:await customerChanges(db,user,can(user,'customers_all'),lead.id)});
   }
   if (path === "followup" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
@@ -193,6 +216,7 @@ async function handle(req: Request) {
    if(!SOURCES.includes(body.source)||!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem("请选择来源，每次导入1至3000条");
    const businessScope=clean(body.business_scope,80),business=BUSINESS_SCOPES.find(s=>s.id===businessScope);
    if(businessScope&&(!business||business.source!==body.source))throw new Problem('业务范围与来源渠道不匹配');
+   if(body.source==='Meta'&&body.rows.every((r:any)=>r.id&&r.form_id))return json(await importForms(db,body.rows,actor.id,{scope:businessScope,filename:clean(body.filename,200),preview:body.preview===true}));
    const autoIds:string[]=[];
    const allUsers = (await db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role='sales'").all()).results;
    const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint FROM crm_leads").all()).results;

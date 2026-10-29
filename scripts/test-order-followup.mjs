@@ -106,3 +106,35 @@ env.BUCKET={...bucket,async put(key,body){const result=await bucket.put(key,body
 await assert.rejects(upload(),e=>[403,404].includes(e.status));assert.equal(objects.size,objectCount);
 assert.equal(untouched(),before);
 console.log('PASS: order attachment round-trip, sales read-only, cross-owner denial, conflict cleanup and permission revocation during upload');
+
+// Production and procurement are independent actual milestones, preserving logistics dates.
+await call('followup/staff','POST',{user_id:'staff',enabled:true});
+const supplyPath='followup/orders/'+two.id;
+let supplyOrder=(await call(supplyPath)).order;
+const supplyDetails={...supplyOrder.details,production_progress:'加工中',purchase_progress:'供应商备货中',dates:{...supplyOrder.details.dates,production_ordered:{date:'2026-01-19',kind:'实际',source:'生产下单凭证',confirmed_at:'2026-01-19T00:00:00.000Z'},purchase_ordered:{date:'2026-01-20',kind:'实际',source:'采购单',confirmed_at:'2026-01-20T00:00:00.000Z'},planned_ship:{date:'2026-11-20',kind:'预计',source:'工厂反馈',confirmed_at:'2026-01-20T00:00:00.000Z'}}};
+await call(supplyPath+'/details','POST',{version:supplyOrder.version,details:supplyDetails});
+supplyOrder=(await call(supplyPath)).order;
+assert.equal(supplyOrder.details.dates.production_ordered.date,'2026-01-19');assert.equal(supplyOrder.details.dates.purchase_ordered.date,'2026-01-20');assert.equal(supplyOrder.details.production_progress,'加工中');assert.equal(supplyOrder.details.dates.planned_ship.date,'2026-11-20');
+await assert.rejects(call(supplyPath+'/details','POST',{version:supplyOrder.version,details:{...supplyOrder.details,dates:{...supplyOrder.details.dates,production_ordered:{...supplyOrder.details.dates.production_ordered,kind:'预计'}}}}),/实际时间/);
+await assert.rejects(call(supplyPath+'/details','POST',{version:supplyOrder.version,details:{...supplyOrder.details,dates:{...supplyOrder.details.dates,purchase_ordered:{...supplyOrder.details.dates.purchase_ordered,date:'2099-01-01'}}},change_reason:'测试'}),/不能晚于今天/);
+await assert.rejects(call(supplyPath+'/details','POST',{version:supplyOrder.version,details:{...supplyOrder.details,dates:{...supplyOrder.details.dates,purchase_ordered:{...supplyOrder.details.dates.purchase_ordered,date:'2026-01-21'}}}}),/日期变更原因/);
+console.log('PASS: separate production/purchase milestones, actual-only past dates, progress, shipping preservation and dated-change audit rules.');
+
+// Manual priority is independent of anomalies and cannot overwrite unrelated order details.
+const priorityBefore=untouched(),priorityOrder=(await call(supplyPath)).order;
+await assert.rejects(call(supplyPath+'/priority','POST',{version:priorityOrder.version,priority:true},other),e=>e.status===403);
+await call(supplyPath+'/priority','POST',{version:priorityOrder.version,priority:true});
+let marked=(await call(supplyPath)).order;
+assert.equal(marked.details.priority.by,admin.name);
+const {priority:priorityMark,...remainingDetails}=marked.details;
+const {priority:previousPriority,...originalDetails}=priorityOrder.details;assert.deepEqual(remainingDetails,originalDetails);
+await assert.rejects(call(supplyPath+'/priority','POST',{version:priorityOrder.version,priority:false}),e=>e.status===409);
+await call(supplyPath+'/details','POST',{version:marked.version,details:{...marked.details,priority:null}});
+marked=(await call(supplyPath)).order;assert.deepEqual(marked.details.priority,priorityMark,'normal details editing cannot erase the priority marker');
+const {moduleURL}=await import('./test-form-intake.mjs');
+const {teamFollowupEndpoint}=await import(moduleURL('lib/team-followup-server.ts'));
+assert((await teamFollowupEndpoint(db,admin,'team-followup','GET')).priorityOrders.some(o=>o.id===marked.id),'manual priority appears on homepage independently of tasks');
+await call(supplyPath+'/priority','POST',{version:marked.version,priority:false});
+assert(!(await teamFollowupEndpoint(db,admin,'team-followup','GET')).priorityOrders.some(o=>o.id===marked.id));
+assert.equal(untouched(),priorityBefore);
+console.log('PASS: manual priority mark/unmark, homepage visibility without anomaly dependency, permission denial, stale versions, preserved details/ownership and audit.');

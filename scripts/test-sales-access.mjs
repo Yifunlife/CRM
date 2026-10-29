@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
+for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
+const db={prepare:sql=>new Statement(sql)};
+globalThis.__salesAccessEnv={DB:db};
+const wide={customers_all:true,leads_allocate:true,performance_view:true,advertising_view:true,advertising_edit:true};
+for(const [id,role,permissions] of [['admin','admin',{}],['sales','sales',wide],['other','sales',{}]])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,permissions,created) VALUES(?,?,?,?,?,?,?)').run(id,id==='sales'?'winnie':id,id,role,'test-only',JSON.stringify(permissions),'2026-01-01');
+for(const [id,owner] of [['mine','sales'],['theirs','other']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-01-01')").run(id,id,owner,id);
+const pool=sqlite.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,state,target_lead_id,created,updated,created_by) VALUES(?,'Meta','test','{}','待确认',?,'2026-01-01','2026-01-01',?)");
+pool.run('their-form','theirs','sales');pool.run('my-form','mine','other');pool.run('my-pending',null,'sales');pool.run('their-pending',null,'other');
+const token='local-fixture-session',digest=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))).toString('hex');
+sqlite.prepare('INSERT INTO crm_sessions(token,user_id,expires) VALUES(?,?,?)').run(digest,'sales',Date.now()+60000);
+const tables=sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' ORDER BY name").all().map(r=>r.name);
+const snapshot=()=>JSON.stringify(tables.map(t=>sqlite.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+const before=snapshot();
+const dir=mkdtempSync(join(tmpdir(),'sales-access-'));
+try{
+ const result=await build({entryPoints:['app/api/[...path]/route.ts'],bundle:true,format:'esm',platform:'node',write:false,plugins:[{name:'fixture-env',setup(build){build.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env=globalThis.__salesAccessEnv;'}));}}]});
+ const file=join(dir,'route.mjs');writeFileSync(file,result.outputFiles[0].text);const {GET}=await import(pathToFileURL(file));
+ const request=async(path,view='boss')=>{const response=await GET(new Request('https://crm.test/api/'+path,{headers:{cookie:'crm_session='+token,'X-CRM-View':view}}));return {status:response.status,data:await response.json()};};
+ assert.deepEqual((await request('leads')).data.map(r=>r.id),['mine']);
+ assert.equal((await request('leads/theirs')).status,404);
+ assert.equal((await request('leads/mine')).status,200);
+ const report=await request('customer-pool');assert.equal(report.status,200);assert.deepEqual(report.data.rows.map(r=>r.id).sort(),['my-form','my-pending']);assert.deepEqual(report.data.campaigns,[]);
+ const progress=await request('customer-pool/progress');assert.equal(progress.data.stageCounts['全部'],3);assert.deepEqual(progress.data.staff.map(r=>r.owner_id),['sales']);
+ assert.equal((await request('advertising')).status,403);
+ assert.equal((await request('allocation/report')).status,403);
+ assert.equal((await request('workbench/snapshot')).status,200,'customer communication remains available');
+ assert.equal((await request('leads','winnie')).status,403,'sales cannot impersonate another view');
+ assert.equal(snapshot(),before,'all personal read requests preserve data, permissions, sessions and ownership');
+ sqlite.prepare("UPDATE crm_sessions SET user_id='admin' WHERE token=?").run(digest);
+ assert.equal((await request('leads')).data.length,2,'admin retains all-customer access');
+ assert.deepEqual((await request('leads','winnie')).data.map(r=>r.id),['mine'],'admin switched to salesperson uses that personal scope');
+ assert.equal((await request('leads/theirs','winnie')).status,404);
+ console.log('PASS: real API handler enforces own leads/details/forms/counts with historical broad grants; chat stays available; ads and allocation are blocked; admin and switched sales scopes work; read-only data preserved.');
+}finally{rmSync(dir,{recursive:true,force:true});delete globalThis.__salesAccessEnv;}
