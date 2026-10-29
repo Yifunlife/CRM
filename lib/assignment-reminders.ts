@@ -3,6 +3,7 @@ export async function assignmentReminders(db:D1Database,user:any){
  if(user.role==='followup')return [];
  return (await db.prepare(`WITH owned AS (
  SELECT l.id,l.name,l.country,l.source,l.status,l.created,l.owner_id,
+ CASE WHEN json_valid(l.detail) THEN COALESCE(json_extract(l.detail,'$.inbox_url'),json_extract(l.detail,'$.收件箱链接')) END AS inbox_url,
  (SELECT name FROM crm_users WHERE id=l.owner_id) AS owner_name,
  (SELECT json_object('created',n.created,'author',u.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE n.lead_id=l.id ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
  (SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at
