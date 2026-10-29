@@ -9,7 +9,7 @@ export async function assignmentReminders(db:D1Database,user:any){
  FROM crm_leads l WHERE l.owner_id=? AND l.review=0
  ) SELECT * FROM owned l WHERE (l.assigned_at IS NOT NULL OR l.status='待首次联系')
  AND NOT EXISTS(SELECT 1 FROM crm_notes n WHERE n.lead_id=l.id AND n.user_id=l.owner_id
- AND n.created>=COALESCE(l.assigned_at,l.created) AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配'))
+ AND n.created>=COALESCE(l.assigned_at,l.created) AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信'))
  ORDER BY COALESCE(l.assigned_at,l.created) DESC,l.id`).bind(user.id).all<any>()).results;
 }
 
@@ -21,7 +21,7 @@ export async function teamAssignmentSummary(db:D1Database,month:string,owner='')
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const leads=(await db.prepare(`SELECT l.id,l.name,l.country,l.source,l.status,l.next_date,l.owner_id,u.name AS owner_name,
  (SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,
- (SELECT json_object('created',n.created,'author',p.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users p ON p.id=n.user_id WHERE n.lead_id=l.id AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配') ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
+ (SELECT json_object('created',n.created,'author',p.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users p ON p.id=n.user_id WHERE n.lead_id=l.id AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信') ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
  EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS won
  FROM crm_leads l JOIN crm_users u ON u.id=l.owner_id WHERE l.review=0`).all<any>()).results;
  const deals=(await db.prepare("SELECT d.owner_id,c.currency,c.total_minor FROM crm_deals d LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0 AND substr(d.deal_date,1,7)=?").bind(month).all<any>()).results;

@@ -161,3 +161,30 @@ assert.equal(resetBefore,JSON.stringify(['crm_leads','crm_notes','crm_assignment
 await resetAccountPassword(db,admin,{id:'admin',password:'admin-test-password'});
 assert(await verifyPassword('admin-test-password',sqlite.prepare("SELECT password FROM crm_users WHERE id='admin'").get().password));
 console.log('PASS: password reset permissions, validation, hashing, target session revocation, self reset and business-data preservation');
+
+// CRM leads enter communication without retyping; only confirmed evidence changes contact state.
+sqlite.prepare("UPDATE crm_leads SET status='待首次联系' WHERE id='winnie'").run();
+assert.equal((await call('prepare','POST',{lead_id:'winnie'},winnie)).desktop_id,'desktop-1');
+await assert.rejects(call('prepare','POST',{lead_id:'winnie'},other),e=>e.status===404);
+const priorNotes=sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='winnie'").get().n;
+const send2={...payload,id:'automatic-contact-send-0001'};
+await call('command','POST',send2,winnie);const claimed=await device({});assert.equal(claimed.command.id,send2.id);
+await device({result:{id:send2.id,state:'done',value:{status:'confirmed_sent',messageId:'proof-send-2'}}});
+assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='winnie'").get().status,'已联系待回复');
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='winnie'").get().n,priorNotes+1);
+await device({result:{id:send2.id,state:'done',value:{status:'confirmed_sent',messageId:'proof-send-2'}}});
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='winnie'").get().n,priorNotes+1);
+async function chatResult(id,messages){await call('command','POST',{...payload,id,kind:'conversation'},winnie);assert.equal((await device({})).command.id,id);await device({result:{id,state:'done',value:{messages}}});}
+const historic={key:'old-incoming',speaker:'Customer',text:'old archive',channel:'whatsapp'};
+await chatResult('contact-baseline-000001',[historic]);assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='winnie'").get().status,'已联系待回复');
+await chatResult('contact-reply-00000001',[historic,{key:'new-incoming',speaker:'Customer',text:'new reply',channel:'whatsapp'}]);assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='winnie'").get().status,'正在沟通');
+await call('snapshot','POST',{...snapshot,captured_at:new Date().toISOString(),clients:[{id:'desktop-1',name:'Existing',phone:'+61111111111',messages:[]}]});
+sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,phone,email,status) VALUES('auto-create','Auto customer','Meta','winnie','{}','auto-create','2026-10-29','+61222222222','auto@example.test','待首次联系')").run();
+const prep=await call('prepare','POST',{lead_id:'auto-create'},winnie);assert.ok(prep.command_id);assert.equal((await call('prepare','POST',{lead_id:'auto-create'},winnie)).command_id,prep.command_id);
+const createJob=(await device({})).command;assert.equal(createJob.kind,'client-create');assert.equal(createJob.payload.patch.name,'Auto customer');assert.equal(createJob.payload.patch.email,'auto@example.test');
+await device({result:{id:prep.command_id,state:'done',value:{created_id:'desktop-auto',clients:[{id:'desktop-auto',name:'Auto customer',whatsapp:'+61222222222',email:'auto@example.test'}]}}});
+assert.equal((await call('prepare','POST',{lead_id:'auto-create'},winnie)).desktop_id,'desktop-auto');assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='auto-create'").get().status,'待首次联系');
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='auto-create'").get().n,0);
+const failedSend={...payload,id:'contact-failed-send-0001',desktop_id:'desktop-auto'};await call('command','POST',failedSend,winnie);await device({});await device({result:{id:failedSend.id,state:'failed',value:{error:'test transport failure'}}});assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='auto-create'").get().status,'待首次联系');assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='auto-create'").get().n,0);
+const reassigned={...payload,id:'reassigned-send-000001'};await call('command','POST',reassigned,winnie);await device({});sqlite.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='winnie'").run();const beforeReceipt=sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='winnie'").get().n;await device({result:{id:reassigned.id,state:'done',value:{status:'sent'}}});assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='winnie'").get().n,beforeReceipt);
+console.log('PASS: automatic preparation, no status on open/create, confirmed-send evidence, duplicate receipts, baseline-safe replies and reassignment isolation');

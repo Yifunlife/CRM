@@ -58,6 +58,9 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
+  const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
+  if(!completed)return {ok:true};
+  if(completed.state==='done'&&(r.state!=='done'||JSON.stringify(await readJson(completed.result))!==JSON.stringify(r.value||{})))return {ok:true};
   await db.prepare("UPDATE crm_workbench_commands SET state=?,result=?,updated=? WHERE id=? AND owner_id=? AND state='running'").bind(r.state,await storeJson(r.value||{},`results/${device.owner_id}`),timestamp,r.id,device.owner_id).run();
   if(r.state==='done'&&Array.isArray(r.value?.clients)){
    const job:any=await db.prepare('SELECT kind FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(r.id,device.owner_id).first();
@@ -66,7 +69,20 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
     if(row){const snapshot=(await readJson(row.payload));if(job.kind==='directory'){snapshot.groups=(r.value.groups||[]).filter((g:any)=>/^group:\d+@g\.us$/.test(g.id)).map((g:any)=>({id:g.id,name:clean(g.name,200),group:true}));snapshot.scenes=(r.value.scenes||[]).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,80),category:clean(s.category,40),reply:clean(s.reply,2000)}));}for(const raw of r.value.clients){const patch=clientPatch(Object.fromEntries(clientFields.filter(k=>k in raw).map(k=>[k,raw[k]])));const metadata={...patch,id:clean(raw.id,150),phone:patch.whatsapp||'',revision:clean(raw.revision,150),createdAt:clean(raw.createdAt,50),lastContact:clean(raw.lastContact,50)};const previous=snapshot.clients.find((c:any)=>c.id===metadata.id);if(previous)Object.assign(previous,metadata);else snapshot.clients.push({...metadata,messages:[]});}await db.prepare('UPDATE crm_workbench_snapshots SET payload=?,updated=? WHERE owner_id=?').bind(await storeJson(snapshot,`snapshots/${device.owner_id}`,true),new Date().toISOString(),device.owner_id).run();}
    }
   }
-  if(r.state==='done'&&r.value?.status==='sent'){
+  if(r.state==='done'&&completed.kind==='client-create'&&r.value?.created_id){
+   const leadId=JSON.parse(completed.payload).crm_lead_id;
+   if(leadId&&r.value.clients?.some((c:any)=>c.id===r.value.created_id))await db.prepare('INSERT OR IGNORE INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) SELECT id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?').bind(r.value.created_id,new Date(timestamp).toISOString(),completed.actor_id,leadId,device.owner_id).run();
+  }
+  if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&['send','material'].includes(completed.kind)){
+   await recordOnlineContact(db,device.owner_id,completed.desktop_id,r.value.messageId?'message:'+JSON.parse(completed.payload).channel+':'+r.value.messageId:'command:'+completed.id,JSON.parse(completed.payload).channel,JSON.parse(completed.payload).text||'已发送客户资料',false,timestamp);
+  }
+  if(r.state==='done'&&completed.kind==='conversation'&&Array.isArray(r.value?.messages)){
+   const prior:any=await db.prepare("SELECT result FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind='conversation' AND state='done' AND id<>? AND json_extract(payload,'$.channel')=? ORDER BY updated DESC LIMIT 1").bind(device.owner_id,completed.desktop_id,completed.id,JSON.parse(completed.payload).channel).first();
+   if(prior){const previous=await readJson(prior.result),known=new Set((previous.messages||[]).map((m:any)=>m.key)),anchor=(previous.messages||[]).filter((m:any)=>m.key).at(-1)?.key,anchorIndex=anchor?r.value.messages.findIndex((m:any)=>m.key===anchor):-1;
+    for(const m of anchorIndex<0?[]:r.value.messages.slice(anchorIndex+1)){if(!m.key||!m.speaker||known.has(m.key))continue;const incoming=!/^Winnie Wu(?: \(Email\))?$/.test(m.speaker||'');await recordOnlineContact(db,device.owner_id,completed.desktop_id,'message:'+m.channel+':'+(m.channel==='whatsapp'?m.key.split(':').at(-1):m.key),m.channel,m.text||'非文字消息',incoming,timestamp);}
+   }
+  }
+  if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)){
    const sent:any=await db.prepare("SELECT desktop_id,payload,actor_id FROM crm_workbench_commands WHERE id=? AND owner_id=? AND kind='send'").bind(r.id,device.owner_id).first();
    if(sent){const p=JSON.parse(sent.payload);await db.prepare("UPDATE crm_workbench_drafts SET content='',updated=?,updated_by=? WHERE owner_id=? AND channel=? AND content=? AND lead_id IN (SELECT w.lead_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND w.desktop_id=? AND l.owner_id=w.owner_id)").bind(new Date(timestamp).toISOString(),sent.actor_id,device.owner_id,p.channel==='email'?'邮件':'WhatsApp',p.text,device.owner_id,sent.desktop_id).run();}
   }
@@ -84,3 +100,11 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
 
 const clientFields=['name','country','project','grade','stage','projectStatus','whatsapp','email','source','customerType','nextAction','nextContact','followStatus','closeDate','amount','lostReason','notes'];
 function clientPatch(p:any):any{if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!clientFields.includes(k)))throw new AllocationError('客户字段无效');return Object.fromEntries(Object.entries(p).map(([k,v])=>[k,k==='stage'?Number(v):clean(v,['notes','lostReason','nextAction'].includes(k)?6000:500)]));}
+
+async function recordOnlineContact(db:D1Database,owner:string,desktop:string,event:string,channel:string,text:string,incoming:boolean,timestamp:number){
+ const lead:any=await db.prepare('SELECT l.* FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND w.desktop_id=? AND l.owner_id=w.owner_id').bind(owner,desktop).first();if(!lead)return;
+ const noteId='online-'+await digest(owner+':'+lead.id+':'+event),at=new Date(timestamp).toISOString();
+ const existing=await db.prepare('SELECT id FROM crm_notes WHERE id=?').bind(noteId).first();if(existing)return;
+ const method=incoming?'系统收信':channel==='email'?'邮件':'WhatsApp';
+ await db.batch([db.prepare('INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)').bind(noteId,lead.id,owner,(incoming?'客户线上回复':'线上发送已确认')+'｜'+clean(text,12000)+'\n沟通凭据：'+event,method,'',at),db.prepare("UPDATE crm_leads SET status=CASE WHEN status IN ('待首次联系','已联系待回复','正在沟通') THEN ? ELSE status END,last_contact=? WHERE id=? AND owner_id=?").bind(incoming?'正在沟通':lead.status==='正在沟通'?'正在沟通':'已联系待回复',at,lead.id,owner)]);
+}
