@@ -19,9 +19,10 @@ const insert=sqlite.prepare('INSERT INTO crm_meta_ad_daily VALUES(?,?,?,?,?,?,?,
 const values=['one','full','ad1','2026-04-01','ad','c1','campaign','s1','set',101,10,2,1,'lead','{}','test.csv','hash','2026'];insert.run(...values);
 assert.throws(()=>insert.run(...['duplicate',...values.slice(1)]),/UNIQUE/);
 insert.run(...['two','full','ad2',...values.slice(3)]);
+insert.run(...['three','full','source-row:sha:1',...values.slice(3)]);
 class Statement{constructor(sql){this.sql=sql;}async all(){return {results:sqlite.prepare(this.sql).all()};}}
 const {metaAdReport}=await import(moduleUrl('lib/meta-ad-report-server.ts'));
 const report=await metaAdReport({prepare:sql=>new Statement(sql)});
-assert.equal(report.accounts[0].ad_count,2);assert.equal(report.daily.length,1);assert.equal(report.daily[0].spent,202);assert.equal(report.campaigns[0].spent,202);
+assert.equal(report.accounts[0].ad_count,2);assert.equal(report.daily.length,1);assert.equal(report.daily[0].spent,303);assert.equal(report.campaigns[0].spent,303);assert.equal(report.accounts[0].unidentified_count,1);
 assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
 console.log('PASS: month/quarter/year boundaries, account isolation, cents reconciliation, mixed results, empty ranges, non-additive reach excluded, unique ad/day keys and SQL rollups');
