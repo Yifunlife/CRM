@@ -68,3 +68,18 @@ assert.equal(JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads ORDER BY id'
 sqlite.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='lead'").run();await assert.rejects(detail(p1,sales),e=>e.status===404);assert.equal((await detail(p1,other)).quotes.length,0);
 assert.equal(quoteCommercialAmount(JSON.stringify(snap)).amount_minor,23000);
 console.log('PASS: all eight modules; independent projects, qualification evidence, revisions, dual-system permission, no costs leak, read-only quotation binding, tasks and collaborator isolation, forecasting, revival, ownership review, aftercare, concurrency versions, reminders, customer data preservation.');
+const {dormantReason}=await import(pure),checkAt='2026-10-29T12:00:00Z';
+const sample={created:'2026-09-29T12:00:00Z',status:'跟进中',next_date:'',review:0};
+assert.ok(dormantReason(sample,checkAt));
+for(const change of [{created:'2026-09-30T12:00:00Z'},{note_at:'2026-10-28T12:00:00Z'},{assigned_at:'2026-10-28T12:00:00Z'},{review:1},{status:'已成交'},{next_date:'2026-11-01'},{revival:JSON.stringify({outcome:'已无需求'})},{revival:JSON.stringify({review_date:'2026-11-01'})}])assert.equal(dormantReason({...sample,...change},checkAt),'');
+sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('sleep-test','Dormant fixture','Meta','sales','{}','sleep-test','2026-09-01')").run();
+const beforeDormant=JSON.stringify(sqlite.prepare("SELECT * FROM crm_leads WHERE id='sleep-test'").get());
+await refreshSalesSuite(db,undefined,checkAt);
+const sleeping=()=>sqlite.prepare("SELECT * FROM crm_sales_notifications WHERE lead_id='sleep-test' AND resolved_at='' AND dedupe_key LIKE 'dormant:%'").all();
+assert.equal(sleeping().length,1);assert.equal(sleeping()[0].recipient_id,'sales');
+await call('notices/read',{id:sleeping()[0].id});await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,1);assert.ok(sleeping()[0].read_at);
+assert.equal(JSON.stringify(sqlite.prepare("SELECT * FROM crm_leads WHERE id='sleep-test'").get()),beforeDormant);
+sqlite.prepare("UPDATE crm_leads SET next_date='2026-11-01' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,0);
+sqlite.prepare("UPDATE crm_leads SET next_date='',last_contact='2026-10-28T12:00:00Z' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,0);
+sqlite.prepare("UPDATE crm_leads SET last_contact='',owner_id='other' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,1);assert.equal(sleeping()[0].recipient_id,'other');
+console.log('PASS: dormant boundary, follow-up and reassignment suppression, future review, no-demand exclusion, automatic owner reminder, read persistence, deduplication and preserved customer rows.');

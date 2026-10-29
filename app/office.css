@@ -134,3 +134,25 @@
   .office-app .followup-list .table-wrap { max-height: none; }
   .office-app .office-progress { right: 12px; bottom: 12px; }
 }
+
+/* Customer archive: compact controls and rows, with full notes on demand. */
+.office-app .customer-overview .page-heading{margin-bottom:8px;gap:8px}
+.office-app .customer-overview .page-heading h1{font-size:20px;margin:0}
+.office-app .customer-overview .page-heading p{font-size:12px;margin:3px 0 0}
+.office-app .customer-overview .customer-stage-tabs{gap:6px;margin-bottom:6px}
+.office-app .customer-overview .customer-grade-filters{gap:6px;margin-bottom:4px}
+.office-app .customer-overview .tabs{gap:4px;margin:0 0 6px}
+.office-app .customer-overview .customer-stage-tabs button,.office-app .customer-overview .customer-grade-filters button,.office-app .customer-overview .tabs button,.office-app .customer-page-actions button{min-height:30px;padding:4px 8px;font-size:12px}
+.office-app .customer-overview .filters{gap:6px;margin-bottom:5px}
+.office-app .customer-overview .filters input,.office-app .customer-overview .filters select{min-height:32px;height:32px;padding:4px 8px;font-size:12px}
+.office-app .customer-overview .customer-results{margin-bottom:3px;font-size:12px}
+.office-app .customer-list-help{margin:0 0 5px;font-size:11px;color:var(--muted)}
+.office-app .customer-row-warning{margin:2px 0 0;font-size:11px;color:#805c16}
+.office-app .customer-row-warning summary,.office-app .customer-list-help summary{cursor:pointer}
+.office-app .customer-row-warning p{margin:3px 0;max-width:240px}
+.office-app .customer-overview .customer-table{max-height:max(320px,calc(100dvh - 310px))}
+.office-app .customer-overview .customer-table th,.office-app .customer-overview .customer-table td{padding:6px 8px;font-size:12px;line-height:1.35}
+.office-app .customer-overview .customer-table .small{font-size:11px;line-height:1.3;margin-top:2px}
+.office-app .customer-overview .customer-table button{padding:0;min-height:24px;font-size:12px}
+.office-app .customer-overview .pagination{margin-top:6px;font-size:12px}
+@media(max-width:720px){.office-app .customer-overview .customer-table{max-height:65vh}.office-app .customer-overview .customer-stage-tabs button,.office-app .customer-page-actions button{min-height:36px}}

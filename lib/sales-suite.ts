@@ -3,6 +3,17 @@ export const FORECASTS=[['early','早期项目'],['best','争取成交'],['commi
 export const TASK_KINDS=[['collaboration','成交前协作'],['followup','销售跟进'],['revival','客户唤醒'],['callback','交付回访'],['service','售后事项'],['expansion','扩店增购'],['referral','转介绍与案例']] as const;
 export const QUALIFICATION_FIELDS=[['site','场地状态与租赁情况'],['drawing','平面图与确认版本'],['area','面积与净高'],['budget','预算金额、币种及范围'],['decision','决策人及采购流程'],['purchase','采购决定时间'],['opening','目标开业时间'],['scope','供货范围与当地要求']] as const;
 export const CLOSED_STAGES=['won','lost','paused'];
+export function dormantReason(l:any,at=new Date().toISOString()){
+ const today=suiteDay(at),task=l.revival?JSON.parse(l.revival):null;
+ if(l.review||l.status==='已成交'||l.next_date>today)return '';
+ if(task?.outcome==='已无需求'||task?.review_date>today)return '';
+ const dates=[l.last_contact,l.created,l.note_at,l.assigned_at,task?.status==='done'?task.updated:null].map(v=>Date.parse(v||'')).filter(Number.isFinite);
+ if(!dates.length)return '';
+ const days=Math.floor((Date.parse(at)-Math.max(...dates))/86400000);
+ if(days<0)return '';
+ if(days>=30)return `已 ${days} 天没有联系记录`;
+ return ['暂停跟进','已结束'].includes(l.status)?`${l.status}，未安排后续复查`:'';
+}
 export const suiteDay=(at=new Date().toISOString())=>new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 export const suiteStamp=(at:string)=>at?new Date(at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'待确认';
 export const suiteLocal=(at:string)=>at?new Date(Date.parse(at)+8*3600000).toISOString().slice(0,16):'';

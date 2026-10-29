@@ -11,7 +11,7 @@ export default function OperationsSummary({data,navigate}:{data:any;navigate:(ta
  if(!dashboard)return <p>暂无运营汇总，请刷新重试。</p>;
  return <div className="acquisition-dashboard">
  <p className="muted">获客期间：{report.from||'最早记录'} 至 {report.to||report.as_of} · 后续成交追踪至 {report.as_of}（北京时间）</p>
- <div className="operations-checks"><strong>待处理</strong><button onClick={()=>navigate('咨询核查')}>来源待确认 {report.customers.filter((c:any)=>c.source_key==='未知来源').length} 位</button><button onClick={()=>navigate('待确认')}>归因待审核 {data.requests.filter((r:any)=>r.state==='待核查').length} 条</button><button onClick={()=>navigate('活动与费用')}>费用待核查 {data.pending_spend.length} 条</button></div>
+ <details className="operations-checks-menu"><summary>待处理提醒</summary><div className="operations-checks"><button onClick={()=>navigate('咨询核查')}>来源待确认 {report.customers.filter((c:any)=>c.source_key==='未知来源').length} 位</button><button onClick={()=>navigate('待确认')}>归因待审核 {data.requests.filter((r:any)=>r.state==='待核查').length} 条</button><button onClick={()=>navigate('活动与费用')}>费用待核查 {data.pending_spend.length} 条</button></div></details>
  <div className="market-switch">{dashboard.sections.map((s:any)=><button key={s.market} aria-pressed={market===s.market} className={market===s.market?'primary':''} onClick={()=>M(s.market)}>{s.market} · {s.total} 位</button>)}</div>
  {dashboard.sections.filter((s:any)=>s.market===market).map((s:any)=><section className="acquisition-market" key={s.market} aria-label={s.market+'获客与承接'}><h3>{s.market==='待确认'?'内外贸待确认':s.market} <span className="small muted">{s.total} 位新增客户</span></h3>
  {!s.total?<p className="muted">本期间暂无该类新增客户。</p>:<>
