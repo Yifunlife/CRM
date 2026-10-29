@@ -14,7 +14,8 @@ export default {
     await refreshFollowupNotifications(env.DB);
     await processCustomerPool(env.DB);
     await syncGoogleForms(env.DB);
-    await refreshSalesSuite(env.DB,env.QUOTE_DB);
+    // The shared scheduler runs every five minutes; dormant leads run at 08:00 Beijing only.
+    await refreshSalesSuite(env.DB,env.QUOTE_DB,undefined,new Date(_event.scheduledTime).toISOString().slice(11,16)==='00:00');
     await refreshQuoteBridge(env.DB,env.QUOTE_DB);
   },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
