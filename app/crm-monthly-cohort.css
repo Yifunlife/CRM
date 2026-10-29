@@ -1,0 +1,21 @@
+.crm-monthly{margin:8px 0 12px;border-bottom:1px solid #dbe3ee;padding:0 0 10px;color:#203854;font-size:12px;font-variant-numeric:tabular-nums}
+.crm-monthly .crm-monthly-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.crm-monthly h3{font-size:15px;margin:0 8px 0 0}
+.crm-monthly .crm-monthly-toolbar label{display:flex;align-items:center;gap:4px;font-size:12px;margin:0}
+.crm-monthly .crm-monthly-toolbar select{width:auto;min-height:30px;padding:3px 22px 3px 6px;font-size:12px}
+.crm-monthly-legend{display:flex;gap:5px;align-items:center;margin-left:auto}
+.crm-monthly-legend i{width:10px;height:10px;background:#2b5f9e;display:inline-block}
+.crm-monthly-legend i:nth-of-type(2){background:#bd7724;margin-left:6px}
+.crm-monthly .crm-monthly-note{margin:5px 0 8px;font-size:11px;color:#52647b}
+.crm-monthly-charts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 14px}
+.crm-monthly figure{grid-column:span 2;margin:0;min-width:0;border-bottom:1px solid #e3e9f0;padding-bottom:4px}
+.crm-monthly figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px;font-size:12px;line-height:1.5}
+.crm-monthly figcaption strong{font-size:12px}.crm-monthly small{font-size:11px;color:#52647b}
+.crm-monthly svg{display:block;width:100%;height:auto;max-height:165px}
+.crm-monthly svg text{font-size:10px;fill:#52647b}
+.crm-monthly details{font-size:11px;margin-top:6px}.crm-monthly details p{margin:5px 0;line-height:1.5}
+.crm-monthly summary{cursor:pointer;color:#2b5f9e}.crm-monthly :focus-visible{outline:2px solid #2b5f9e;outline-offset:2px}
+.crm-monthly table{font-size:12px}.crm-monthly th,.crm-monthly td{padding:5px 7px;white-space:nowrap}
+.crm-monthly figure:nth-last-child(-n+2){grid-column:span 3}
+@media(max-width:1100px){.crm-monthly-charts{grid-template-columns:repeat(2,minmax(0,1fr))}.crm-monthly figure,.crm-monthly figure:nth-last-child(-n+2){grid-column:span 1}.crm-monthly figure:last-child{grid-column:span 2}}
+@media(max-width:650px){.crm-monthly-charts{grid-template-columns:1fr}.crm-monthly figure:last-child{grid-column:span 1}.crm-monthly-legend{margin-left:0}.crm-monthly h3{width:100%}}

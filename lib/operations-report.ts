@@ -1,3 +1,4 @@
+import {reportAcquiredDay} from './report-acquired-day';
 // Cohorts use the first recorded acquisition of a confirmed customer identity.
 // Unlinked consultations stay separate; matching contact text is not identity proof.
 export const REPORT_TIMEZONE='Asia/Shanghai';
@@ -6,7 +7,7 @@ export function operationsReport({leads,campaigns,attrs,quality,subjects,deals,s
  const inRange=(d:string)=>(!from||d>=from)&&(!to||d<=to)&&d<=asOf;
  const links=new Map(subjects.map(s=>[s.lead_id,s.subject_id])),attribution=new Map(attrs.map(a=>[a.lead_id,a])),qualities=new Map(quality.map(q=>[q.lead_id,q]));
  const byId=new Map(campaigns.map(c=>[c.id,c])),groups=new Map<string,any[]>(),buckets=new Map<string,any>();
- const acquired=(l:any)=>l.entered&&/^\d{4}-\d{2}-\d{2}$/.test(l.entered)?l.entered:reportDay(l.created);
+ const acquired=(l:any)=>reportAcquiredDay(l.entered)||reportDay(l.created);
  function origin(l:any){const a=attribution.get(l.id);return a?.source_kind==='广告活动'&&byId.has(a.campaign_id)?a.campaign_id:a?.source_kind&&a.source_kind!=='广告活动'?a.source_kind:'未知来源';}
  function bucket(key:string){if(!buckets.has(key)){const c=byId.get(key),spend=summary.find(s=>s.key===key&&s.currency===c?.currency);buckets.set(key,{key,label:c?.name||key,platform:c?.platform||'',currency:c?.currency||'',spent_minor:spendRecorded.includes(key)?spend?.spent_minor??0:null,consultations:0,customers:0,verified_customers:0,unverified_customers:0,valid:0,invalid:0,unchecked:0,contacted:0,converted:0,conversion:null,cost_per_valid_minor:null,grades:{VIP:0,A:0,B:0,C:0,未评级:0},statuses:{}});}return buckets.get(key);}
  for(const c of campaigns)bucket(c.id);

@@ -20,8 +20,9 @@ const values=['one','full','ad1','2026-04-01','ad','c1','campaign','s1','set',10
 assert.throws(()=>insert.run(...['duplicate',...values.slice(1)]),/UNIQUE/);
 insert.run(...['two','full','ad2',...values.slice(3)]);
 insert.run(...['three','full','source-row:sha:1',...values.slice(3)]);
-class Statement{constructor(sql){this.sql=sql;}async all(){return {results:sqlite.prepare(this.sql).all()};}}
-const {metaAdReport}=await import(moduleUrl('lib/meta-ad-report-server.ts'));
+class Statement{constructor(sql){this.sql=sql;}bind(...args){this.args=args;return this;}async all(){return {results:sqlite.prepare(this.sql).all(...(this.args||[]))};}}
+const serverSource=ts.transpileModule(readFileSync('lib/meta-ad-report-server.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./report-acquired-day'",JSON.stringify(moduleUrl('lib/report-acquired-day.ts')));
+const {metaAdReport}=await import('data:text/javascript;base64,'+Buffer.from(serverSource).toString('base64'));
 const report=await metaAdReport({prepare:sql=>new Statement(sql)});
 assert.equal(report.accounts[0].ad_count,2);assert.equal(report.daily.length,1);assert.equal(report.daily[0].spent,303);assert.equal(report.campaigns[0].spent,303);assert.equal(report.accounts[0].unidentified_count,1);
 assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
@@ -36,3 +37,8 @@ const linked=await metaAdReport({prepare:sql=>new Statement(sql)});assert.deepEq
 sqlite.exec('UPDATE crm_deals SET cancelled=1');assert.equal((await metaAdReport({prepare:sql=>new Statement(sql)})).outcomes[0].deals,0);
 sqlite.exec("UPDATE crm_attribution_leads SET lead_id='second'");assert.deepEqual((await metaAdReport({prepare:sql=>new Statement(sql)})).outcomes,[],'later enquiry must not invent first acquisition attribution');
 console.log('PASS: month/quarter/year boundaries, account isolation, cents reconciliation, mixed results, empty ranges, non-additive reach excluded, unique ad/day keys and SQL rollups');
+
+sqlite.exec("UPDATE crm_attribution_leads SET lead_id='first'; UPDATE crm_leads SET entered='2025-12-31T17:00:00Z' WHERE id='first'");
+assert.equal((await metaAdReport({prepare:sql=>new Statement(sql)})).outcomes[0].date,'2026-01-01');
+sqlite.exec("UPDATE crm_leads SET entered='2026/1/1' WHERE id='first'");assert.equal((await metaAdReport({prepare:sql=>new Statement(sql)})).outcomes[0].date,'2026-01-01');
+sqlite.exec("UPDATE crm_leads SET entered='2026-02-30',created='2025-12-31T17:00:00Z' WHERE id='first'");const fallback=await metaAdReport({prepare:sql=>new Statement(sql)});assert.equal(fallback.outcomes[0].date,'2026-01-01');assert.equal(fallback.outcomes[0].customers,1);console.log('PASS Beijing timezone/month boundary, slash date, invalid date fallback and identity dedup');
