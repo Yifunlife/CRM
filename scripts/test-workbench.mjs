@@ -47,6 +47,7 @@ assert.equal(sqlite.prepare('SELECT updated_by FROM crm_workbench_drafts').get()
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_workbench_drafts').get().n,1);
 sqlite.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='winnie'").run();
 assert.equal((await call('drafts','GET',{},winnie)).length,0);
+assert.equal((await call('snapshot','GET',{},winnie)).snapshot.clients.length,0,'reassigned client archive must not remain in previous owner current conversation list');
 await assert.rejects(call('drafts','POST',{lead_id:'winnie',channel:'邮件',content:'stale'},winnie),e=>e.status===404);
 sqlite.prepare("UPDATE crm_leads SET owner_id='winnie' WHERE id='winnie'").run();
 assert.equal(JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads').all()),before);

@@ -17,7 +17,9 @@ export async function workbenchEndpoint(db:D1Database,user:any,actor:any,path:st
  const bridge=await bridgeUserEndpoint(db,owner,actor,path,method,body);if(bridge!==undefined)return bridge;
  if(path==='workbench/snapshot'&&method==='GET'){
   const row:any=await db.prepare('SELECT payload,updated FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner.id).first();
-  return {owner,updated:row?.updated||'',snapshot:row?(await readJson(row.payload)):null};
+  const snapshot=row?await readJson(row.payload):null;
+  if(snapshot){const moved=(await db.prepare('SELECT w.desktop_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND (l.owner_id IS NULL OR l.owner_id<>w.owner_id)').bind(owner.id).all<any>()).results;const hidden=new Set(moved.map(r=>r.desktop_id));snapshot.clients=snapshot.clients.filter((c:any)=>!hidden.has(c.id));}
+  return {owner,updated:row?.updated||'',snapshot};
  }
  if(path==='workbench/snapshot'&&method==='POST'){
   if(user.role!=='admin'||actor.role!=='admin')throw new AllocationError('只有老板视角可以同步工作台资料',403);
