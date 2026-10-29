@@ -156,3 +156,9 @@
 .office-app .customer-overview .customer-table button{padding:0;min-height:24px;font-size:12px}
 .office-app .customer-overview .pagination{margin-top:6px;font-size:12px}
 @media(max-width:720px){.office-app .customer-overview .customer-table{max-height:65vh}.office-app .customer-overview .customer-stage-tabs button,.office-app .customer-page-actions button{min-height:36px}}
+
+/* Keep imported questions and long answers inside their own columns. */
+.office-app .customer-detail dl > div{min-width:0;gap:8px;padding:8px 0;align-items:start}
+.office-app .customer-detail dt,.office-app .customer-detail dd{min-width:0;margin:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.5}
+.office-app .customer-detail .customer-contact-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#customer-contact-form{scroll-margin-top:80px}

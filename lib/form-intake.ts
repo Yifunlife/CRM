@@ -1,3 +1,4 @@
+import {businessDetail} from './customer-business-detail';
 import {can,clean,digest,emailKey,id,now,phoneKey} from './crm';
 import {AllocationError,allocationWeights,distribute} from './allocation-server';
 import {BUSINESS_SCOPES} from './allocation';
@@ -81,12 +82,12 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    }
    const statements:D1PreparedStatement[]=[];
    if(isNew){
-    const detail={...first.raw,'客户名称':first.name,'联系方式':first.phone,'邮箱':first.email,'所在国家/地区':first.country,'录入日期':first.occurred,'项目需求描述':first.requirement,'公司名称':clean(first.raw.company_name),'来源渠道':clean(first.raw.platform),'首次表单时间':first.occurred};
+    const detail={...businessDetail(first.raw),'客户名称':first.name,'联系方式':first.phone,'邮箱':first.email,'所在国家/地区':first.country,'录入日期':first.occurred,'项目需求描述':first.requirement,'公司名称':clean(first.raw.company_name),'来源渠道':clean(first.raw.platform),'首次表单时间':first.occurred};
     statements.push(db.prepare('INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,channel,entered,detail,fingerprint,batch_id,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(lead.id,lead.name,lead.phone,lead.email,lead.country,'Meta',lead.business_scope,clean(first.raw.platform),first.occurred,JSON.stringify(detail),first.fingerprint,batchId,at));allocate.add(lead.id);
    }
    // Persist each source ID, including repeats, so re-fetches never create duplicate notes or notices.
    for(const r of fresh){
-    const repeated=!isNew||r!==first,content=`表单${repeated?'再次询问':'首次询问'}｜提交时间：${r.occurred}\n需求：${r.requirement}\n原始内容：${JSON.stringify(r.raw)}`;
+    const repeated=!isNew||r!==first,content=`表单${repeated?'再次询问':'首次询问'}｜提交时间：${r.occurred}\n需求：${r.requirement}`;
     statements.push(db.prepare('INSERT OR IGNORE INTO crm_form_submissions(id,lead_id,phone,email,occurred,raw,kind,created) VALUES(?,?,?,?,?,?,?,?)').bind(r.id,lead.id,r.phone,r.email,r.occurred,JSON.stringify(r.raw),repeated?'repeat':'new',at));
     statements.push(db.prepare("INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,'请查看本次需求并安排跟进',?)").bind('form-note:'+r.fingerprint,lead.id,actor,content,repeated?'再次询问':'表单咨询',at));
     if(repeated)result.repeated++;
