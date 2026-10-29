@@ -28,5 +28,31 @@ try{
  assert.equal((await teamAssignmentSummary(db,'2026-09','b'))[0].pending.length,0,'later assignments excluded from selected month');
  const nov=(await teamAssignmentSummary(db,'2026-11','b'))[0];assert.equal(nov.pending_month,1);assert.equal(nov.pending_history,0);assert.equal(nov.pending_unknown,0);assert.equal(nov.pending[0].owner_name,'B');assert.equal(nov.pending[0].latest_note.content,'已联系确认需求');
  const dec=(await teamAssignmentSummary(db,'2026-12','b'))[0];assert.equal(dec.pending_history,1);assert.equal(dec.pending_month+dec.pending_history+dec.pending_unknown,dec.pending.length);
+ sql.exec(`INSERT INTO crm_leads(id,name,source,owner_id,original_owner,detail,fingerprint,created) VALUES
+ ('new','新分配','Meta','a','','{}','new','2026-10-01'),
+ ('sheet','已标记同步','Meta','a','A','{}','sheet','2026-10-01'),
+ ('legacy','旧版同步','Meta','a','A','{"分配同步来源":{"filename":"历史表格","row":2}}','legacy','2026-10-01'),
+ ('unknown','无分配记录','Meta','a','A','{}','unknown','2026-10-01'),
+ ('changed-owner','旧归属已转交','Meta','b','A','{"分配同步来源":{"filename":"历史表格","row":3}}','changed-owner','2026-10-01');
+ INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES
+ ('new-a','new','a','a','2026-10-02','equal-global-v1'),
+ ('sheet-a','sheet','a','a','2026-10-02','historical-sheet-v1'),
+ ('legacy-a','legacy','a','a','2026-10-02',''),
+ ('changed-original','changed-owner','a','a','2026-10-02',''),
+ ('changed-current','changed-owner','a','b','2026-10-03','');`);
+ const before=sql.prepare('SELECT total_changes() AS n').get().n;
+ const classified=await assignmentReminders(db,a);
+ assert.deepEqual(Object.fromEntries(classified.map(l=>[l.id,l.assignment_category])),{new:'new',sheet:'historical',legacy:'historical',unknown:'unverified'});
+ assert.equal(new Set(classified.map(l=>l.id)).size,classified.length,'category query does not duplicate leads');
+ assert.equal((await assignmentReminders(db,b)).find(l=>l.id==='changed-owner').assignment_category,'new','old provenance must not label a different owner as historical sync');
+ await teamAssignmentSummary(db,'2026-10');
+ assert.equal(sql.prepare('SELECT total_changes() AS n').get().n,before,'classification and summaries only read existing data');
+ sql.exec("INSERT INTO crm_notes(id,lead_id,user_id,content,next_step,method,created) VALUES('system-sync','sheet','a','同步归属','','归属核正','2026-10-03'),('confirmed-history','legacy','a','已核实并跟进','','电话','2026-10-03')");
+ const after=await assignmentReminders(db,a);
+ assert.ok(after.some(l=>l.id==='sheet'),'system sync is not follow-up evidence');assert.ok(!after.some(l=>l.id==='legacy'),'valid owner follow-up resolves historical group');
+ sql.exec("UPDATE crm_leads SET owner_id='a' WHERE id='changed-owner';INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('changed-back','changed-owner','b','a','2026-10-04')");
+ assert.equal((await assignmentReminders(db,a)).find(l=>l.id==='changed-owner').assignment_category,'new','returning to original owner must not reuse old sync provenance');
+ sql.exec("UPDATE crm_leads SET review=1 WHERE id='unknown'");assert.ok(!(await assignmentReminders(db,a)).some(l=>l.id==='unknown'),'review exclusion remains unchanged');
+ console.log('PASS: three exclusive categories, legacy sheet provenance, reassignment, follow-up evidence and read-only invariance.');
  console.log('PASS: ownership isolation, persistent reads, status-only changes, follow-up evidence, reassignment and followup role.');
 }finally{rmSync(dir,{recursive:true,force:true});}

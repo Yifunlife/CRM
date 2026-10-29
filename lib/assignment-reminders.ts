@@ -1,3 +1,4 @@
+import {assignmentCategory} from './assignment-categories';
 // Derive unresolved work from ownership and recorded follow-up, never notification read state.
 export async function assignmentReminders(db:D1Database,user:any){
  if(user.role==='followup')return [];
@@ -6,12 +7,17 @@ export async function assignmentReminders(db:D1Database,user:any){
  CASE WHEN json_valid(l.detail) THEN COALESCE(json_extract(l.detail,'$.inbox_url'),json_extract(l.detail,'$.收件箱链接')) END AS inbox_url,
  (SELECT name FROM crm_users WHERE id=l.owner_id) AS owner_name,
  (SELECT json_object('created',n.created,'author',u.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE n.lead_id=l.id ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
- (SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at
- FROM crm_leads l WHERE l.owner_id=? AND l.review=0
+ a.created AS assigned_at,a.policy AS assignment_policy,
+ CASE WHEN a.policy='' AND l.original_owner=(SELECT name FROM crm_users WHERE id=l.owner_id)
+ AND json_valid(l.detail) AND json_type(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.分配同步来源')='object'
+ AND a.id=(SELECT first.id FROM crm_assignments first WHERE first.lead_id=l.id ORDER BY first.created,first.rowid LIMIT 1)
+ THEN 1 ELSE 0 END AS legacy_sync
+ FROM crm_leads l LEFT JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)
+ WHERE l.owner_id=? AND l.review=0
  ) SELECT * FROM owned l WHERE (l.assigned_at IS NOT NULL OR l.status='待首次联系')
  AND NOT EXISTS(SELECT 1 FROM crm_notes n WHERE n.lead_id=l.id AND n.user_id=l.owner_id
  AND n.created>=COALESCE(l.assigned_at,l.created) AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信'))
- ORDER BY COALESCE(l.assigned_at,l.created) DESC,l.id`).bind(user.id).all<any>()).results;
+ ORDER BY COALESCE(l.assigned_at,l.created) DESC,l.id`).bind(user.id).all<any>()).results.map(l=>({...l,assignment_category:assignmentCategory(l)}));
 }
 
 export async function teamAssignmentSummary(db:D1Database,month:string,owner=''){
