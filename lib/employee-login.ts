@@ -13,7 +13,7 @@ export async function initializeEmployeeLogin(db:D1Database,actor:any,body:any){
   const username=item.employee_number.toLowerCase();
   if(user.username===username)throw new AllocationError('此账号已使用该工号，不重复重置密码');
   if(await db.prepare('SELECT id FROM crm_users WHERE username=? AND id<>?').bind(username,item.id).first())throw new AllocationError('工号已被其他账号使用');
-  statements.push(db.prepare('UPDATE crm_users SET username=?,password=? WHERE id=?').bind(username,await passwordHash(item.employee_number),item.id));
+  statements.push(db.prepare('UPDATE crm_users SET username=?,password=?,must_change_password=1 WHERE id=?').bind(username,await passwordHash(item.employee_number),item.id));
   statements.push(db.prepare('DELETE FROM crm_sessions WHERE user_id=?').bind(item.id));
  }
  await db.batch(statements);

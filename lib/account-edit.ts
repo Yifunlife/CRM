@@ -18,7 +18,7 @@ export async function resetAccountPassword(db:D1Database,actor:any,body:any){
  if(Object.keys(body).some(k=>!['id','password'].includes(k)))throw new AllocationError('只能重置账号密码');
  if(typeof body.password!=='string'||body.password!==body.password.trim()||body.password.length<8||body.password.length>200)throw new AllocationError('新密码需为8–200位，首尾不能有空格');
  if(!await db.prepare('SELECT id FROM crm_users WHERE id=?').bind(body.id).first())throw new AllocationError('账号不存在',404);
- await db.batch([db.prepare('UPDATE crm_users SET password=? WHERE id=?').bind(await passwordHash(body.password),body.id),db.prepare('DELETE FROM crm_sessions WHERE user_id=?').bind(body.id)]);
+ await db.batch([db.prepare('UPDATE crm_users SET password=?,must_change_password=1 WHERE id=?').bind(await passwordHash(body.password),body.id),db.prepare('DELETE FROM crm_sessions WHERE user_id=?').bind(body.id)]);
  return {ok:true};
 }
 

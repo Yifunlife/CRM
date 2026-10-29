@@ -28,8 +28,9 @@ export default function MetaAdReport(){
    <label>业务 / 账户<select value={account} onChange={e=>{A(e.target.value);S('');}}><option value="">两个账户合计</option>{data.accounts.map((a:any)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
    <label>年份<select value={year} onChange={e=>{Y(e.target.value);S('');}}><option value="">全部年份</option>{years.map(y=><option key={y}>{y}</option>)}</select></label>
    <label>统计期间<select value={selected} onChange={e=>S(e.target.value)}><option value="">全部期间</option>{periods.map(r=><option key={r.period}>{r.period}</option>)}</select></label>
+   <label>成效指标<select value={metric} onChange={e=>SM(e.target.value)}>{[...new Set(['actions:leadgen.other',metric,...resultTypes])].map(t=><option key={t} value={t}>{metaResultLabel(t)}</option>)}</select></label>
   </div>
-  <div className="meta-chart-heading"><h3>{period==='month'?'每月':period==='quarter'?'季度':'年度'}对比图</h3><label>成效指标<select value={metric} onChange={e=>SM(e.target.value)}>{[...new Set(['actions:leadgen.other',metric,...resultTypes])].map(t=><option key={t} value={t}>{metaResultLabel(t)}</option>)}</select></label></div>
+  <div className="meta-chart-heading"><h3>{period==='month'?'每月':period==='quarter'?'季度':'年度'}对比图</h3></div>
   <MetaAdTrend metricLabel={metaResultLabel(metric)} rows={shownPeriods.map(r=>{const outcomes=(data.outcomes||[]).filter((v:any)=>(!account||v.account_id===account)&&metaPeriod(v.date,period)===r.period);return {period:r.period,spent:r.spent,leads:r.results[metric]??null,customers:outcomes.length?outcomes.reduce((n:number,v:any)=>n+v.customers,0):null,deals:outcomes.length?outcomes.reduce((n:number,v:any)=>n+v.deals,0):null};})} coverage={typeof data.outcomeCoverage==='string'?data.outcomeCoverage:data.outcomeCoverage?.reason}/>
   <p className="small muted">按时间从早到晚对比；金额与成效分图。未提供的成效不作零值。当前月份为截至报表日期的累计。</p>
   <details><summary>查看费用明细</summary><h3>费用与效果明细</h3><p aria-live="polite">{selected||year||'全部已导入历史'} · {account?accounts[0]?.name:'两个账户'}实际花费 <strong>{money(total.spent)} USD</strong></p>

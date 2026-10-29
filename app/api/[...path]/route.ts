@@ -1,3 +1,4 @@
+import {cloudEndpoint,cloudWebhook} from '../../../lib/cloud-communication';
 import {quoteBridgeEndpoint,refreshQuoteBridge} from '../../../lib/quote-bridge';
 import {executionEndpoint} from '../../../lib/order-execution-server';
 import {salesSuiteEndpoint} from '../../../lib/sales-suite-server';
@@ -36,6 +37,7 @@ async function handle(req: Request) {
  try {
   const db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
+  if(path==="cloud/webhook")return await cloudWebhook(db,env as any,req);
   if (write && path!=="bridge/poll" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
@@ -58,14 +60,16 @@ async function handle(req: Request) {
    if (!user || !await verifyPassword(pw, user.password)) {
     await db.prepare("INSERT INTO crm_login_attempts(key,count,until) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN until<? THEN 1 ELSE count+1 END,until=CASE WHEN until<? THEN excluded.until ELSE until END").bind(key, Date.now()+900000, Date.now(), Date.now()).run();throw new Problem("用户名或密码错误，或账号已停用", 401);
    }
+   if(/^yw\d{3}$/.test(username)&&pw===username.toUpperCase())await db.prepare('UPDATE crm_users SET must_change_password=1 WHERE id=?').bind(user.id).run();
    await db.prepare("DELETE FROM crm_login_attempts WHERE key=?").bind(key).run();
    const token = id() + id(); await db.prepare("INSERT INTO crm_sessions(token,user_id,expires) VALUES(?,?,?)").bind(await digest(token), user.id, Date.now()+43200000).run();
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
-  const user=await viewUser(db,actor,req.headers.get('x-crm-view'));
+  if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
+  const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications'))throw new Problem('跟单员仅可访问本人订单跟单',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
@@ -91,6 +95,7 @@ async function handle(req: Request) {
   const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined)return json(phase1Result);
   const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined)return json(executionResult);
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
+  const cloud=await cloudEndpoint(db,env as any,user,actor,path,req.method,body,url);if(cloud!==undefined)return json(cloud);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
   const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
   if(operationsResult!==undefined)return json(operationsResult);
@@ -99,13 +104,14 @@ async function handle(req: Request) {
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,can_switch:actor.role==='admin',can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
+  if (path === "me" && !write) return json({...user,must_change_password:!!actor.must_change_password,can_switch:actor.role==='admin',can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
   if (path === "password" && req.method === "POST") {
    if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
    if (!await verifyPassword(clean(body.current,200), stored.password)) throw new Problem("原密码不正确");
-   if (clean(body.password,200).length < 8) throw new Problem("新密码至少8位");
-   await db.batch([db.prepare("UPDATE crm_users SET password=? WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
+   if(typeof body.password!=='string'||body.password!==body.password.trim()||body.password.length<8||body.password.length>200)throw new Problem('新密码需为8–200位，首尾不能有空格');
+   if(await verifyPassword(body.password,stored.password))throw new Problem('新密码不能与原密码相同');
+   await db.batch([db.prepare("UPDATE crm_users SET password=?,must_change_password=0 WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
   }
   if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
   if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
@@ -119,7 +125,7 @@ async function handle(req: Request) {
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
     const userId = id();
-    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
+    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password) VALUES(?,?,?,?,?,1,?,1)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
     if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
     if(body.role==='followup')statements.push(db.prepare("UPDATE crm_users SET permissions=? WHERE id=?").bind(JSON.stringify({followup_edit:true}),userId));
     await db.batch(statements);return json({ok:true});

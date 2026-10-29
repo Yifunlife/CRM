@@ -36,12 +36,13 @@ try{
  assert.ok(!JSON.stringify(data).includes('duplicate'));assert.equal(data.rows.reduce((n,r)=>n+r.customers,0),4);
  await build({entryPoints:[join(base,'app/crm-monthly-cohort.tsx')],outfile:join(dir,'component.cjs'),bundle:true,platform:'node',format:'cjs',jsx:'automatic',external:['react','react-dom'],nodePaths:[join(root,'node_modules')],plugins:[fallback],logLevel:'silent'});
  // Keep React resolution on the repository's installed runtime.
- const componentText=readFileSync(join(dir,'component.cjs'),'utf8').replaceAll('require("react")',`require(${JSON.stringify(join(root,'node_modules/react'))})`).replaceAll('require("react/jsx-runtime")',`require(${JSON.stringify(join(root,'node_modules/react/jsx-runtime.js'))})`);
+ const componentText=readFileSync(join(dir,'component.cjs'),'utf8').replaceAll('require("react")',`require(${JSON.stringify(join(root,'node_modules/react'))})`).replaceAll('require("react-dom")',`require(${JSON.stringify(join(root,'node_modules/react-dom'))})`).replaceAll('require("react/jsx-runtime")',`require(${JSON.stringify(join(root,'node_modules/react/jsx-runtime.js'))})`);
  writeFileSync(join(dir,'component.cjs'),componentText);
  const Component=require(join(dir,'component.cjs')).default;
  const html=renderToStaticMarkup(React.createElement(Component,{data}));
- assert.equal((html.match(/<svg/g)||[]).length,5);assert.ok(html.includes('最终转化率'));assert.ok(html.includes('50.0%'));assert.ok(html.includes('金额未齐'));assert.ok(html.includes('蓝色当月，橙色上月'));assert.ok(html.includes('尚未判定有效性'));assert.ok(html.includes('2026-09'));
+ assert.equal((html.match(/<svg/g)||[]).length,1,'only the selected chart is rendered');assert.ok(html.includes('最终转化率'));assert.ok(html.includes('50.0%'));assert.ok(html.includes('来源占比'));assert.ok(html.includes('渠道对比'));assert.ok(html.includes('选择分析内容'));assert.ok(html.includes('2026-09'));
+
  const output=process.env.PREVIEW_PATH;
  if(output){const css=readFileSync(join(base,'app/crm-monthly-cohort.css'),'utf8');writeFileSync(output,`<!doctype html><meta charset="utf-8"><title>月度对比组件测试（虚构测试数据）</title><style>body{font:13px system-ui;margin:16px;color:#203854}.table-wrap{overflow:auto}table{border-collapse:collapse}td,th{border-bottom:1px solid #ddd}select{border:1px solid #bbc9d8;background:white;border-radius:4px}summary{padding:4px 0}${css}</style><p>虚构测试数据 · 不写入正式数据库</p>${html}`);}
- console.log('PASS: cohort identity deduplication; repeat/cancelled/future/pre-acquisition orders; mixed currencies; missing amounts; market/source scope; prior-year boundary; uncovered/zero months; five two-color charts; customer conversion.');
+ console.log('PASS: cohort identity deduplication; repeat/cancelled/future/pre-acquisition orders; mixed currencies; missing amounts; market/source scope; prior-year boundary; uncovered/zero months; single selected chart and analysis controls; customer conversion.');
 }finally{rmSync(dir,{recursive:true,force:true});}

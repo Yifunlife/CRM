@@ -1,0 +1,9 @@
+CREATE TABLE crm_cloud_settings (id TEXT PRIMARY KEY, value TEXT NOT NULL, updated TEXT NOT NULL, actor_id TEXT NOT NULL REFERENCES crm_users(id));
+CREATE TABLE crm_cloud_connections (owner_id TEXT PRIMARY KEY REFERENCES crm_users(id), phone_id TEXT NOT NULL UNIQUE, waba_id TEXT NOT NULL, display_phone TEXT NOT NULL, token TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, connected TEXT NOT NULL, sync_status TEXT NOT NULL DEFAULT '');
+CREATE TABLE crm_cloud_auth (nonce TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES crm_users(id), expires INTEGER NOT NULL);
+CREATE TABLE crm_cloud_messages (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES crm_users(id), phone_id TEXT NOT NULL, lead_id TEXT REFERENCES crm_leads(id), peer TEXT NOT NULL, direction TEXT NOT NULL, content TEXT NOT NULL, status TEXT NOT NULL, provider_id TEXT UNIQUE, request_hash TEXT NOT NULL DEFAULT '', created TEXT NOT NULL);
+CREATE INDEX crm_cloud_messages_owner_lead ON crm_cloud_messages(owner_id,lead_id,created);
+CREATE TABLE crm_ai_limits (owner_id TEXT PRIMARY KEY REFERENCES crm_users(id), monthly_tokens INTEGER NOT NULL DEFAULT 0 CHECK(monthly_tokens>=0), updated TEXT NOT NULL, actor_id TEXT NOT NULL REFERENCES crm_users(id));
+CREATE TABLE crm_ai_usage (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES crm_users(id), lead_id TEXT NOT NULL REFERENCES crm_leads(id), month TEXT NOT NULL, request_hash TEXT NOT NULL, model TEXT NOT NULL, state TEXT NOT NULL, charged_tokens INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, reply TEXT NOT NULL DEFAULT '', created TEXT NOT NULL);
+CREATE INDEX crm_ai_usage_budget ON crm_ai_usage(owner_id,month,state);
+CREATE TABLE crm_cloud_receipts (provider_id TEXT PRIMARY KEY, phone_id TEXT NOT NULL, status TEXT NOT NULL);
