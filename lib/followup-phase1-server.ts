@@ -26,10 +26,10 @@ async function references(db:D1Database,row:any,input:any){
 export async function phase1Endpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('followup-phase1/'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
- const manager=await followupManager(db,user),all=manager||can(user,'followup_all');
+ const manager=user.role!=='sales'&&await followupManager(db,user),all=user.role!=='sales'&&(manager||can(user,'followup_all'));
  if(!all&&!['sales','followup'].includes(user.role))fail('没有跟单访问权限',403);
  if(path==='followup-phase1/report'&&method==='GET'){
-  const day=chinaDay(now()),args=all?[]:[user.id],where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=?';
+  const day=chinaDay(now()),args=all?[]:user.role==='sales'?[user.id,user.id]:[user.id],where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=? AND EXISTS(SELECT 1 FROM crm_leads own WHERE own.id=o.lead_id AND own.owner_id=?)';
   const orders=(await db.prepare('SELECT o.* FROM crm_followup_orders o'+where).bind(...args).all<any>()).results;
   const records=(await db.prepare('SELECT r.*,u.name AS actor_name FROM crm_followup_records r JOIN crm_followup_orders o ON o.id=r.order_id JOIN crm_users u ON u.id=r.created_by'+where+' ORDER BY r.occurred_at DESC,r.created DESC,r.rowid DESC').bind(...args).all<any>()).results.map(r=>({...r,payload:JSON.parse(r.payload)}));
   const checks=(await db.prepare('SELECT c.*,u.name AS actor_name FROM crm_followup_checks c JOIN crm_followup_orders o ON o.id=c.order_id JOIN crm_users u ON u.id=c.created_by'+where+' ORDER BY c.created DESC,c.rowid DESC').bind(...args).all<any>()).results;

@@ -1,3 +1,4 @@
+import {contractFiles} from '../../../lib/contract-files';
 import {tracedRequest,type RequestTrace} from '../../../lib/api/diagnostics';
 import { env } from "cloudflare:workers";
 import { setAccountPermissions } from '../../../lib/account-edit';
@@ -26,7 +27,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(path==="cloud/webhook")return await cloudWebhook(db,env as any,req);
   if (write && path!=="bridge/poll" && path!=="linked/worker" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
-  if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files") && !path.startsWith("contract-files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
   trace.identify(body);
   if(path==="linked/worker"&&req.method==="POST")return json(await linkedWorker(db,req,body));
   if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
@@ -70,6 +71,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(path==='advertising'||path.startsWith('operations/'))permissionDenied(write?'advertising_edit':'advertising_view');
   if(path==='users/permissions'&&req.method==='POST')return json(await setAccountPermissions(db,user,body));
   if(path==='admin/backup' &&req.method==='GET'){if(!['admin','ceo'].includes(actor.role)||!['admin','ceo'].includes(user.role))throw new Problem('没有导出备份权限',403);return databaseBackup(db);}
+  if(path==='contract-files'||path.startsWith('contract-files/'))return await contractFiles(req,db,env.BUCKET,user,actor);
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
   const businessResult=await businessModules({db,env,req,url,path,write,body,user,actor,token});if(businessResult!==undefined)return businessResult;

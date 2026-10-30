@@ -1,3 +1,5 @@
+import {roleWorkspaceEndpoint as roleDashboardEndpoint} from '../role-workspace-server';
+import {contractTemplateEndpoint} from '../contract-templates-server';
 import {customerServiceEndpoint} from '../customer-service';
 import {roleWorkspaceEndpoint} from '../role-workspaces';
 import { advertisingEndpoint } from '../advertising-server';
@@ -26,6 +28,8 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const template=await contractTemplateEndpoint(user,path,req.method,body);if(template!==undefined)return template instanceof Response?template:json(template);
+ const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined)return json(dashboard);
   const workspace=await roleWorkspaceEndpoint(db,user,path,req.method,url);if(workspace!==undefined)return json(workspace);
   const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
   const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined){if(req.method==='POST'&&path==='confirmations/quote'&&'id' in confirmation)await afterWorkflowWrite(db,env.QUOTE_DB,confirmation,{project:confirmation.id});return json(confirmation);}

@@ -10,6 +10,7 @@ export async function followupOrder(db:D1Database,user:any,orderId:string){
  const current:any=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)throw new AllocationError('订单不存在或无权查看',404);user={...user,...current,...(current.role==='ceo'&&user.personal_business?{role:'sales',permissions:{}}:{})};
  const manager=await followupManager(db,user);
  const row:any=await db.prepare('SELECT * FROM crm_followup_orders WHERE id=?').bind(orderId).first();
+ if(user.role==='sales'&&row&&(row.commercial_id!==user.id||!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(row.lead_id,user.id).first()))throw new AllocationError('订单不存在或无权查看',404);
  if(!row||(!manager&&!can(user,'followup_all')&&(user.role==='followup'?row.logistics_id!==user.id:row.commercial_id!==user.id)))throw new AllocationError('订单不存在或无权查看',404);
  return {row:{...row,details:JSON.parse(row.details),steps:JSON.parse(row.steps)},manager:manager||user.role==='followup'&&row.logistics_id===user.id&&can(user,'followup_edit')};
 }
@@ -34,10 +35,10 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  // Customer communication follow-ups use the original /followup POST handler.
  if(path==='followup'&&method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project'))return undefined;
  if(method!=='GET'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('跟单请求格式无效');
- const manager=await followupManager(db,user);
+ const manager=user.role!=='sales'&&await followupManager(db,user);
  if(!manager&&!can(user,'followup_all')&&!['sales','followup'].includes(user.role))fail('此账号没有跟单访问权限，请联系管理员',403);
  if(path==='followup'&&method==='GET'){
-  const all=manager||can(user,'followup_all'),where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=?',args=all?[]:[user.id];
+  const all=user.role!=='sales'&&(manager||can(user,'followup_all')),where=all?'':user.role==='followup'?' WHERE o.logistics_id=?':' WHERE o.commercial_id=? AND EXISTS(SELECT 1 FROM crm_leads own WHERE own.id=o.lead_id AND own.owner_id=?)',args=all?[]:user.role==='sales'?[user.id,user.id]:[user.id];
   const orders=(await db.prepare('SELECT o.*,l.name AS customer_name,c.name AS commercial_name,s.name AS logistics_name FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users c ON c.id=o.commercial_id JOIN crm_users s ON s.id=o.logistics_id'+where+' ORDER BY o.archived,o.updated DESC').bind(...args).all()).results.map((o:any)=>({...o,details:JSON.parse(o.details),steps:JSON.parse(o.steps)}));
   const tasks=(await db.prepare('SELECT t.*,u.name AS owner_name FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_users u ON u.id=t.owner_id'+where+' ORDER BY t.due_at,t.created').bind(...args).all()).results;
   const people=manager?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 ORDER BY name').all()).results:user.role==='followup'?(await db.prepare('SELECT id,name,role FROM crm_users WHERE active=1 AND (id=? OR id IN (SELECT commercial_id FROM crm_followup_orders WHERE logistics_id=?)) ORDER BY name').bind(user.id,user.id).all()).results:[];

@@ -8,7 +8,7 @@ import {enquiryNotification} from './lead-notifications';
 const manager=(user:any)=>can(user,'customers_all')&&can(user,'leads_allocate');
 const day=(at:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
-function fields(input:any){return Object.fromEntries(['name','phone','email','country','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));}
+function fields(input:any):Record<string,string>{const data=Object.fromEntries(['name','phone','email','country','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));const platform=clean(input?.platform,20).toLowerCase();if(platform&&!['fb','ig','facebook','instagram'].includes(platform))fail('请选择Facebook或Instagram平台');return {...data,...(platform?{platform}:{} )};}
 function event(db:D1Database,key:string,actor:string,kind:string,payload:any){return db.prepare('INSERT INTO crm_pool_events(id,intake_id,actor_id,kind,payload,created) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),key,actor,kind,JSON.stringify(payload),now());}
 async function matches(db:D1Database,data:any){
  const rows=(await db.prepare('SELECT l.id,l.name,l.phone,l.email,l.owner_id,l.original_owner,l.review,u.name AS owner_name,u.active AS owner_active FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id').all<any>()).results;
@@ -38,7 +38,7 @@ export async function processCustomerPool(db:D1Database,at=now()){
    if(!lead){
     const duplicates=await matches(db,data);
     if(duplicates.length&&!data.distinct_reason)throw new Error('发现相同联系方式，请核查是否已有客户');
-    const detail=JSON.stringify({'项目需求描述':data.requirement,'客户需求摘要':data.summary,'原始内容':row.raw,'客户池记录':row.id,'确认新客户依据':data.distinct_reason||'','客户池电话键':phoneKey(data.phone),'客户池邮箱键':emailKey(data.email)});
+    const detail=JSON.stringify({'项目需求描述':data.requirement,'客户需求摘要':data.summary,...(data.platform?{'来源渠道':data.platform,platform:data.platform}:{}),'原始内容':row.raw,'客户池记录':row.id,'确认新客户依据':data.distinct_reason||'','客户池电话键':phoneKey(data.phone),'客户池邮箱键':emailKey(data.email)});
     await db.batch([
      db.prepare(`INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,entered,detail,fingerprint,created)
       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_customer_pool WHERE id=? AND state='待分配' AND version=?)
@@ -118,14 +118,14 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
  if(path==='customer-pool/review'&&method==='POST')return {candidates:await matches(db,fields(body.fields)),events:(await db.prepare('SELECT e.kind,e.payload,e.created,u.name AS actor_name FROM crm_pool_events e JOIN crm_users u ON u.id=e.actor_id WHERE e.intake_id=? ORDER BY e.created,e.rowid').bind(row.id).all<any>()).results};
  if(path==='customer-pool/save'&&method==='POST'){
   if(row.state!=='待确认'||row.version!==body.version)fail('记录已变化，请刷新后核查',409);
-  const data=fields(body.fields),result=await db.batch([
+  const data=fields({...JSON.parse(row.payload),...body.fields}),result=await db.batch([
    db.prepare("UPDATE crm_customer_pool SET payload=?,updated=?,version=version+1 WHERE id=? AND state='待确认' AND version=?").bind(JSON.stringify(data),timestamp,row.id,body.version),
    event(db,row.id,actor.id,'保存待确认资料',{before:JSON.parse(row.payload),after:data})
   ]);if(!result[0].meta.changes)fail('记录已变化，请刷新后核查',409);return {ok:true,version:row.version+1};
  }
  if(path==='customer-pool/confirm'&&method==='POST'){
   if(row.state!=='待确认'||row.version!==body.version)fail('记录已变化，请刷新后核查',409);
-  const data=fields(body.fields),scope=BUSINESS_SCOPES.find(s=>s.id===data.business_scope);
+  const data=fields({...JSON.parse(row.payload),...body.fields}),scope=BUSINESS_SCOPES.find(s=>s.id===data.business_scope);
   if(!data.name||(!phoneKey(data.phone)&&!emailKey(data.email)))fail('请补充姓名及至少一种有效联系方式');
   if(data.phone&&phoneKey(data.phone).length<7)fail('电话号码不足7位，请核对');
   if(data.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))fail('邮箱格式不正确，请核对');

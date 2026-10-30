@@ -36,5 +36,5 @@ export function permissionDefaults(role:string):Record<PermissionKey,boolean>{
 }
 export function permissionOverrides(user:any):Partial<Record<PermissionKey,boolean>>{try{const p=typeof user.permissions==='string'?JSON.parse(user.permissions):user.permissions;return p&&typeof p==='object'&&!Array.isArray(p)?p:{};}catch{return {};}}
 export const SALES_PERSONAL_ONLY:readonly PermissionKey[]=['customers_all','leads_allocate','performance_view','advertising_view','advertising_edit'];
-export function ceoRequestAllowed(user:any,path:string,method:string){return user?.role!=='ceo'||method==='GET'||method==='POST'&&['logout','password','service/conversation'].includes(path);}
+export function ceoRequestAllowed(user:any,path:string,method:string){return user?.role!=='ceo'||method==='GET'||method==='POST'&&['logout','password','service/conversation','role-workspace/templates/generate'].includes(path);}
 export function can(user:any,key:PermissionKey){if(user?.role==='ceo')return permissionDefaults('ceo')[key];if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
