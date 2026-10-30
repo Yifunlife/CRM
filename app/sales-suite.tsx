@@ -17,7 +17,8 @@ const values=(form:HTMLFormElement)=>Object.fromEntries(new FormData(form));
 const Badge=({children,tone='blue'}:{children:any;tone?:string})=><span className={'ss-badge '+tone}>{children}</span>;
 const Field=({title,children}:{title:string;children:any})=><div className="ss-field"><span>{title}</span><div>{children||'待核实'}</div></div>;
 export default function SalesSuite(props:Props){
- if(props.view==='我的工作'&&['admin','ceo','management'].includes(props.user.role)&&can(props.user,'customers_all'))return <ManagementWork api={props.api} user={props.user} navigate={props.navigate} openLead={props.openLead} openOrder={props.openOrder} choose={(id:string,page='客户与项目')=>{props.onProject(id);props.navigate(page);}}/>;
+ const [revision,refresh]=useState(0);
+ if(props.view==='我的工作'&&['admin','ceo','management'].includes(props.user.role)&&can(props.user,'customers_all'))return <section className="sales-suite"><div className="page-heading"><div><h1>我的工作</h1></div><div className="ss-actions"><button onClick={()=>refresh(n=>n+1)}>刷新</button></div></div><ManagementWork key={revision} api={props.api} user={props.user} navigate={props.navigate} openLead={props.openLead} openOrder={props.openOrder} choose={(id:string,page='客户与项目')=>{props.onProject(id);props.navigate(page);}}/></section>;
  return <SalesSuiteContent {...props}/>;
 }
 function SalesSuiteContent({view,active,api,user,navigate,openOrder,openLead,openCommunication,openCommunicationQueue,projectId,onProject}:Props){

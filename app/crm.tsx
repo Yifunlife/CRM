@@ -1,25 +1,26 @@
 'use client';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {lazy,Suspense,useCallback,useEffect,useRef,useState} from 'react';
 import {Users,MessageSquare,ClipboardList,Settings,LogOut,Search,Plus,ArrowRight,ChevronLeft,ChevronRight,ChevronDown,Link2,Eye,EyeOff,Menu,X} from 'lucide-react';
 import {SOURCES,STATUSES,GRADES,phoneKey,emailKey,can} from '../lib/crm';
 import {businessDetail,customerNoteContent} from '../lib/customer-business-detail';
 import SourceBadge from './source-badge';
-import AccountManagement from './account-management';
-import AllocationSettings from './allocation-settings';
-import HistoricalAlignment from './historical-alignment';
+const AccountManagement=lazy(()=>import('./account-management'));
+const AllocationSettings=lazy(()=>import('./allocation-settings'));
+const HistoricalAlignment=lazy(()=>import('./historical-alignment'));
 import CustomerPool from './customer-pool';
-import {SalesPipelineOverview,SalesPipelineDetail} from './sales-pipeline';
-import CustomerChangeList from './customer-change-list';
-import Advertising from './advertising';
+const SalesPipelineOverview=lazy(()=>import('./sales-pipeline').then(m=>({default:m.SalesPipelineOverview})));
+const SalesPipelineDetail=lazy(()=>import('./sales-pipeline').then(m=>({default:m.SalesPipelineDetail})));
+const CustomerChangeList=lazy(()=>import('./customer-change-list'));
+const Advertising=lazy(()=>import('./advertising'));
 import FollowupNotifications from './followup-notifications';
-import OrderFollowup from './order-followup';
-import Workflow from './workflow';
-import Attribution from './attribution';
+const OrderFollowup=lazy(()=>import('./order-followup'));
+const Workflow=lazy(()=>import('./workflow'));
+const Attribution=lazy(()=>import('./attribution'));
 import {LOSS_REASONS} from '../lib/attribution';
-import CustomerIdentities from './customer-identities';
-import TeamFollowup from './team-followup';
+const CustomerIdentities=lazy(()=>import('./customer-identities'));
+const TeamFollowup=lazy(()=>import('./team-followup'));
 import ProfileMenu from './profile-menu';
-import SalesWorkbench from './sales-workbench';
+const SalesWorkbench=lazy(()=>import('./sales-workbench'));
 import SalesSuite from './sales-suite';
 import {BUSINESS_SCOPES} from '../lib/allocation';
 import {FIELDS,readGrid,type Grid} from '../lib/import-grid';
@@ -133,9 +134,9 @@ export default function CRM({businessEntry=false}:{businessEntry?:boolean}){
  const entries=(user.role==='followup'?[['订单跟单',ClipboardList]]:[['我的工作',ClipboardList],['客户管理',Users],['销售项目',ClipboardList],...(groups['销售管理'].length?[['销售管理',Users]]:[]),...(['sales','admin','ceo'].includes(user.role)?[['销售工作台',MessageSquare]]:[]),...(user.role==='sales'||user.can_followup?[['订单跟单',ClipboardList]]:[]),...(user.role!=='sales'?[['运营看板',Link2]]:[]),...(['admin','ceo'].includes(user.role)?[['系统设置',Settings]]:[])]) as [string,typeof Users][];
  return <div className={"app office-app"+(mobileNav?" navigation-open":"")}><aside id="crm-navigation" role={mobileNav?'dialog':undefined} aria-modal={mobileNav||undefined} aria-label="功能导航"><div className="brand"><img src="/workplace-logo.png" alt="YIFUN LIFE"/></div><div className="brand-sub">{user.role==='followup'?'跟单工作台':user.role==='sales'?'业务工作台':'客资管理'}</div><button className="mobile-nav-close icon" aria-label="关闭导航" onClick={()=>MN(false)}><X size={20}/></button><nav aria-label={user.role==='followup'?'跟单导航':user.role==='sales'?'业务端导航':'管理端导航'}>{entries.map(([p,Icon])=>groups[p]?<div className="nav-group" key={p}><button className={activeGroup===p?'active':''} aria-expanded={expandedGroup===p} aria-controls={'navigation-'+p} onClick={()=>ON(expandedGroup===p?'':p)}><Icon size={19}/>{p==='销售管理'?'销售情况':p}<ChevronDown className="nav-group-chevron" size={16}/></button>{expandedGroup===p&&<div className="nav-submenu" id={'navigation-'+p}>{groups[p].map(name=><button key={name} className={page===name?'active':''} aria-current={page===name?'page':undefined} onClick={()=>{nav(name);ON(window.innerWidth<=720?'':p);}}>{pageLabel(name)}</button>)}</div>}</div>:<button key={p} className={page===p?'active':''} aria-current={page===p?'page':undefined} onClick={()=>{ON(null);nav(p);}}><Icon size={19}/>{pageLabel(p)}</button>)}</nav><div className="profile"><ProfileMenu name={user.name} role={user.actor_role==='ceo'?(user.personal_business?'CEO · 我的业务':'CEO · 公司管理'):roles[user.role]} navigate={nav} switchView={user.can_switch?async()=>{SW(true);E('');const previous=activeView;activeView=user.actor_role==='ceo'?(user.personal_business?'boss':'personal'):user.role==='admin'?'winnie':'boss';SP('');CL('');CQ([]);PR(null);D(null);L([]);A([]);H([]);try{await refresh();nav(activeView==='personal'?'我的工作':activeView==='winnie'?'销售工作台':'业务员跟进');}catch(e:any){activeView=previous;E(e.message);}finally{SW(false);}}:undefined} switchLabel={switching?'正在切换…':user.actor_role==='ceo'?(user.personal_business?'切换到公司管理':'切换到我的业务'):user.role==='admin'?'切换到 Winnie 客户沟通':'切换到老板视角'} switchDisabled={busy||switching}/><button className="icon" aria-label="退出登录" onClick={()=>act(async()=>{await api('logout',{});activeView='boss';initialLanding.current=true;U(null);L([]);PR(null);D(null);P('工作台');})}><LogOut size={18}/></button></div></aside>{mobileNav&&<button className="navigation-backdrop" aria-label="关闭导航遮罩" onClick={()=>MN(false)}/>}<main className="workspace" inert={mobileNav}><header><button className="mobile-nav-toggle icon" aria-label="展开导航" aria-expanded={mobileNav} aria-controls="crm-navigation" onClick={()=>MN(!mobileNav)}><Menu size={20}/></button><div className="workspace-breadcrumb"><span className="muted">{user.role==='followup'?'亦玩跟单工作台':user.role==='sales'?'亦玩业务工作台':'亦玩客资管理'}</span> / {detail?detail.name:pageLabel(page)}</div><div className="followup-actions"><FollowupNotifications key={user.id} api={api} canAudit={can(user,'followup_all')} openLead={id=>open({id})}/><span className="small muted">{user.actor_role==='ceo'?(user.personal_business?'CEO · 我的业务':'CEO · 公司管理'):roles[user.role]} · {user.name}</span></div></header><div className="content" aria-busy={switching||busy}>{error&&<div role="alert" className="notice error">{error}</div>}{message&&<div role="status" className="notice success">{message}</div>}{busy&&<div role="status" className="office-progress">正在处理，请稍候…</div>}
  {manager&&!switching&&!detail&&page==='分配设置'&&<button className="text back" onClick={()=>nav('工作台')}><ChevronLeft size={16}/>返回客户档案</button>}
- {user.role==='sales'&&page==='我的工作'&&!switching&&<div hidden={!!detail}><SalesSuite projectId={suiteProjectId} onProject={SP} key={'suite-home'+user.id} view={page} active={!detail} api={api} user={user} navigate={nav} openOrder={id=>{nav('订单跟单');WO(id);}} openLead={id=>open({id})} openCommunication={id=>{CQ([]);CL(id);nav('销售工作台');}} openCommunicationQueue={ids=>{CQ(ids);CL(ids[0]||'');nav('销售工作台');}}/></div>}
+ <Suspense fallback={<p role="status">正在加载页面…</p>}>{user.role==='sales'&&page==='我的工作'&&!switching&&<div hidden={!!detail}><SalesSuite projectId={suiteProjectId} onProject={SP} key={'suite-home'+user.id} view={page} active={!detail} api={api} user={user} navigate={nav} openOrder={id=>{nav('订单跟单');WO(id);}} openLead={id=>open({id})} openCommunication={id=>{CQ([]);CL(id);nav('销售工作台');}} openCommunicationQueue={ids=>{CQ(ids);CL(ids[0]||'');nav('销售工作台');}}/></div>}
  {user.role!=='followup'&&(suitePages.includes(page)||page==='我的工作'&&user.role!=='sales')&&!detail&&<SalesSuite projectId={suiteProjectId} onProject={SP} key={'suite'+user.id} view={page} active={!switching} api={api} user={user} navigate={nav} openOrder={id=>{nav('订单跟单');WO(id);}} openLead={id=>open({id})} openCommunication={id=>{CQ([]);CL(id);nav('销售工作台');}} openCommunicationQueue={ids=>{CQ(ids);CL(ids[0]||'');nav('销售工作台');}}/>}
- {manager&&user.role!=='sales'&&<div hidden={switching||!!detail||page!=='业务员跟进'}><TeamFollowup openProject={id=>{SP(id);nav('客户与项目');}} key={user.id} active={!switching&&!detail&&page==='业务员跟进'} userId={user.id} api={api} openLead={id=>open({id})} openData={()=>nav('工作台')} openOrders={()=>nav('订单跟单')}/></div>}
+ {manager&&user.role!=='sales'&&<div hidden={switching||!!detail||page!=='业务员跟进'}><Suspense fallback={null}><TeamFollowup openProject={id=>{SP(id);nav('客户与项目');}} key={user.id} active={!switching&&!detail&&page==='业务员跟进'} userId={user.id} api={api} openLead={id=>open({id})} openData={()=>nav('工作台')} openOrders={()=>nav('订单跟单')}/></Suspense></div>}
  {switching?<p role="status">正在加载当前视角…</p>:detail?<div className="customer-detail" key={detail.id}><button className="text back" disabled={busy} onClick={closeDetail}><ChevronLeft size={16}/>返回{pageLabel(page)}</button><div className="page-heading"><div><h1 ref={detailHeading} tabIndex={-1}>{detail.name}</h1><p>{detail.country||'国家待补充'} · {detail.source} · 负责人：{detail.owner_name||detail.original_owner||'待分配'}</p></div><div className="customer-contact-actions"><span className="badge">{detail.cohort==='historical'&&detail.assignment_category!=='new'&&detail.status==='待首次联系'?'历史客资 · 默认已联系':detail.status}</span>{canEdit&&<button className="primary" disabled={busy} onClick={()=>{DT('跟进');requestAnimationFrame(()=>{document.getElementById('customer-contact-form')?.scrollIntoView({block:'start'});document.getElementById('customer-contact-status')?.focus();});}}>记录联系结果</button>}</div></div><div className="customer-next-action"><div><span className="small muted">下一步</span><strong>{detail.notes?.[0]?.next_step||'尚未记录下一步，请在跟进时补充'}</strong></div><div><span className="small muted">下次跟进</span><strong>{detail.next_date||'未安排'}</strong></div></div>
  {detailTab==='跟进'&&<details className="panel"><summary>当前客户核查提醒</summary><Workflow key={detail.id+detail.status+detail.next_date} section="待核查" api={api} user={user} leadId={detail.id} openLead={()=>DT('客户资料')}/></details>}
  <div className="customer-detail-tabs" role="tablist" aria-label="客户详情栏目">{['跟进','客户资料','成交与收款'].map((name,index)=><button key={name} id={'customer-tab-'+index} role="tab" aria-selected={detailTab===name} aria-controls={'customer-panel-'+index} tabIndex={detailTab===name?0:-1} onClick={()=>DT(name)} onKeyDown={e=>{const tabs=['跟进','客户资料','成交与收款'];const next=e.key==='ArrowRight'?(index+1)%3:e.key==='ArrowLeft'?(index+2)%3:e.key==='Home'?0:e.key==='End'?2:-1;if(next>=0){e.preventDefault();DT(tabs[next]);document.getElementById('customer-tab-'+next)?.focus();}}}>{name}</button>)}</div>
@@ -159,5 +160,5 @@ export default function CRM({businessEntry=false}:{businessEntry?:boolean}){
  page==='账号与权限'?<><AccountManagement readOnly={user.role==='ceo'} users={users} currentId={user.id} api={api} refresh={refresh} onSelfReset={()=>{U(null);M('密码已修改，请使用新密码登录');}}/><details className="panel"><summary>人员交接</summary><Workflow section="人员交接" api={api} user={user} onSaved={refresh}/></details><details className="panel"><summary>业务操作记录</summary><Workflow section="操作记录" api={api} user={user}/></details></>:
  page==='个人资料'?<><div className="page-heading"><div><h1>个人资料</h1><p>当前登录的公司账号信息。</p></div></div><section className="panel narrow"><dl><div><dt>姓名</dt><dd>{user.name}</dd></div><div><dt>用户名</dt><dd>{user.username}</dd></div><div><dt>角色</dt><dd>{roles[user.role]}</dd></div></dl></section></>:
  page==='修改密码'?<><div className="page-heading"><div><h1>修改密码</h1><p>修改后，其他设备上的登录会失效。</p></div></div><section className="panel narrow"><PasswordForm busy={busy} save={async(current,password)=>{let saved=false;await act(async()=>{await api('password',{current,password});M('密码已更新');saved=true;});return saved;}}/></section></>:null}
- </div></main></div>;
+ </Suspense></div></main></div>;
 }
