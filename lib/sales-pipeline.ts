@@ -13,7 +13,7 @@ export function salesSummary(lead:any,at=new Date().toISOString(),orders:any[]=[
  const completed=(round:Record<string,ContactRecord>)=>required.length&&required.every(c=>round[c]?.at)?required.map(c=>round[c].at).sort().at(-1)||'':'';
  const first=completed(state.first),second=completed(state.second),due=first?new Date(Date.parse(salesDay(first))+7*86400000).toISOString().slice(0,10):'';
  const won=deals.length>0,activeOrders=orders,linked=deals.filter(d=>d.has_order??activeOrders.some(o=>o.deal_id===d.id)).length;
- const historical=lead.cohort==='historical';
+ const historical=lead.cohort==='historical'&&lead.assignment_category!=='new';
  const unverified=!first&&!Object.keys(state.first).length&&!!(lead.last_contact||!['待首次联系','已结束','暂停跟进'].includes(lead.status));
  const stage=won?'won':lead.status==='已结束'?'ended':lead.status==='暂停跟进'?'paused':state.stage||(historical?'historical':!first?(unverified?'unverified':Object.keys(state.first).length?'partial':'untouched'):second?'second_done':salesDay(at)>due?'second_overdue':'second_pending');
  const labels:Record<string,string>={historical:'历史客资 · 默认已联系',won:linked<deals.length?'已成交待交接':'已成交跟单中',ended:'已结束',paused:'暂停跟进',unverified:'历史跟进待核实',partial:'初步沟通待补齐',untouched:'待初次联系',second_done:'二次跟进已完成',second_overdue:'二次跟进逾期',second_pending:'已初步沟通 · 待二次跟进',...Object.fromEntries(SALES_STAGES)};

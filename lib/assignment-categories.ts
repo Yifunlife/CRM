@@ -5,9 +5,9 @@ export const ASSIGNMENT_CATEGORIES = [
 ] as const;
 export type AssignmentCategory = typeof ASSIGNMENT_CATEGORIES[number]['id'];
 export function assignmentCategory(lead:{assigned_at?:string|null;assignment_policy?:string|null;legacy_sync?:number;cohort?:string}):AssignmentCategory{
- if(lead.cohort==='historical')return 'historical';
- if(lead.cohort==='unknown'||!lead.assigned_at)return 'unverified';
- return ['historical-sheet-v1','historical-alignment'].includes(lead.assignment_policy||'')||lead.legacy_sync===1?'historical':'new';
+ // Date cohorts describe customer history; only assignment provenance determines this work queue.
+ if(!lead.assigned_at)return 'unverified';
+ return ['historical-sheet-v1','historical-alignment','historical-sync'].includes(lead.assignment_policy||'')||lead.legacy_sync===1?'historical':'new';
 }
 
 export function newAssignmentCount(leads:ReadonlyArray<{assignment_category?:string}>){return leads.filter(l=>l.assignment_category==='new').length;}

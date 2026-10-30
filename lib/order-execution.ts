@@ -20,4 +20,13 @@ export function executionStages(p:ExecutionProfile):ExecutionStage[]{
 }
 export function executionCurrent(order:any){const flow=order.details?.execution;if(!flow)return null;const stages=executionStages(flow.profile);return stages.find(s=>flow.stages?.[s.key]?.status!=='已完成')||stages[stages.length-1];}
 export function executionTitle(order:any){return executionCurrent(order)?.name||'';}
+export function executionListSummary(order:any,latestRecord?:any){
+ const flow=order.details?.execution,date=order.details?.dates?.inspection?.date;
+ const inspection=!flow?date||'待确认':!flow.profile.inspection?'不适用':flow.stages?.inspection?.status==='已完成'?['已完成',date].filter(Boolean).join(' · '):date||flow.stages?.inspection?.status||'待验货';
+ const stages=flow?executionStages(flow.profile):[];
+ const latest=Object.entries(flow?.stages||{}).filter(([key,value]:[string,any])=>stages.some(s=>s.key===key)&&value.at).sort(([,a]:any,[,b]:any)=>Date.parse(a.at)-Date.parse(b.at)).at(-1) as [string,any]|undefined;
+ const note=latestRecord?.payload?.content;
+ const activity=note&&(!latest||Date.parse(latestRecord.occurred_at||latestRecord.created)>=Date.parse(latest[1].at))?note:latest?stages.find(s=>s.key===latest[0])!.name+' · '+latest[1].status:flow?'尚未填写执行记录':'暂无过程记录';
+ return {inspection,activity};
+}
 export function executionLate(date:string,today:string){return date&&date<today?Math.floor((Date.parse(today)-Date.parse(date))/86400000):0;}

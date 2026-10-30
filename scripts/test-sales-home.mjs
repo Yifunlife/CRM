@@ -59,10 +59,15 @@ assert.equal(homeCustomer({...base,status:'已结束'},at).tags.length,0);
 assert.equal(homeCustomer({...base,assigned_at:'2026-12-31T02:00:00Z'},'2027-01-03T02:00:00Z').due,'','unverified calendar is not invented');
 add('historical-sheet','sales','待首次联系');add('historical-unknown','sales','待首次联系');
 sqlite.exec("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('sheet-sync','historical-sheet','admin','sales','2026-10-29','historical-sheet-v1'),('normal-first','first','admin','sales','2026-10-29','equal-global-v1');");
+sqlite.exec("UPDATE crm_leads SET cohort='historical' WHERE id='first'");
 const historicalCheck=await salesHomeEndpoint(db,sales,'sales-home','GET');
-assert.ok(historicalCheck.todos.some(r=>r.id==='first'),'genuine new assignment stays in work summary');
+assert.ok(historicalCheck.todos.some(r=>r.id==='first'),'genuine new assignment stays in work summary even before cutoff');
+assert.ok(historicalCheck.todos.find(r=>r.id==='first').tags.includes('first'));
+assert.equal(historicalCheck.todos.find(r=>r.id==='first').cohort,'historical','display must not rewrite original date classification');
 assert.ok(!historicalCheck.todos.some(r=>['historical-sheet','historical-unknown'].includes(r.id)),'historical records never inflate work summary');
 assert.ok(historicalCheck.todos.some(r=>r.id==='due'),'actual new inquiry and scheduled follow-up remain');
 assert.equal(historicalCheck.historical_review_count,2);
 if(process.env.SALES_HOME_FIXTURE)writeFileSync(process.env.SALES_HOME_FIXTURE,JSON.stringify(result));
 console.log('PASS: personal scoping with broad permissions, read-only snapshots, grouped due/first/new-inquiry queues, paused review, historical performance ownership, cancelled entries, currency separation, handovers, stage projects and calendar boundaries.');
+
+assert.equal(homeCustomer({...base,cohort:"new",assignment_category:"historical"},at).tags.length,0,"historical backfill after cutoff must not generate synthetic first-contact tasks");

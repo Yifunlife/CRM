@@ -27,7 +27,10 @@ assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='edgeNew'").ge
 assert.equal(await distribute(db,['edgeNew'],'all','admin'),0);
 sql.exec("UPDATE crm_leads SET owner_id='sales' WHERE id='old';INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('historical-original','old','admin','sales','2026-11-02','equal-global-v1')");
 const {assignmentReminders,teamAssignmentSummary}=await import(moduleURL('lib/assignment-reminders.ts'));
-assert.equal((await assignmentReminders(db,{id:'sales',role:'sales'})).find(r=>r.id==='old').assignment_category,'historical','Cutoff overrides old allocation markers');
+assert.equal((await assignmentReminders(db,{id:'sales',role:'sales'})).find(r=>r.id==='old').assignment_category,'new','Verified allocation remains pending regardless of cutoff');
+assert.equal((await teamAssignmentSummary(db,'2026-11','sales'))[0].allocated_rows.some(r=>r.id==='old'),true);
+sql.exec("UPDATE crm_assignments SET policy='historical-alignment' WHERE id='historical-original'");
+assert.equal((await assignmentReminders(db,{id:'sales',role:'sales'})).find(r=>r.id==='old').assignment_category,'historical','Historical alignment remains excluded even after cutoff');
 assert.equal((await teamAssignmentSummary(db,'2026-11','sales'))[0].allocated_rows.some(r=>r.id==='old'),false);
 assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
 console.log('PASS: Beijing boundary, unknown provenance, late historical imports, preserved original fields, historical followup exclusion, subsequent reminders and allocation isolation/idempotence.');

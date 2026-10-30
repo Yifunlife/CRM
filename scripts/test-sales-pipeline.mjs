@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const pure=module('lib/sales-pipeline.ts'),crm=module('lib/crm.ts'),errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const {salesPipelineEndpoint}=await import(module('lib/sales-pipeline-server.ts',{"'./crm'":crm,"'./allocation-server'":errors,"'./sales-pipeline'":pure}));
+const {salesPipelineEndpoint}=await import(module('lib/sales-pipeline-server.ts',{"'./crm'":crm,"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./assignment-categories'":module('lib/assignment-categories.ts'),"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const {salesSummary}=await import(pure);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
@@ -57,3 +57,5 @@ sqlite.exec("UPDATE crm_followup_orders SET commercial_id='other' WHERE id='orde
 assert.throws(()=>sqlite.exec("UPDATE crm_deals SET cancelled=1 WHERE id='deal'"),/存在有效收款或跟单/);
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: both/single channels, seven natural days, partial and late second follow-up, reply inactivity, stage duration, legacy uncertainty, immutable evidence, concurrent writes, permissions, handover and independent production/purchase/shipping status.');
+
+assert.equal(salesSummary({id:"actual-allocation",name:"真实分配",cohort:"historical",assignment_category:"new",status:"待首次联系",detail:{},phone:"123",email:""},"2026-10-30T00:00:00Z").stage,"untouched","genuine allocation must not display historical default contacted");

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const source=ts.transpileModule(readFileSync('lib/order-execution.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {executionListSummary}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const profile={type:'equipment',production:true,inspection:true,shipping:'sea',installation:'ours',charge:'paid'};
+const order={details:{execution:{profile,stages:{inspection:{status:'已完成',at:'2026-11-02T01:00:00Z'},archive:{status:'已完成',at:'2026-11-03T01:00:00Z'}}}}};
+assert.deepEqual(executionListSummary(order),{inspection:'已完成',activity:'订单归档 · 已完成'});
+assert.equal(executionListSummary(order,{occurred_at:'2026-11-01T01:00:00Z',payload:{content:'早期生产记录'}}).activity,'订单归档 · 已完成');
+assert.equal(executionListSummary(order,{occurred_at:'2026-11-04T01:00:00Z',payload:{content:'补充验收说明'}}).activity,'补充验收说明');
+assert.deepEqual(executionListSummary({details:{dates:{inspection:{date:'2026-11-05'}}}},{created:'2026-11-01',payload:{content:'原有跟单记录'}}),{inspection:'2026-11-05',activity:'原有跟单记录'});
+assert.deepEqual(executionListSummary({details:{execution:{profile:{...profile,inspection:false},stages:{}}}}),{inspection:'不适用',activity:'尚未填写执行记录'});
+assert.deepEqual(executionListSummary({details:{}}),{inspection:'待确认',activity:'暂无过程记录'});
+console.log('PASS: completed execution inspection and latest stage summary, newer manual records, inspection not applicable, and legacy order display preserved.');

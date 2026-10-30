@@ -1,3 +1,5 @@
+import {assignmentFields,assignmentJoin} from './assignment-reminders';
+import {assignmentCategory} from './assignment-categories';
 import {authorizedLead,can,clean,id,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {salesState,salesSummary,SALES_STAGES} from './sales-pipeline';
@@ -14,22 +16,22 @@ export async function salesPipelineEndpoint(db:D1Database,user:any,actor:any,pat
  const timestamp=now();
  if(path==='sales-pipeline'&&method==='GET'){
   const all=can(user,'customers_all'),where=all?'':' WHERE l.owner_id=?',args=all?[]:[user.id];
-  const leads=(await db.prepare('SELECT l.*,u.name AS owner_name,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
+  const leads=(await db.prepare(`SELECT l.*,u.name AS owner_name,${assignmentFields} FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin}${where}`).bind(...args).all<any>()).results;
   const deals=(await db.prepare('SELECT d.id,d.lead_id,EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) AS has_order FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE d.cancelled=0'+(all?'':' AND l.owner_id=?')).bind(...args).all<any>()).results;
   const orders=await visibleOrders(db,user);
   const byLead=(items:any[])=>{const map=new Map<string,any[]>();for(const item of items){const group=map.get(item.lead_id)||[];group.push(item);map.set(item.lead_id,group);}return map;};
   const orderMap=byLead(orders),dealMap=byLead(deals);
-  const rows=leads.map(l=>{const {state,required,...row}=salesSummary(l,timestamp,orderMap.get(l.id)||[],dealMap.get(l.id)||[]);return row;});
+  const rows=leads.map(l=>{const {state,required,...row}=salesSummary({...l,assignment_category:assignmentCategory(l)},timestamp,orderMap.get(l.id)||[],dealMap.get(l.id)||[]);return row;});
   const people=(await db.prepare("SELECT id,name,active FROM crm_users WHERE "+(all?"role='sales' OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id)":'id=?')+' ORDER BY name,id').bind(...args).all<any>()).results;
   return {rows,people,at:timestamp,timezone:'Asia/Shanghai'};
  }
  const match=/^sales-pipeline\/([a-zA-Z0-9_-]+)$/.exec(path);if(!match)fail('销售流程操作不存在',404);
- const lead:any=await db.prepare('SELECT l.*,u.name AS owner_name,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE l.id=?').bind(match![1]).first();
+ const lead:any=await db.prepare(`SELECT l.*,u.name AS owner_name,${assignmentFields} FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE l.id=?`).bind(match![1]).first();
  if(!lead||!authorizedLead(user,lead))fail('客户不存在或无权查看',404);
  if(method==='GET'){
   const deals=(await db.prepare('SELECT d.id,EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) AS has_order FROM crm_deals d WHERE d.lead_id=? AND d.cancelled=0').bind(lead.id).all()).results;
   const history=(await db.prepare("SELECT e.id,e.payload,e.created,u.name AS author FROM crm_attribution_events e JOIN crm_users u ON u.id=e.created_by WHERE e.entity_id=? AND e.kind='销售流程记录' ORDER BY e.created DESC,e.rowid DESC LIMIT 100").bind(lead.id).all<any>()).results.map(e=>({...e,payload:JSON.parse(e.payload)}));
-  return {...salesSummary(lead,timestamp,await visibleOrders(db,user,lead.id),deals),history};
+  return {...salesSummary({...lead,assignment_category:assignmentCategory(lead)},timestamp,await visibleOrders(db,user,lead.id),deals),history};
  }
  if(method!=='POST')fail('不支持此操作',405);
  if(!can(user,'customers_edit'))fail('没有客资维护权限',403);

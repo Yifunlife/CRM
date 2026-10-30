@@ -27,7 +27,8 @@ export async function salesHomeEndpoint(db:D1Database,user:any,path:string,metho
  ]);
  const contracts=(await db.prepare(`SELECT c.currency,SUM(c.total_minor) AS amount FROM crm_workflow_contracts c JOIN crm_deals d ON d.id=c.deal_id WHERE d.owner_id=? AND d.cancelled=0 AND substr(d.deal_date,1,7)=? GROUP BY c.currency`).bind(user.id,month).all<any>()).results;
  const dealMap=new Map<string,any[]>();for(const deal of dealResult.results){const list=dealMap.get(deal.lead_id)||[];list.push(deal);dealMap.set(deal.lead_id,list);}
- const rows=leadResult.results.map(lead=>homeCustomer(lead,at,dealMap.get(lead.id)||[]));
+ const categories=new Map(assignments.map(l=>[l.id,l.assignment_category]));
+ const rows=leadResult.results.map(lead=>homeCustomer({...lead,assignment_category:categories.get(lead.id)},at,dealMap.get(lead.id)||[]));
  const historicalIds=new Set(assignments.filter(l=>l.assignment_category!=='new').map(l=>l.id));
  const tasks=taskResult.results.map(t=>({...t,mine:t.owner_id===user.id,due:t.due_at?salesDay(t.due_at):'',next_date:t.next_followup?salesDay(t.next_followup):''}));
  return {at,today,month,timezone:'Asia/Shanghai',customer_count:rows.length,

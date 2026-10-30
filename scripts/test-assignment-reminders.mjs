@@ -8,11 +8,10 @@ const dir=mkdtempSync(join(tmpdir(),'assignment-reminders-'));
 try{
  await build({entryPoints:['lib/assignment-reminders.ts','lib/assignment-categories.ts'],bundle:true,platform:'node',format:'esm',outdir:dir,outExtension:{'.js':'.mjs'},logLevel:'silent'});
  const {assignmentReminders,teamAssignmentSummary}=await import('file://'+join(dir,'assignment-reminders.mjs'));
- const {newAssignmentCount}=await import('file://'+join(dir,'assignment-categories.mjs'));
+ const {newAssignmentCount,assignmentCategory}=await import('file://'+join(dir,'assignment-categories.mjs'));
  const sql=new DatabaseSync(':memory:');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
  const statement=(s,a=[])=>({bind:(...args)=>statement(s,args),all:async()=>({results:sql.prepare(s).all(...a)})});const db={prepare:s=>statement(s)};
  sql.exec("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('a','a','A','sales','unused','now'),('b','b','B','sales','unused','now'); INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('l','模拟','Meta','a','{}','x','2026-10-01'); INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created) VALUES('as','l','a','a','2026-10-02');");
- sql.exec("UPDATE crm_leads SET cohort='new'"); // Explicit post-cutoff fixture; calendar behavior remains independently tested.
  const a={id:'a',role:'sales'},b={id:'b',role:'sales'};
  assert.equal((await assignmentReminders(db,a)).length,1);assert.equal((await assignmentReminders(db,b)).length,0);
  assert.equal((await assignmentReminders(db,a)).length,1,'repeated reads do not resolve');
@@ -42,7 +41,10 @@ try{
  ('legacy-a','legacy','a','a','2026-10-02',''),
  ('changed-original','changed-owner','a','a','2026-10-02',''),
  ('changed-current','changed-owner','a','b','2026-10-03','');`);
- sql.exec("UPDATE crm_leads SET cohort='new'");
+ assert.equal(assignmentCategory({cohort:'historical',assigned_at:'2026-10-30T06:10:12Z',assignment_policy:'equal-global-v1'}),'new','real allocation before cutoff stays pending');
+ for(const policy of ['historical-sheet-v1','historical-alignment','historical-sync'])assert.equal(assignmentCategory({cohort:'new',assigned_at:'2026-11-02',assignment_policy:policy}),'historical','historical imports after cutoff stay historical');
+ assert.equal(assignmentCategory({cohort:'historical',assigned_at:'2026-10-30',legacy_sync:1}),'historical');
+ assert.equal(assignmentCategory({cohort:'unknown',assigned_at:'2026-10-30',assignment_policy:'equal-v1'}),'new','verified allocation does not depend on date classification');
  const before=sql.prepare('SELECT total_changes() AS n').get().n;
  const classified=await assignmentReminders(db,a);
  assert.deepEqual(Object.fromEntries(classified.map(l=>[l.id,l.assignment_category])),{new:'new',sheet:'historical',legacy:'historical',unknown:'unverified'});
