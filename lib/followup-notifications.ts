@@ -4,34 +4,36 @@ import {AllocationError} from './allocation-server';
 import {orderReminders} from './order-followup';
 import {chinaDay} from './followup-phase1';
 
-export async function refreshFollowupNotifications(db:D1Database,at=now()){
+export async function refreshFollowupNotifications(db:D1Database,at=now(),orderId=''){
  const users=(await db.prepare('SELECT id,role,permissions FROM crm_users WHERE active=1').all<any>()).results;
  const active=new Set(users.map(u=>u.id)),leaders=users.filter(u=>can(u,'followup_all')).map(u=>u.id);
- const orders=(await db.prepare('SELECT * FROM crm_followup_orders WHERE archived=0').all<any>()).results;
- const tasks=(await db.prepare("SELECT t.* FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id WHERE o.archived=0 AND t.status='待处理'").all<any>()).results;
+ const orders=(await db.prepare('SELECT * FROM crm_followup_orders WHERE archived=0'+(orderId?' AND id=?':'')).bind(...(orderId?[orderId]:[])).all<any>()).results;
+ const tasks=(await db.prepare("SELECT t.* FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id WHERE o.archived=0 AND t.status='待处理'"+(orderId?' AND o.id=?':'')).bind(...(orderId?[orderId]:[])).all<any>()).results;
+ // Operations retire/update existing due notices, but only the daily scan creates them.
+ const existing=new Set(orderId?(await db.prepare("SELECT dedupe_key FROM crm_followup_notifications WHERE order_id=? AND resolved_at=''").bind(orderId).all<any>()).results.map(n=>n.dedupe_key):[]);
  const today=chinaDay(at),notices:any[]=[];
- const add=(o:any,key:string,title:string,content:string,recipients:string[])=>{for(const recipient of new Set(recipients.filter(r=>active.has(r)&&(users.find(u=>u.id===r)?.role!=='followup'||o.logistics_id===r))))notices.push({key:o.id+':'+key+':'+recipient,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});};
+ const add=(o:any,key:string,title:string,content:string,recipients:string[],due=false)=>{for(const recipient of new Set(recipients.filter(r=>active.has(r)&&(users.find(u=>u.id===r)?.role!=='followup'||o.logistics_id===r)))){const noticeKey=o.id+':'+key+':'+recipient;if(orderId&&due&&!existing.has(noticeKey))continue;notices.push({key:noticeKey,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});}};
  for(const raw of orders){
   const o={...raw,details:JSON.parse(raw.details),steps:JSON.parse(raw.steps)};
   // Calendar reminders are independent of work-week and response-time policies.
-  for(const r of orderReminders(o,[],today))add(o,r.key+':'+(o.details.dates?.[r.key]?.date||r.due),r.title,r.title+'｜'+r.due,[o.logistics_id,...(r.overdue?leaders:[])]);
+  for(const r of orderReminders(o,[],today))add(o,r.key+':'+(o.details.dates?.[r.key]?.date||r.due),r.title,r.title+'｜'+r.due,[o.logistics_id,...(r.overdue?leaders:[])],true);
   for(const t of tasks.filter(t=>t.order_id===o.id)){
    const meta=JSON.parse(t.meta||'{}'),content=t.title+'\n当前：'+t.impact+'\n下一步：'+t.next_action+'\n期限：'+t.due_at;
    const overdue=!!t.due_at&&Date.parse(t.due_at)<Date.parse(at),follow=!!t.next_followup&&Date.parse(t.next_followup)<=Date.parse(at);
-   if(overdue||follow||t.due_at&&Date.parse(t.due_at)===Date.parse(at))add(o,t.id+':'+(overdue?'overdue':'due')+':'+(overdue?t.due_at:t.next_followup),'任务'+(overdue?'逾期':'到期跟进')+'：'+t.title,content,[t.owner_id,...(overdue?leaders:[])]);
+   if(overdue||follow||t.due_at&&Date.parse(t.due_at)===Date.parse(at))add(o,t.id+':'+(overdue?'overdue':'due')+':'+(overdue?t.due_at:t.next_followup),'任务'+(overdue?'逾期':'到期跟进')+'：'+t.title,content,[t.owner_id,...(overdue?leaders:[])],true);
    if(t.kind==='金额事项'&&meta.money?.state!=='已确认')add(o,t.id+':money:'+t.updated,'金额待确认：'+t.title,content,[o.commercial_id,...leaders]);
    if(t.kind==='异常'||['重大','紧急'].includes(meta.priority))add(o,t.id+':exception:'+t.updated,'异常待处理：'+t.title,content,[o.commercial_id,...leaders]);
    if(meta.priority==='紧急')add(o,t.id+':urgent:'+t.updated,'紧急事项：'+t.title,content,[active.has(o.details.delegate_id)?o.details.delegate_id:o.logistics_id]);
   }
  }
  // Store delivery in the CRM inbox; reading is acknowledged only by the recipient.
- const statements=[db.prepare("UPDATE crm_followup_notifications SET resolved_at=? WHERE resolved_at='' AND dedupe_key NOT LIKE 'confirmation:%'").bind(at),...notices.map(n=>db.prepare("INSERT INTO crm_followup_notifications(id,dedupe_key,order_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.order_id,n.recipient,n.title,n.content,at)),db.prepare("INSERT INTO crm_followup_notification_run(id,finished,count) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET finished=excluded.finished,count=excluded.count").bind(at,notices.length)];
+ const statements=[db.prepare("UPDATE crm_followup_notifications SET resolved_at=? WHERE resolved_at='' AND dedupe_key NOT LIKE 'confirmation:%'"+(orderId?' AND order_id=?':'')).bind(at,...(orderId?[orderId]:[])),...notices.map(n=>db.prepare("INSERT INTO crm_followup_notifications(id,dedupe_key,order_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.order_id,n.recipient,n.title,n.content,at))];
+ if(!orderId)statements.push(db.prepare("INSERT INTO crm_followup_notification_run(id,finished,count) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET finished=excluded.finished,count=excluded.count").bind(at,notices.length));
  await db.batch(statements);return {count:notices.length,finished:at};
 }
 export async function notificationEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('followup-notifications'))return undefined;
  if(path==='followup-notifications'&&method==='GET'){
-  await refreshFollowupNotifications(db);
   const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE n.recipient_id=?'+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=n.order_id AND o.logistics_id=n.recipient_id)':'')+' ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
   const enquiries=user.role==='followup'?[]:(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200").bind(user.id,user.id).all<any>()).results;
   return {assignments:await assignmentReminders(db,user),notifications:[...rows,...enquiries].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first(),channel:'站内通知',email:'未启用'};

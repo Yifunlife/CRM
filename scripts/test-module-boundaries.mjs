@@ -28,7 +28,7 @@ for(const step of steps){
 assert(!graph.get('lib/execution-quote-source.ts').some(f=>steps.has(f)||f==='lib/order-execution-server.ts'),'Read-only quote source cannot depend on execution or confirmations');
 for(const file of ['lib/api/business.ts','lib/confirmed-workflow.ts','lib/workflow-scheduler.ts'])assert(!/\.prepare\s*\(|\b(?:INSERT INTO|UPDATE crm_|DELETE FROM)\b/.test(readFileSync(file,'utf8')),`${file}: orchestration must not own business SQL`);
 const schedulerImports=new Set(graph.get('lib/workflow-scheduler.ts'));
-assert.deepEqual(schedulerImports,new Set(['lib/followup-notifications.ts','lib/customer-pool.ts','lib/google-form-sync.ts','lib/sales-suite-server.ts','lib/quote-bridge.ts']),'Scheduler must not add a business confirmation without an explicit contract change');
+assert.deepEqual(schedulerImports,new Set(['lib/followup-notifications.ts','lib/google-form-sync.ts','lib/sales-suite-server.ts']),'Scheduler must not add a business confirmation without an explicit contract change');
 const route=readFileSync('app/api/[...path]/route.ts','utf8');
 assert(!/\b(?:INSERT(?: OR \w+)? INTO|UPDATE|DELETE FROM)\s+crm_(?:leads|deals|assignments|receipts|followup_orders)\b/.test(route),'HTTP entry must delegate business writes');
 console.log('PASS: registered modules and acceptance tests, acyclic extracted modules, isolated confirmation steps, read-only quote dependency, SQL-free orchestration and bounded scheduler.');

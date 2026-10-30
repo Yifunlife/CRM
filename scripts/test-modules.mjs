@@ -2,7 +2,7 @@ import {spawn} from 'node:child_process';
 import {build} from 'esbuild';
 const compiled=await build({entryPoints:['lib/api/operations.ts'],bundle:true,write:false,platform:'node',format:'esm'});
 const {MODULES}=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
-const names=[...new Set(['module-boundaries','module-diagnostics','workflow-scheduler','api-module-contracts',...Object.values(MODULES).flatMap(m=>m.tests)])];
+const names=[...new Set(['module-boundaries','module-diagnostics','workflow-scheduler','workflow-rpc','api-module-contracts',...Object.values(MODULES).flatMap(m=>m.tests)])];
 let failed=0;
 for(const name of names){
  const result=await new Promise(resolve=>{

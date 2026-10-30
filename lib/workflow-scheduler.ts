@@ -1,11 +1,8 @@
 import { refreshFollowupNotifications } from './followup-notifications';
-import { processCustomerPool } from './customer-pool';
 import { syncGoogleForms } from './google-form-sync';
 import { refreshSalesSuite } from './sales-suite-server';
-import { refreshQuoteBridge } from './quote-bridge';
 
-// Preserve the existing task order and stop on failure. These jobs never replace
-// the sales/CEO confirmation endpoints or automatically retry a confirmation.
+// Business synchronization belongs to successful operations, never this clock.
 export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.Env){
  if(env.CRM_BACKEND_ORIGIN)return;
  const db=env.DB;if(!db)throw new Error('CRM database binding is missing');
@@ -14,10 +11,16 @@ export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.E
  const step=async(module:string,operation:string,run:()=>Promise<unknown>)=>{
   const started=Date.now();try{await run();emit(module,operation,'completed',started);}catch(error){emit(module,operation,'failed',started);throw error;}
  };
- await step('notifications','refresh-followup-notifications',()=>refreshFollowupNotifications(db));
- await step('intake','process-customer-pool',()=>processCustomerPool(db));
- await step('google','sync-google-forms',()=>syncGoogleForms(db));
- // The shared scheduler runs every five minutes; dormant leads run at 08:00 Beijing only.
- await step('projects','refresh-sales-suite',()=>refreshSalesSuite(db,env.QUOTE_DB,undefined,new Date(scheduledTime).toISOString().slice(11,16)==='00:00'));
- await step('quotes','refresh-quote-bridge',()=>refreshQuoteBridge(db,env.QUOTE_DB));
+ const at=new Date(scheduledTime).toISOString(),utc=at.slice(11,16);
+ if(utc==='00:00'){
+  // Run both independent reminder families even if one fails; retain failure logs.
+  const results=await Promise.allSettled([
+   step('notifications','daily-followup-reminders',()=>refreshFollowupNotifications(db,at)),
+   step('projects','daily-sales-reminders',()=>refreshSalesSuite(db,undefined,at,true))
+  ]);
+  const failed=results.find(r=>r.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
+ }
+ // Sydney 08:00 is UTC 21:00 or 22:00 depending on daylight saving.
+ if(['21:00','22:00'].includes(utc)&&new Intl.DateTimeFormat('en-GB',{timeZone:'Australia/Sydney',hour:'2-digit',hourCycle:'h23'}).format(new Date(scheduledTime))==='08')
+  await step('google','daily-google-forms',()=>syncGoogleForms(db,{at}));
 }

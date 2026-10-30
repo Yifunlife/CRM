@@ -17,6 +17,7 @@ assert.equal(config.r2_buckets[0].bucket_name,'yifun-crm-files','Existing CRM fi
 assert.equal(config.r2_buckets[1].binding,'QUOTE_BUCKET');
 assert.equal(config.r2_buckets[1].bucket_name,'yifunlife-erp-images','Quotation attachments source must be retained');
 assert.ok(!config.vars?.CRM_BACKEND_ORIGIN,'The primary Worker must not forward to itself');
+assert.deepEqual(config.triggers.crons,['0 0 * * *','0 21,22 * * *'],'Retain Beijing daily reminders and Sydney daily intake only');
 console.log('Verified existing CRM database and R2 bindings. Publishing code only.');
 if(process.argv.includes('--check'))process.exit(0);
 const result=spawnSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','deploy','--config',configPath],{stdio:'inherit'});

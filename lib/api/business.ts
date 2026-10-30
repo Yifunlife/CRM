@@ -12,7 +12,8 @@ import { linkedEndpoint } from '../linked-whatsapp';
 import { operationsEndpoint } from '../operations-server';
 import { executionEndpoint } from '../order-execution-server';
 import { followupEndpoint } from '../order-followup-server';
-import { quoteBridgeEndpoint,refreshQuoteBridge } from '../quote-bridge';
+import { quoteBridgeEndpoint } from '../quote-bridge';
+import {afterWorkflowWrite} from '../workflow-events';
 import { salesHomeEndpoint } from '../sales-home-server';
 import { salesPipelineEndpoint } from '../sales-pipeline-server';
 import { salesSuiteEndpoint } from '../sales-suite-server';
@@ -24,9 +25,9 @@ import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
   const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
-  const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined)return json(confirmation);
+  const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined){if(req.method==='POST'&&path==='confirmations/quote'&&'id' in confirmation)await afterWorkflowWrite(db,env.QUOTE_DB,confirmation,{project:confirmation.id});return json(confirmation);}
   const bridgeResult=await quoteBridgeEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(bridgeResult!==undefined)return json(bridgeResult);
-  const suiteResult=await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(suiteResult!==undefined){if(req.method==='POST'&&['sales-suite/project/record','sales-suite/quotes/link','sales-suite/quotes/unlink','sales-suite/quotes/sync'].includes(path)){try{await refreshQuoteBridge(db,env.QUOTE_DB,body.project_id||body.id);}catch{(suiteResult as any).message='CRM记录已保存；报价端同步暂未完成，系统将自动重试。';}}return json(suiteResult);}
+  const suiteResult=await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(suiteResult!==undefined){if(req.method==='POST'&&['sales-suite/project/record','sales-suite/quotes/link','sales-suite/quotes/unlink','sales-suite/quotes/sync'].includes(path))await afterWorkflowWrite(db,env.QUOTE_DB,suiteResult,{project:body.project_id||body.id});return json(suiteResult);}
   const noticeResult=await notifications(context);if(noticeResult!==undefined)return noticeResult;
   const homeResult=await salesHomeEndpoint(db,user,path,req.method);if(homeResult!==undefined)return json(homeResult);
   const salesResult=await salesPipelineEndpoint(db,user,actor,path,req.method,body);if(salesResult!==undefined)return json(salesResult);
@@ -35,9 +36,9 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   const teamResult=await teamFollowupEndpoint(db,user,path,req.method);if(teamResult!==undefined)return json(teamResult);
   const identityResult=await customerIdentityEndpoint(db,user,actor,path,req.method,body);if(identityResult!==undefined)return json(identityResult);
   const workflowResult=await workflowEndpoint(db,user,actor,path,req.method,body);if(workflowResult!==undefined)return json(workflowResult);
-  const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined)return json(phase1Result);
-  const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined)return json(executionResult);
-  const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
+  const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined){if(req.method==='POST'&&'id' in phase1Result&&phase1Result.id)await afterWorkflowWrite(db,env.QUOTE_DB,phase1Result,{order:phase1Result.id});return json(phase1Result);}
+  const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined){if(req.method==='POST'&&'id' in executionResult&&typeof executionResult.id==='string')await afterWorkflowWrite(db,env.QUOTE_DB,executionResult,{order:executionResult.id});return json(executionResult);}
+  const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined){if(req.method==='POST'&&'id' in followupResult&&followupResult.id)await afterWorkflowWrite(db,env.QUOTE_DB,followupResult,{order:followupResult.id});return json(followupResult);}
   const linked=await linkedEndpoint(db,user,actor,path,req.method,body);if(linked!==undefined)return json(linked);
   const cloud=await cloudEndpoint(db,env as any,user,actor,path,req.method,body,url);if(cloud!==undefined)return json(cloud);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);

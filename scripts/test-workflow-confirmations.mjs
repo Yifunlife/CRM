@@ -63,3 +63,23 @@ await assert.rejects(executionEndpoint(db,source,users.followup,users.followup,'
 await call('release',{order_id:order,kind:'payment',reason:'核对新版本付款单据',file_id:'proof-v2',request_id:'payment-current'});
 assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_followup_files WHERE id IN ('proof','proof-v2')").get().n,2);
 console.log('PASS: superseded evidence retained but rejected, release revision invalidation, stale editor rejection and reconfirmation with latest evidence.');
+// Operation transport uses explicit links; it never accepts or confirms a new version.
+const {afterWorkflowWrite,syncQuotationChange}=await import(moduleURL('lib/workflow-events.ts'));
+qs.exec(`ALTER TABLE quotation_crm_messages ADD COLUMN direction TEXT DEFAULT 'quote';ALTER TABLE quotation_crm_messages ADD COLUMN body_json TEXT DEFAULT '{}';ALTER TABLE quotation_crm_messages ADD COLUMN project_id TEXT DEFAULT '';CREATE TABLE quotation_crm_links(quotation_id TEXT PRIMARY KEY,project_id TEXT,project_name TEXT,contract_no TEXT,sales_id TEXT,sales_name TEXT,sales_email TEXT,active INTEGER,updated_at TEXT);`);
+const transport=database(qs),quoteData=JSON.stringify(qs.prepare('SELECT * FROM quotation_history').all());
+await afterWorkflowWrite(db,transport,{}, {project:accepted.id});
+assert.equal(qs.prepare('SELECT project_id FROM quotation_crm_links WHERE quotation_id=?').get('q').project_id,accepted.id);
+qs.exec(`INSERT INTO quotation_crm_messages(id,quotation_id,kind,author,created_at,body_json) VALUES('reply-event','q','核算回复','sales@test.invalid','2026-11-02','{"content":"即时回复"}')`);
+const projectsBefore=sql.prepare('SELECT COUNT(*) n FROM crm_sales_projects').get().n,ordersBefore=sql.prepare('SELECT COUNT(*) n FROM crm_followup_orders').get().n;
+await syncQuotationChange(db,transport,'q');await syncQuotationChange(db,transport,'q');
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_sales_events WHERE id='quote-reply-event'").get().n,1);
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_sales_projects').get().n,projectsBefore);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_followup_orders').get().n,ordersBefore);
+assert.equal(JSON.stringify(qs.prepare('SELECT * FROM quotation_history').all()),quoteData);
+qs.exec("INSERT INTO quotation_history SELECT 'q2','Q-001-R02',project_name,created_by,'2026-11-03',lineage_id,0,NULL,NULL,final_currency,NULL,NULL,'quoted',customer_name,quote_valid_until,snapshot_json FROM quotation_history WHERE id='q'");
+await syncQuotationChange(db,transport,'q2');
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_quote_acceptances WHERE quote_id=?').get('q2').n,0,'new version is not automatically accepted');
+const refreshed=JSON.parse(sql.prepare('SELECT summary FROM crm_sales_quote_links WHERE project_id=?').get(accepted.id).summary);
+assert.equal(refreshed.current_id,'q','unaccepted version cannot replace the confirmed quote');assert(refreshed.versions.some(v=>v.id==='q2'),'revision becomes visible immediately');
+await assert.rejects(syncQuotationChange(db,transport,''),/Invalid/);
+const err=console.error;console.error=()=>{};try{const result=await afterWorkflowWrite(db,undefined,{ok:true},{project:accepted.id});assert.equal(result.ok,true);assert.match(result.message,/已保存/);}finally{console.error=err;}
+console.log('PASS: immediate quote link, incoming reply, revision refresh, deduplication, no automatic acceptance/contract, source preservation and saved-operation failure warning.');

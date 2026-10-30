@@ -42,6 +42,14 @@ let report=await call('report');assert.equal(report.projects[0].checked,true);as
 await post({...record,task_id:task().id,result:'待包装',priority:'紧急',due_at:'2026-01-01T00:00:00Z',next_followup:'2026-01-01T00:00:00Z'});
 assert.equal((await call('report')).projects[0].checked,false,'new changes invalidate today check');
 await call(path+'/delegate',{version:order().version,delegate_id:'admin',reason:'后勤休假'});
+await refreshFollowupNotifications(db,undefined,orderId);
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_followup_notifications WHERE title LIKE '任务逾期%'").get().n,0,'operation does not generate new due reminders');
+assert(sql.prepare("SELECT COUNT(*) n FROM crm_followup_notifications WHERE title LIKE '紧急%'").get().n>0,'urgent operation is immediate');
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_followup_notification_run').get().n,0);
+const readBefore=JSON.stringify(sql.prepare('SELECT * FROM crm_followup_notifications').all());
+await notificationEndpoint(db,staff,staff,'followup-notifications','GET',{});
+assert.equal(JSON.stringify(sql.prepare('SELECT * FROM crm_followup_notifications').all()),readBefore,'reading inbox cannot scan due notices');
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_followup_notification_run').get().n,0);
 await refreshFollowupNotifications(db);
 const ns=()=>sql.prepare('SELECT * FROM crm_followup_notifications').all();assert(ns().some(n=>n.recipient_id==='admin'&&n.title.includes('紧急')));assert(!ns().some(n=>n.recipient_id==='staff'&&n.title.includes('紧急')));assert(ns().some(n=>n.recipient_id==='boss'&&n.title.includes('逾期')));assert(ns().some(n=>n.recipient_id==='sales'&&n.title.includes('异常')));assert(!ns().some(n=>n.recipient_id==='other'));
 const count=ns().length;await refreshFollowupNotifications(db);assert.equal(ns().length,count,'reminder deduplication');
@@ -52,7 +60,7 @@ await assert.rejects(notificationEndpoint(db,sales,sales,'followup-notifications
 await assert.rejects(legacy('followup/orders/'+orderId+'/tasks',{...record,id:task().id,version:order().version}),/跟单记录/);
 await assert.rejects(post({...record,references:[{type:'file',id:'foreign-file'}]}),/附件/);
 await assert.rejects(post({...record,references:[{type:'link',label:'恶意',url:'javascript:alert(1)'}]}),/HTTPS/);
-await post({...record,task_id:task().id,status:'已解决',result:'生产完成，已核实',next_action:'',due_at:'',next_followup:''});await refreshFollowupNotifications(db);assert(ns().every(n=>n.resolved_at),'resolved task retires active reminders');
+await post({...record,task_id:task().id,status:'已解决',result:'生产完成，已核实',next_action:'',due_at:'',next_followup:''});await refreshFollowupNotifications(db,undefined,orderId);assert(ns().every(n=>n.resolved_at),'resolved task retires active reminders');
 const money={reason:'货代改价',amount:'100.25',difference:'-10.10',currency:'USD',state:'待确认'};
 await assert.rejects(post({...record,money,status:'已解决'}),/金额未确认/);
 await post({...record,title:'货代报价确认',category:'forwarder',money});const mtask=sql.prepare("SELECT * FROM crm_followup_tasks WHERE kind='金额事项'").get();assert.equal(JSON.parse(mtask.meta).money.difference_minor,-1010);

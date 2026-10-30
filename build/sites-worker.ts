@@ -1,7 +1,16 @@
 import {runScheduledWorkflow} from '../lib/workflow-scheduler';
+import {WorkerEntrypoint} from 'cloudflare:workers';
+import {syncQuotationChange} from '../lib/workflow-events';
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
+
+export class QuoteWorkflow extends WorkerEntrypoint<Cloudflare.Env>{
+  async quotationChanged(quoteId:string){
+    if(!this.env.DB||!this.env.QUOTE_DB||this.env.CRM_BACKEND_ORIGIN)throw Error('CRM bindings unavailable');
+    return syncQuotationChange(this.env.DB,this.env.QUOTE_DB,quoteId);
+  }
+}
 
 export default {
   async scheduled(_event: ScheduledController, env: Cloudflare.Env) {

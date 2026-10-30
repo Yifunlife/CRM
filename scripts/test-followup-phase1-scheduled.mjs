@@ -13,7 +13,10 @@ try{
  const db=await mf.getD1Database('DB');
  // Use a fresh, empty schema; never depend on a developer's persisted D1 or customers.
  for(const {sql} of schema.prepare("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 ELSE 2 END").all())await db.prepare(sql).run();
- const worker=await mf.getWorker();assert.equal((await worker.scheduled({cron:'*/5 * * * *'})).outcome,'ok');
+ const worker=await mf.getWorker();assert.equal((await worker.scheduled({cron:'0 0 * * *',scheduledTime:Date.parse('2026-11-02T00:00:00Z')})).outcome,'ok');
+ assert.equal((await db.prepare("SELECT finished FROM crm_followup_notification_run WHERE id='main'").first()).finished,'2026-11-02T00:00:00.000Z');
+ assert.equal((await worker.scheduled({cron:'0 0 * * *',scheduledTime:Date.parse('2026-11-02T00:05:00Z')})).outcome,'ok');
+ assert.equal((await db.prepare("SELECT finished FROM crm_followup_notification_run WHERE id='main'").first()).finished,'2026-11-02T00:00:00.000Z');
  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM crm_leads').first()).n,0);
  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM crm_contract_confirmations').first()).n,0);
  console.log('PASS: built Worker scheduled handler executes against an isolated current schema, without an open CRM page or creating customers/contracts.');
