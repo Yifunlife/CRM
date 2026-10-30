@@ -7,6 +7,7 @@ import QuoteBridge from './quote-bridge';
 import ManagementWork from './management-work';
 import SalesAmounts from './sales-amounts';
 import {useEffect,useRef,useState} from 'react';
+import {can} from '../lib/crm';
 import {ArrowLeft,ArrowRight,Plus,RefreshCw,Search} from 'lucide-react';
 import {PROJECT_STAGES,FORECASTS,TASK_KINDS,QUALIFICATION_FIELDS,CLOSED_STAGES,suiteDay,suiteStamp,suiteLocal,suiteISO,moneyLabel} from '../lib/sales-suite';
 import './sales-suite.css';
@@ -15,7 +16,11 @@ const label=(items:readonly(readonly[string,string])[],key:string)=>items.find((
 const values=(form:HTMLFormElement)=>Object.fromEntries(new FormData(form));
 const Badge=({children,tone='blue'}:{children:any;tone?:string})=><span className={'ss-badge '+tone}>{children}</span>;
 const Field=({title,children}:{title:string;children:any})=><div className="ss-field"><span>{title}</span><div>{children||'待核实'}</div></div>;
-export default function SalesSuite({view,active,api,user,navigate,openOrder,openLead,openCommunication,openCommunicationQueue,projectId,onProject}:Props){
+export default function SalesSuite(props:Props){
+ if(props.view==='我的工作'&&['admin','ceo','management'].includes(props.user.role)&&can(props.user,'customers_all'))return <ManagementWork api={props.api} user={props.user} navigate={props.navigate} openLead={props.openLead} openOrder={props.openOrder} choose={(id:string,page='客户与项目')=>{props.onProject(id);props.navigate(page);}}/>;
+ return <SalesSuiteContent {...props}/>;
+}
+function SalesSuiteContent({view,active,api,user,navigate,openOrder,openLead,openCommunication,openCommunicationQueue,projectId,onProject}:Props){
  const [data,D]=useState<any>(null),[detail,DE]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[form,F]=useState<any>(null),[query,Q]=useState(''),[filter,K]=useState('all'),[quotes,QU]=useState<any>(null),[quoteSearch,QS]=useState(''),[quotePage,QP]=useState(0),[quotePreview,QV]=useState<any>(null),[accounts,AC]=useState<any>(null),[history,H]=useState<any>(null),[legacy,LE]=useState<any>(null);
  const selected=projectId,S=onProject,selection=useRef(projectId),detailRequest=useRef(0);selection.current=selected;
  async function load(){const [d,old]=await Promise.all([api('sales-suite/report'),user.role==='sales'?api('sales-home'):Promise.resolve(null)]);D(d);LE(old);if(!d.projects.some((p:any)=>p.project_id===selected))S(d.projects[0]?.project_id||'');return d;}

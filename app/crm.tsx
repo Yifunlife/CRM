@@ -61,7 +61,21 @@ export default function CRM({businessEntry=false}:{businessEntry?:boolean}){
  const [source,S]=useState('全部'),[status,T]=useState('全部'),[query,Q]=useState(''),[queue,K]=useState('全部'),[selected,C]=useState<string[]>([]),[ownerFilter,OF]=useState('全部'),[pg,N]=useState(1),[gradeFilter,GF]=useState('全部');
  const [grids,G]=useState<Grid[]>([]),[sheet,SH]=useState(0),[map,MAP]=useState<Record<string,string>>({}),[filename,FN]=useState(''),[importSource,IS]=useState('Meta'),[importScope,ISC]=useState(''),[scopeFilter,SF]=useState('全部'),[manual,MAN]=useState(false);
  const manager=can(user,'customers_all'),canEdit=can(user,'customers_edit'),canAllocate=can(user,'leads_allocate'),canPerformance=can(user,'performance_view'),grid=grids[sheet];
- async function refresh(){const me=await api('me');U(me);BL(me.role==='sales');if(me.must_change_password){L([]);A([]);H([]);return;}if(me.role==='followup'){P('订单跟单');L([]);A([]);H([]);return;}if(initialLanding.current){initialLanding.current=false;if(can(me,'customers_all')&&me.role!=='sales')P('我的工作');}if(me.role==='sales'){if(page==='工作台')P('我的工作');if(window.location.pathname!=='/sales')window.history.replaceState(null,'','/sales');}else if(window.location.pathname==='/sales')window.history.replaceState(null,'','/');const [l,a,h]=await Promise.all([api('leads'),api('users'),can(me,'customers_all')?api('batches'):Promise.resolve([])]);L(l);A(a);H(h);if(['admin','ceo'].includes(me.role))GO(await api('google/status'));}
+ const pageLoad=useRef(0);
+ async function loadPageData(me:any,current:string){
+  const revision=++pageLoad.current;
+  const needsUsers=['工作台','全部客资','我的客资','客资分配','广告投放','账号与权限'].includes(current);
+  const [people,rows,history,connection]=await Promise.all([
+   needsUsers?api('users'):Promise.resolve(null),
+   current==='销售工作台'?api('leads'):Promise.resolve(null),
+   current==='导入客资'&&can(me,'customers_all')?api('batches'):Promise.resolve(null),
+   current==='连接Google'&&['admin','ceo'].includes(me.role)?api('google/status'):Promise.resolve(null)
+  ]);
+  if(revision!==pageLoad.current)return;
+  if(people)A(people);if(rows)L(rows);if(history)H(history);if(connection)GO(connection);
+ }
+ useEffect(()=>{if(user&&!user.must_change_password&&user.role!=='followup')void loadPageData(user,page).catch(e=>E(e.message));return()=>{pageLoad.current++;};},[page,user?.id,user?.role]);
+ async function refresh(){const me=await api('me');U(me);BL(me.role==='sales');if(me.must_change_password){L([]);A([]);H([]);return;}if(me.role==='followup'){P('订单跟单');L([]);A([]);H([]);return;}if(initialLanding.current){initialLanding.current=false;if(can(me,'customers_all')&&me.role!=='sales')P('我的工作');}if(me.role==='sales'){if(page==='工作台')P('我的工作');if(window.location.pathname!=='/sales')window.history.replaceState(null,'','/sales');}else if(window.location.pathname==='/sales')window.history.replaceState(null,'','/');if(ready)await loadPageData(me,page);}
  useEffect(()=>{const result=new URLSearchParams(window.location.search).get('google');refresh().catch(()=>U(null)).finally(()=>{R(true);if(result){P('连接Google');if(result==='connected')M('Google授权成功，可以测试读取四张表');else E('Google授权未完成，请检查客户端回调地址、测试用户和授权权限，然后重新连接');window.history.replaceState(null,'',window.location.pathname);}});},[]);
  async function act(fn:()=>Promise<any>){B(true);E('');M('');try{await fn();}catch(e:any){E(e.message);}finally{B(false);}}
  function nav(p:string,q='全部'){CF('全部');ON(null);WO('');if(p==='我的交接'){p=user?.role==='followup'?'订单跟单':'我的工作';setTimeout(()=>(()=>{const panel=document.getElementById('my-handovers') as HTMLDetailsElement|null;if(panel){panel.open=true;panel.scrollIntoView({block:'start'});}})(),100);} MN(false);CS('全部');SI(false);RI(null);if(p!==page)PR(null);GF('全部');SF('全部');S('全部');T('全部');Q('');OF(p==='我的客资'?user?.id||'全部':'全部');P(manager&&['工作台','全部客资','客资分配'].includes(p)?'工作台':p);D(null);K(q);C([]);N(1);E('');M('');}
