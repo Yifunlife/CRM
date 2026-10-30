@@ -1,0 +1,4 @@
+CREATE TABLE crm_service_settings (owner_id TEXT PRIMARY KEY REFERENCES crm_users(id), enabled INTEGER NOT NULL DEFAULT 0, reply TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL);
+CREATE TABLE crm_service_contacts (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES crm_users(id), peer TEXT NOT NULL, first_message TEXT NOT NULL, created TEXT NOT NULL, state TEXT NOT NULL DEFAULT '待录入', lead_id TEXT REFERENCES crm_leads(id), payload TEXT NOT NULL DEFAULT '{}', error TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1, UNIQUE(owner_id,peer));
+CREATE TABLE crm_service_replies (id TEXT PRIMARY KEY REFERENCES crm_service_contacts(id), owner_id TEXT NOT NULL REFERENCES crm_users(id), peer TEXT NOT NULL, content TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'queued', result TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL);
+CREATE INDEX crm_service_contacts_owner ON crm_service_contacts(owner_id,created);
