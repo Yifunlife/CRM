@@ -25,7 +25,7 @@ export async function refreshFollowupNotifications(db:D1Database,at=now()){
   }
  }
  // Store delivery in the CRM inbox; reading is acknowledged only by the recipient.
- const statements=[db.prepare("UPDATE crm_followup_notifications SET resolved_at=? WHERE resolved_at=''").bind(at),...notices.map(n=>db.prepare("INSERT INTO crm_followup_notifications(id,dedupe_key,order_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.order_id,n.recipient,n.title,n.content,at)),db.prepare("INSERT INTO crm_followup_notification_run(id,finished,count) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET finished=excluded.finished,count=excluded.count").bind(at,notices.length)];
+ const statements=[db.prepare("UPDATE crm_followup_notifications SET resolved_at=? WHERE resolved_at='' AND dedupe_key NOT LIKE 'confirmation:%'").bind(at),...notices.map(n=>db.prepare("INSERT INTO crm_followup_notifications(id,dedupe_key,order_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.order_id,n.recipient,n.title,n.content,at)),db.prepare("INSERT INTO crm_followup_notification_run(id,finished,count) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET finished=excluded.finished,count=excluded.count").bind(at,notices.length)];
  await db.batch(statements);return {count:notices.length,finished:at};
 }
 export async function notificationEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){

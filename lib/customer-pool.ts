@@ -15,7 +15,7 @@ async function matches(db:D1Database,data:any){
  return rows.filter(l=>data.phone&&phoneKey(data.phone)&&phoneKey(data.phone)===phoneKey(l.phone)||data.email&&emailKey(data.email)===emailKey(l.email));
 }
 
-// Only explicitly confirmed pool records are processed. Historical unassigned leads are not scanned.
+// Process recognized or explicitly confirmed records only. Historical ownership is never allocated.
 export async function processCustomerPool(db:D1Database,at=now()){
  const pending=(await db.prepare("SELECT * FROM crm_customer_pool WHERE state='待分配' ORDER BY updated,id LIMIT 50").all<any>()).results;
  for(const row of pending){
@@ -42,7 +42,7 @@ export async function processCustomerPool(db:D1Database,at=now()){
     await db.batch([
      db.prepare(`INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,entered,detail,fingerprint,created)
       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_customer_pool WHERE id=? AND state='待分配' AND version=?)
-      AND (?<>'' OR NOT EXISTS(SELECT 1 FROM crm_leads WHERE (?<>'' AND json_extract(detail,'$.客户池电话键')=?) OR (?<>'' AND json_extract(detail,'$.客户池邮箱键')=?)))`).bind(row.id,data.name,data.phone,data.email,data.country,row.source,data.business_scope,day(row.created),detail,'pool:'+row.id,row.created,row.id,row.version,data.distinct_reason||'',phoneKey(data.phone),phoneKey(data.phone),emailKey(data.email),emailKey(data.email)),
+      AND (?<>'' OR NOT EXISTS(SELECT 1 FROM crm_leads WHERE (?<>'' AND json_extract(detail,'$.客户池电话键')=?) OR (?<>'' AND json_extract(detail,'$.客户池邮箱键')=?)))`).bind(row.id,data.name,data.phone,data.email,data.country,row.source,data.business_scope,row.created,detail,'pool:'+row.id,row.created,row.id,row.version,data.distinct_reason||'',phoneKey(data.phone),phoneKey(data.phone),emailKey(data.email),emailKey(data.email)),
      event(db,row.id,actor,'建立CRM客资',{lead_id:row.id})
     ]);
     lead=await db.prepare('SELECT id,owner_id,review,business_scope FROM crm_leads WHERE id=?').bind(row.id).first<any>();
@@ -55,13 +55,11 @@ export async function processCustomerPool(db:D1Database,at=now()){
    if(lead.review)throw new Error('此客资已被标记待核查，请先处理');
    if(!lead.owner_id){
     const {config,weights}=await allocationWeights(db,lead.business_scope);
-    if(!config.rule.automatic)throw new Error('全渠道自动分配未开启，请在分配设置启用后重试');
-    if(!weights.length)throw new Error('全渠道暂无正常接收人员，请在分配设置配置人员');
-    await distribute(db,[lead.id],lead.business_scope,actor);
+    if(config.rule.automatic&&weights.length)await distribute(db,[lead.id],lead.business_scope,actor);
    }
    await db.batch([
-    db.prepare("UPDATE crm_customer_pool SET state='已入CRM',lead_id=?,last_error='',updated=?,version=version+1 WHERE id=? AND state='待分配' AND version=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS NOT NULL)").bind(lead.id,at,row.id,row.version,lead.id),
-    event(db,row.id,actor,'平均分配完成',{lead_id:lead.id,policy:'equal-global-v1'})
+    db.prepare("UPDATE crm_customer_pool SET state='已入CRM',lead_id=?,last_error='',updated=?,version=version+1 WHERE id=? AND state='待分配' AND version=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=?)").bind(lead.id,at,row.id,row.version,lead.id),
+    event(db,row.id,actor,'客户资料入档',{lead_id:lead.id,policy:'equal-global-v1'})
    ]);
   }catch(e:any){
    const message=clean(e.message,300),created=await db.prepare('SELECT id FROM crm_leads WHERE id=?').bind(row.id).first(),needsReview=!created&&!message.includes('全渠道');
@@ -79,11 +77,11 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
  if(path==='customer-pool/progress'&&method==='GET')return customerProgress(db,user);
  if(path==='customer-pool'&&method==='GET'){
   const rows=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id'+(manages?'':user.role==='sales'?' WHERE l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL)':' WHERE p.created_by=? OR l.owner_id=?')+' ORDER BY p.created DESC,p.id LIMIT 300').bind(...(manages?[]:[user.id,user.id])).all<any>()).results;
-  const today=day(timestamp),leads=(await db.prepare("SELECT l.id,l.name,l.owner_id,u.name AS owner_name,l.status,l.next_date,l.created FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE "+(manages?'1=1':'l.owner_id=?')).bind(...(manages?[]:[user.id])).all<any>()).results;
-  const assigned=(await db.prepare("SELECT a.owner_id,u.name AS owner_name,COUNT(*) AS count FROM crm_assignments a JOIN crm_users u ON u.id=a.owner_id WHERE a.created>=? AND a.created<?"+(manages?'':' AND a.owner_id=?')+' GROUP BY a.owner_id').bind(...dayBounds(today),...(manages?[]:[user.id])).all<any>()).results;
+  const today=day(timestamp),leads=(await db.prepare("SELECT l.id,l.name,l.owner_id,u.name AS owner_name,l.status,l.next_date,l.created,l.cohort FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE "+(manages?'1=1':'l.owner_id=?')).bind(...(manages?[]:[user.id])).all<any>()).results;
+  const assigned=(await db.prepare("SELECT a.owner_id,u.name AS owner_name,COUNT(*) AS count FROM crm_assignments a JOIN crm_users u ON u.id=a.owner_id WHERE EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=a.lead_id AND l.cohort='new') AND a.policy NOT IN ('historical-alignment','historical-sync') AND a.created>=? AND a.created<?"+(manages?'':' AND a.owner_id=?')+' GROUP BY a.owner_id').bind(...dayBounds(today),...(manages?[]:[user.id])).all<any>()).results;
   const todo=leads.filter(l=>l.next_date&&l.next_date<=today&&!['已成交','已结束','暂停跟进'].includes(l.status));
   const todayPool=manages?await db.prepare("SELECT COUNT(*) total,SUM(state='已入CRM') completed,SUM(state='待确认') review,SUM(state='待分配') pending FROM crm_customer_pool WHERE created>=? AND created<?").bind(...dayBounds(today)).first():null;
-  const firstContact=leads.filter(l=>l.status==='待首次联系');
+  const firstContact=leads.filter(l=>l.cohort==='new'&&l.status==='待首次联系');
   const campaigns=user.role==='sales'?[]:(await db.prepare('SELECT id,code,name,platform FROM crm_attribution_campaigns ORDER BY name,id').all()).results;
   return {campaigns,rows:rows.map(r=>({...r,can_open:manages||r.owner_id===user.id,followed:!!r.last_contact&&r.last_contact>=r.updated,payload:JSON.parse(r.payload)})),manages,today,todayPool,assigned,todoCount:todo.length,todo:todo.slice(0,100),firstContactCount:firstContact.length,firstContact:firstContact.slice(0,100),timezone:'Australia/Sydney',ai:false};
  }
@@ -98,7 +96,20 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
   await db.batch([
    db.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,created,updated,created_by) VALUES(?,?,?,?,?,?,?)").bind(body.id,body.source,raw,JSON.stringify(fields(body.fields)),timestamp,timestamp,actor.id),
    event(db,body.id,actor.id,'提交客户',{source:body.source})
-  ]);return {ok:true,id:body.id};
+  ]);
+  // Normal complete intakes are recognized without a mandatory manual review. Allocation still follows the administrator policy.
+  const cfg:any=await db.prepare("SELECT updated_by,payload FROM crm_allocation_configs WHERE scope='all'").first();
+  const data=fields(body.fields),scope=BUSINESS_SCOPES.find(s=>s.id===data.business_scope);
+  if(cfg&&data.name&&(phoneKey(data.phone).length>=7||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))&&scope?.source===body.source&&data.requirement){
+   const candidates=await matches(db,data),owners=new Set(candidates.map(l=>l.owner_id).filter(Boolean));
+   const reviewer:any=await db.prepare('SELECT * FROM crm_users WHERE id=? AND active=1').bind(cfg.updated_by).first();
+   if(reviewer&&manager(reviewer)&&(!candidates.length||(owners.size===1&&candidates.every(l=>l.owner_id&&l.owner_active&&!l.review)))){
+    const intake:any=await db.prepare('SELECT version FROM crm_customer_pool WHERE id=?').bind(body.id).first();
+    try{await customerPoolEndpoint(db,reviewer,reviewer,'customer-pool/confirm','POST',{id:body.id,version:intake.version,fields:data,target_lead_id:candidates[0]?.id||'',reason:candidates.length?'系统按唯一有效归属及相同联系方式识别原客户':'系统识别完整且无重复联系方式的资料'});}
+    catch(e:any){await db.prepare('UPDATE crm_customer_pool SET last_error=? WHERE id=?').bind(clean(e.message,300),body.id).run();}
+   }
+  }
+  return {ok:true,id:body.id};
  }
  if(!manages)fail('只有具有全公司客户查看及分配权限的人员可以核查客户池',403);
  if(path==='customer-pool/retry'&&method==='POST'){await processCustomerPool(db);return {ok:true};}

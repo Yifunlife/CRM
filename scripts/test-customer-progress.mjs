@@ -14,9 +14,10 @@ const lead=(id,owner=null,status='待首次联系',contact='',review=0,original=
 lead('untouched','a');lead('followed','a','正在沟通','2026-10-28');lead('closed','a','已成交','2026-10-28');lead('legacy','a','正在沟通');lead('closed-no-log','a','已结束');lead('review-owned','a','待首次联系','',1);lead('other','b');lead('disabled','off');lead('unassigned');lead('review',null,'待首次联系','',1);lead('named-only',null,'待首次联系','',0,'历史业务员');lead('pending-created');
 const pool=sqlite.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,state,lead_id,target_lead_id,created,updated,created_by) VALUES(?,'Meta','raw','{}',?,?,?,'2026-10-28','2026-10-28',?)");
 pool.run('pending-created','待分配','pending-created',null,'admin');pool.run('new-review','待确认',null,null,'admin');pool.run('repeat','待确认',null,'followed','admin');pool.run('done','已入CRM','followed',null,'admin');pool.run('sales-own','待确认',null,null,'a');
+sqlite.exec("UPDATE crm_leads SET cohort='new' WHERE id<>'named-only'");
 const before=sqlite.prepare('SELECT total_changes() n').get().n;
 let report=await customerProgress(db,{id:'admin',role:'admin'});
-assert.deepEqual(report.stageCounts,{'全部':15,'待核查':5,'待分配':2,'已分配':8});
+assert.deepEqual(report.stageCounts,{'全部':15,'待核查':5,'待分配':2,'已分配':7,'待归属对齐':1});
 assert.deepEqual({...report.staff.find(r=>r.owner_id==='a')},{owner_id:'a',owner_name:'同名业务员',active:1,assigned:6,followed:2,uncontacted:2,unverified:2,closed:2});
 assert.equal(report.staff.find(r=>r.owner_id==='b').assigned,1,'same names remain separate');
 assert.equal(report.staff.find(r=>r.owner_id==='empty').assigned,0,'show salespeople with zero customers');

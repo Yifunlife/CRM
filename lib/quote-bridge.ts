@@ -13,18 +13,8 @@ export async function refreshQuoteBridge(db:D1Database,source?:D1Database,onlyPr
  if(!await bridgeAvailable(source))return {available:false,linked:0,incoming:0,outgoing:0,pending:[]};
  const src=source!,ps=await projects(db),allLinks=await list(db,'SELECT * FROM crm_sales_quote_links'),result={available:true,linked:0,incoming:0,outgoing:0,pending:[] as any[]};
  const ready=await list(src,"SELECT m.*,q.project_name,q.contract_no,q.voided_at,q.archived_at,q.project_status FROM quotation_crm_messages m JOIN quotation_history q ON q.id=m.quotation_id WHERE m.direction='quote' ORDER BY m.created_at");
- // New links require BOTH the exact project name and contract family; ambiguous matches never auto-link.
- for(const m of ready){if(allLinks.some(l=>read(l.summary).versions?.some((v:any)=>v.id===m.quotation_id)))continue;
-  if(m.voided_at||m.archived_at||m.project_status==='lost')continue;
-  const matches=ps.filter(p=>normalized(p.name)===normalized(m.project_name)&&read(p.details).contract_no&&contractBase(read(p.details).contract_no)===contractBase(m.contract_no));
-  if(matches.length!==1){if(!onlyProject||ps.some(p=>p.project_id===onlyProject&&normalized(p.name)===normalized(m.project_name)))result.pending.push({quote_id:m.quotation_id,project_name:m.project_name,contract_no:m.contract_no,reason:matches.length?'项目名与合同号匹配多个项目':'尚未找到项目名及合同号都一致的CRM项目'});continue;}
-  const p=matches[0];if(onlyProject&&p.project_id!==onlyProject)continue;
-  if(!p.owner_id||!p.sales_active)continue;
-  const summary:any=await quoteSnapshot(db,src,system,m.quotation_id),existing=allLinks.find(l=>l.source_key===summary.source_key);if(existing)continue;
-  const key=id(),time=now();summary.bridge_shared=true;
-  const r=await db.prepare('INSERT OR IGNORE INTO crm_sales_quote_links(id,project_id,quote_id,source_key,summary,synced,created,created_by,updated,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(key,p.project_id,m.quotation_id,summary.source_key,JSON.stringify(summary),time,time,p.created_by,time,p.created_by).run();
-  if(r.meta.changes){result.linked++;allLinks.push({id:key,project_id:p.project_id,quote_id:m.quotation_id,source_key:summary.source_key,summary:JSON.stringify(summary),created_by:p.created_by});}
- }
+ // Scheduled transport never confirms a quotation or creates a project link.
+ for(const m of ready)if(!allLinks.some(l=>l.quote_id===m.quotation_id))result.pending.push({quote_id:m.quotation_id,project_name:m.project_name,contract_no:m.contract_no,reason:'等待业务员在报价与协作确认接收'});
  const selected=onlyProject?ps.filter(p=>p.project_id===onlyProject):ps;
  for(const p of selected){const links=allLinks.filter(l=>l.project_id===p.project_id),validIds=new Set<string>(),currentIds=new Set<string>();
   for(const l of links){const summary:any=await quoteSnapshot(db,src,system,l.quote_id);if(summary.source_key!==l.source_key)continue;

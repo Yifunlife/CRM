@@ -7,7 +7,7 @@ const at='2026-10-29T02:00:00.000Z',pure=module('lib/sales-pipeline.ts'),calenda
 const home=module('lib/sales-home.ts',{"'./sales-pipeline'":pure,"'./china-workdays'":calendar});
 const {homeCustomer}=await import(home);
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const {salesHomeEndpoint}=await import(module('lib/sales-home-server.ts',{"'./crm'":'data:text/javascript,export const now=()=>'+JSON.stringify(at),"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./sales-home'":home}));
+const {salesHomeEndpoint}=await import(module('lib/sales-home-server.ts',{"'./crm'":'data:text/javascript,export const now=()=>'+JSON.stringify(at),"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./sales-home'":home,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}}
 const db={prepare:sql=>new Statement(sql)};
@@ -29,6 +29,7 @@ for(const [id,commercial] of [['own-order','sales'],['other-order','other']])sql
 for(const [id,order,owner] of [['mine','other-order','sales'],['collaborator','own-order','other'],['hidden-task','other-order','other']])sqlite.prepare("INSERT INTO crm_followup_tasks(id,order_id,kind,step,title,impact,contact_reply,next_action,owner_id,due_at,next_followup,created,created_by,updated,updated_by) VALUES(?,?,'待办',0,?,'影响','已联系','核对方案',?,'2026-10-28T09:00:00Z','2026-10-29T09:00:00Z',?,'admin',?,'admin')").run(id,order,id,owner,at,at);
 const tables=sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' ORDER BY name").all().map(r=>r.name);
 const snapshot=()=>JSON.stringify(tables.map(t=>sqlite.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+sqlite.exec("UPDATE crm_leads SET cohort='new'");
 const before=snapshot(),result=JSON.parse(JSON.stringify(await salesHomeEndpoint(db,sales,'sales-home','GET')));
 assert.equal(snapshot(),before,'homepage must not mutate any records');
 assert.equal(result.customer_count,7);
@@ -49,12 +50,19 @@ assert.deepEqual(result.performance.receipts,[{currency:'CNY',amount:20000},{cur
 assert.deepEqual(result.performance.refunds,[{currency:'USD',amount:1000}]);
 await assert.rejects(salesHomeEndpoint(db,admin,'sales-home','GET'),e=>e.status===403);
 await assert.rejects(salesHomeEndpoint(db,sales,'sales-home','POST'),e=>e.status===405);
-const base={id:'x',name:'x',status:'待首次联系',phone:'123',email:'',detail:{},assigned_at:'2026-10-23T02:00:00Z'};
+const base={cohort:'new',id:'x',name:'x',status:'待首次联系',phone:'123',email:'',detail:{},assigned_at:'2026-10-23T02:00:00Z'};
 assert.ok(homeCustomer(base,at).tags.includes('overdue'),'first-contact deadline follows existing China workday rules');
 assert.equal(homeCustomer({...base,assigned_at:''},at).due,'','missing assignment date is not guessed');
 const progress={first:{whatsapp:{at:'2026-10-20T02:00:00Z',note:'首联'}},second:{}};
 assert.ok(homeCustomer({...base,status:'正在沟通',detail:{_sales_progress:progress}},at).tags.includes('overdue'),'second contact reminder retained');
 assert.equal(homeCustomer({...base,status:'已结束'},at).tags.length,0);
 assert.equal(homeCustomer({...base,assigned_at:'2026-12-31T02:00:00Z'},'2027-01-03T02:00:00Z').due,'','unverified calendar is not invented');
+add('historical-sheet','sales','待首次联系');add('historical-unknown','sales','待首次联系');
+sqlite.exec("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('sheet-sync','historical-sheet','admin','sales','2026-10-29','historical-sheet-v1'),('normal-first','first','admin','sales','2026-10-29','equal-global-v1');");
+const historicalCheck=await salesHomeEndpoint(db,sales,'sales-home','GET');
+assert.ok(historicalCheck.todos.some(r=>r.id==='first'),'genuine new assignment stays in work summary');
+assert.ok(!historicalCheck.todos.some(r=>['historical-sheet','historical-unknown'].includes(r.id)),'historical records never inflate work summary');
+assert.ok(historicalCheck.todos.some(r=>r.id==='due'),'actual new inquiry and scheduled follow-up remain');
+assert.equal(historicalCheck.historical_review_count,2);
 if(process.env.SALES_HOME_FIXTURE)writeFileSync(process.env.SALES_HOME_FIXTURE,JSON.stringify(result));
 console.log('PASS: personal scoping with broad permissions, read-only snapshots, grouped due/first/new-inquiry queues, paused review, historical performance ownership, cancelled entries, currency separation, handovers, stage projects and calendar boundaries.');

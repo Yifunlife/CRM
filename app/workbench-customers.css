@@ -10,3 +10,5 @@
 .wb-customer-management .wb-table-pagination{margin:0;padding:6px 0 0;position:sticky;bottom:0;background:#fff}
 .wb-customer-management .wb-customer-sheet th,.wb-customer-management .wb-customer-sheet td{height:34px;padding:5px 8px;font-size:12px}
 @media(max-width:1000px){.wb-customer-management .wb-customer-tools{flex-wrap:wrap}.wb-customer-management .wb-customer-tools input{flex-basis:100%}}
+
+.wb-customer-management .wb-customer-sheet td select{width:96px;min-width:76px;min-height:32px;padding:4px 8px;font-size:12px}.wb-customer-management .wb-customer-sheet td select:focus-visible{outline:2px solid #264b82;outline-offset:2px}

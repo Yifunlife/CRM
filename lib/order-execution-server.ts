@@ -28,6 +28,8 @@ export async function executionQuote(db:D1Database,source:D1Database|undefined,u
  return {kind:'quote',quote_id:q.id,handover_id:saved.id,contract_no:q.contract_no,customer:q.customer_name||d.customerName,amount_minor:Math.round(q.final_amount*100),currency:q.final_currency||d.currency,payment_terms:d.paymentTerms||'',delivery_notes:d.deliveryNotes||'',customer_confirmation:d.customerConfirmation||'',supply_scope:(d.items||[]).map((i:any)=>[i.sku,i.name,i.specification,i.quantity,i.unit].filter(x=>x!==undefined&&x!==null&&x!=='').join(' · ')).join('\n'),files:(d.files||[]).map((f:any)=>({id:f.id,name:f.filename,url:origin+'/api/quotation-handover?quotation='+encodeURIComponent(q.id)+'&file='+encodeURIComponent(f.id)})),quote_url:origin+'/?quotationHistory='+encodeURIComponent(q.id),handover_url:origin+'/api/quotation-handover?quotation='+encodeURIComponent(q.id)+'&id='+encodeURIComponent(saved.id),saved_at:saved.created_at};
 }
 async function shippingRelease(db:D1Database,row:any){
+ const confirmed=await db.prepare('SELECT project_id FROM crm_contract_confirmations WHERE order_id=?').bind(row.id).first();
+ if(confirmed){const approval:any=await db.prepare("SELECT * FROM crm_release_requests WHERE order_id=? AND commercial_revision=? AND state='approved' ORDER BY created DESC LIMIT 1").bind(row.id,row.commercial_revision).first();if(!approval)fail('请销售上传付款单据并确认，或由CEO批准特殊放行');return approval;}
  const release:any=await db.prepare('SELECT r.*,c.version AS current_version FROM crm_workflow_releases r JOIN crm_workflow_contracts c ON c.deal_id=r.deal_id JOIN crm_deals d ON d.id=r.deal_id WHERE r.order_id=? AND r.deal_id=? AND d.cancelled=0').bind(row.id,row.deal_id).first();
  if(!release||release.current_version!==release.contract_version)fail('请商务或管理员先在“应收与放行”完成有效发货放行');
  const payment=await paymentSummary(db,row.deal_id);
@@ -39,7 +41,7 @@ export async function executionEndpoint(db:D1Database,source:D1Database|undefine
  const m=/^followup\/orders\/([a-z0-9-]+)\/execution(?:\/(configure|source|stage|quote))?$/.exec(path);if(!m)return undefined;
  const {row,manager}=await followupOrder(db,u,m[1]);
  const commercial=u.id===row.commercial_id&&u.role!=='followup'&&can(u,'customers_edit');
- const sourceEditor=u.role!=='followup'&&(manager||commercial);
+ const sourceEditor=manager||commercial;
  if(method==='GET'){
   if(m[2]==='quote'){if(!sourceEditor)fail('没有商务资料关联权限',403);return executionQuote(db,source,u,url.searchParams.get('id')||'');}
   if(m[2])fail('请求方法不支持',405);
@@ -48,7 +50,16 @@ export async function executionEndpoint(db:D1Database,source:D1Database|undefine
  if(method!=='POST')fail('请求方法不支持',405);
  if(row.archived)fail('订单已归档，请先重新打开',409);
  if(!Number.isInteger(body?.version)||body.version!==row.version)fail('订单已更新，请刷新后重新填写',409);
+ if(m[2]==='source'&&body.amendment){
+  if(!sourceEditor)fail('没有本单资料修改权限',403);
+  const before=row.details.contract_source;if(!before)fail('请先建立原合同档案');
+  const reason=text(body.reason,'修改原因'),after={...before};
+  for(const key of ['customer','supply_scope','payment_terms','delivery_notes','drawing','drawing_version','delivery_address','customer_contact','delivery_date','special_requirements'])if(Object.hasOwn(body.amendment,key))after[key]=text(body.amendment[key],key,false);
+  const details={...row.details,original_contract_source:row.details.original_contract_source||before,contract_source:after,supply_scope:after.supply_scope,payment_nodes:after.payment_terms,delivery_address:after.delivery_address||row.details.delivery_address||'',customer_contact:after.customer_contact||row.details.customer_contact||'',delivery_requirements:after.delivery_notes};
+  const result=await writeFollowup(db,row,body,actor,'修改订单商务资料',{before,after,reason},()=>[],{...row,details});return result;
+ }
  if(m[2]==='source'){
+  if(await db.prepare('SELECT order_id FROM crm_contract_confirmations WHERE order_id=?').bind(row.id).first())fail('已确认的合同档案请使用项目合同档案中的修改入口，保留原始版本',409);
   if(!sourceEditor)fail('合同资料须由本单商务或管理人员确认',403);
   const evidence=text(body.evidence,'本单客户及合同对应关系确认依据');
   const p=row.details.execution?.profile as ExecutionProfile|undefined;if(!p)fail('请先确认订单类型与执行范围');

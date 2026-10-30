@@ -5,6 +5,7 @@ export const QUALIFICATION_FIELDS=[['site','场地状态与租赁情况'],['draw
 export const CLOSED_STAGES=['won','lost','paused'];
 export function dormantReason(l:any,at=new Date().toISOString()){
  const today=suiteDay(at),task=l.revival?JSON.parse(l.revival):null;
+ if(l.cohort==='historical'&&!l.last_contact&&!l.note_at)return '';
  if(l.review||l.status==='已成交'||l.next_date>today)return '';
  if(task?.outcome==='已无需求'||task?.review_date>today)return '';
  const dates=[l.last_contact,l.created,l.note_at,l.assigned_at,task?.status==='done'?task.updated:null].map(v=>Date.parse(v||'')).filter(Number.isFinite);

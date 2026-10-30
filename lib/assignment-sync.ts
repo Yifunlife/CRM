@@ -19,7 +19,7 @@ export async function syncAssignments(db:D1Database,user:any,body:any){
   if(!Number.isInteger(row.source_row)||row.source_row<2)throw new AllocationError('请提供原表行号');
   const provenance=JSON.stringify({filename,row:row.source_row});
   statements.push(db.prepare("UPDATE crm_leads SET owner_id=?,original_owner=?,business_scope=?,detail=json_set(detail,'$.分配业务员',?,'$.分配同步来源',json(?)) WHERE id=? AND fingerprint=? AND owner_id IS NULL AND original_owner='' AND review=0 AND (business_scope='' OR business_scope=?)").bind(owner.id,owner.name,scope.id,owner.name,provenance,lead.id,row.fingerprint,scope.id));
-  statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month) SELECT ?,id,?,?,?,business_scope,? FROM crm_leads WHERE id=? AND owner_id=? AND original_owner=? AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),user.id,owner.id,created,monthNow(),lead.id,owner.id,owner.name,lead.id));
+  statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month,policy) SELECT ?,id,?,?,?,business_scope,?,CASE WHEN cohort='historical' THEN 'historical-alignment' ELSE 'historical-sheet-v1' END FROM crm_leads WHERE id=? AND owner_id=? AND original_owner=? AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),user.id,owner.id,created,monthNow(),lead.id,owner.id,owner.name,lead.id));
  }
  const result=statements.length?await db.batch(statements):[];
  const updated=result.filter((_,i)=>i%2===0).reduce((sum,r)=>sum+(r.meta.changes||0),0);

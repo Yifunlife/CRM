@@ -18,10 +18,12 @@ function required(value:any,label:string,max=2000){if(typeof value!=='string'||!
 function stage(value:any){if(!Number.isInteger(value)||value<0||value>=ORDER_STEPS.length)fail('请选择有效阶段');return value;}
 async function person(db:D1Database,value:any,label:string){if(typeof value!=='string'||!await db.prepare('SELECT id FROM crm_users WHERE id=? AND active=1').bind(value).first())fail('请选择有效的'+label);return value;}
 function event(db:D1Database,orderId:string,token:string,actor:any,kind:string,payload:any,time:string){return db.prepare('INSERT INTO crm_followup_events(id,order_id,kind,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_followup_orders WHERE id=? AND change_token=?)').bind(id(),orderId,kind,JSON.stringify(payload),time,actor.id,orderId,token);}
-export async function writeFollowup(db:D1Database,row:any,body:any,actor:any,kind:string,payload:any,extra:(token:string,time:string)=>D1PreparedStatement[],fields?:{details:any;steps:any;stage:number;archived:number;logistics_id:string}){
+export async function writeFollowup(db:D1Database,row:any,body:any,actor:any,kind:string,payload:any,extra:(token:string,time:string)=>D1PreparedStatement[],fields?:{details:any;steps:any;stage:number;archived:number;logistics_id:string},invalidateRelease=false){
  if(!Number.isInteger(body.version)||body.version!==row.version)fail('此订单已更新，请刷新后重新填写',409);
  const token=id(),time=now(),f=fields||row;
- const result=await db.batch([db.prepare('UPDATE crm_followup_orders SET logistics_id=?,details=?,steps=?,stage=?,archived=?,version=version+1,change_token=?,updated=?,updated_by=? WHERE id=? AND version=? AND change_token=?').bind(f.logistics_id,JSON.stringify(f.details),JSON.stringify(f.steps),f.stage,f.archived,token,time,actor.id,row.id,body.version,row.change_token),...extra(token,time),event(db,row.id,token,actor,kind,payload,time)]);
+ const commercialKeys=['contract_source','supply_scope','payment_nodes','delivery_address','customer_contact','delivery_requirements','special_requirements'];
+ const commercialChanged=invalidateRelease||commercialKeys.some(k=>JSON.stringify(f.details[k])!==JSON.stringify(row.details[k]));
+ const result=await db.batch([db.prepare('UPDATE crm_followup_orders SET logistics_id=?,details=?,steps=?,stage=?,archived=?,commercial_revision=commercial_revision+?,version=version+1,change_token=?,updated=?,updated_by=? WHERE id=? AND version=? AND change_token=?').bind(f.logistics_id,JSON.stringify(f.details),JSON.stringify(f.steps),f.stage,f.archived,commercialChanged?1:0,token,time,actor.id,row.id,body.version,row.change_token),...extra(token,time),event(db,row.id,token,actor,kind,payload,time)]);
  if(!result[0].meta.changes)fail('此订单已更新，请刷新后重试',409);
  return {ok:true,id:row.id};
 }
@@ -73,8 +75,8 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  const {row,manager:canManage}=await followupOrder(db,user,match[1]);
  if(method==='GET'&&!match[2]){
   const events=(await db.prepare('SELECT e.*,u.name AS actor_name FROM crm_followup_events e JOIN crm_users u ON u.id=e.created_by WHERE order_id=? ORDER BY e.created DESC,e.rowid DESC').bind(row.id).all()).results.map((e:any)=>({...e,payload:JSON.parse(e.payload)}));
-  const files=(await db.prepare('SELECT id,step,name,size,created FROM crm_followup_files WHERE order_id=? ORDER BY created DESC').bind(row.id).all()).results;
-  return {order:row,events,files};
+  const files=(await db.prepare('SELECT id,step,name,size,created,document_kind,previous_id FROM crm_followup_files WHERE order_id=? ORDER BY created DESC').bind(row.id).all()).results;
+  return {order:{...row,confirmed_workflow:!!await db.prepare('SELECT project_id FROM crm_contract_confirmations WHERE order_id=?').bind(row.id).first()},events,files};
  }
  if(match[2]==='priority'){
   if(!['admin','ceo','management'].includes(user.role)||!['admin','ceo','management'].includes(actor.role))fail('只有老板或管理层可以标记优先订单',403);

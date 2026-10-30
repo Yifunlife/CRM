@@ -12,6 +12,7 @@ const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('
 const admin={id:'admin',role:'admin'},sales={id:'sales',role:'sales'},other={id:'other',role:'sales'};
 for(const u of [admin,sales,other])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
 for(const [id,owner,phone,email,status] of [['dual','sales','123456789','test@example.test','待首次联系'],['single','sales','','one@example.test','待首次联系'],['other','other','123456789','','待首次联系'],['legacy','sales','123456789','','正在沟通']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,phone,email,status,detail,fingerprint,created) VALUES(?,?,'Meta',?,?,?,?,'{\"项目需求描述\":\"保留资料\"}',?,'2026-01-01')").run(id,id,owner,phone,email,status,id);
+sqlite.exec("UPDATE crm_leads SET cohort='new'"); // Existing channel tests use new-cohort leads.
 const get=(key='dual',user=sales)=>salesPipelineEndpoint(db,user,user,'sales-pipeline/'+key,'GET',{});
 const save=async(body,key='dual',user=sales)=>salesPipelineEndpoint(db,user,user,'sales-pipeline/'+key,'POST',{version:(await get(key,user)).state.version,note:'真实沟通依据',...body});
 const contact=(round,channel,at)=>({action:'contact',round,channel,at});

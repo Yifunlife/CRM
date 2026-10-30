@@ -95,7 +95,7 @@ env.BUCKET=bucket;
 const {followupFiles}=await import(moduleUrl('lib/order-followup-files.ts',{"'cloudflare:workers'":JSON.stringify(envUrl),"'./allocation-server'":JSON.stringify(errors),"'./order-followup-server'":JSON.stringify(server)}));
 await call('followup/staff','POST',{user_id:'staff',enabled:true});
 const upload=async(user=staff)=>{const o=await get(),url=new URL('https://crm.test/api/followup/files');url.search=new URLSearchParams({order_id:one.id,step:'0',version:String(o.version),name:'确认图纸.txt'}).toString();return followupFiles(new Request(url,{method:'PUT',headers:{'content-length':'5'},body:'hello'}),db,user,user);};
-await assert.rejects(upload(sales),e=>e.status===403);
+assert.ok((await upload(sales)).ok,'Sales can upload payment/contract evidence to their order');
 const file=await(await upload()).json();
 const downloaded=await followupFiles(new Request('https://crm.test/api/followup/files/'+file.id),db,sales,sales);assert.equal(await downloaded.text(),'hello');
 await assert.rejects(followupFiles(new Request('https://crm.test/api/followup/files/'+file.id),db,other,other),e=>e.status===404);

@@ -19,6 +19,9 @@ for(let i=0;i<205;i++)insert.run('receipt-'+i,'reference-'+i,'deal',12345+i,i%2?
 original.exec("INSERT INTO crm_customer_pool(id,source,raw,payload,created,updated,created_by,lead_id,state) VALUES('pool','Meta','原始测试资料','{}','2026-10-29','2026-10-29','admin','lead','已入CRM'); INSERT INTO crm_pool_events(id,intake_id,actor_id,kind,payload,created) VALUES('event','pool','admin','确认资料','{}','2026-10-29');");
 const rows=(db,table)=>db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
 const tables=original.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%' ORDER BY name").all().map(r=>r.name);
+const transient=new Set(['crm_login_attempts','crm_sessions','crm_google_oauth','crm_cloud_auth']);
+assert.deepEqual(tables.filter(t=>!transient.has(t)&&!backupTables.includes(t)),[],'Every persistent CRM table must be included in backups');
+original.exec("INSERT INTO crm_cloud_messages(id,owner_id,phone_id,lead_id,peer,direction,content,status,created) VALUES('msg','admin','phone','lead','peer','in','历史聊天测试','received','2026-10-30'); INSERT INTO crm_ai_limits VALUES('admin',1000,'2026-10-30','admin'); INSERT INTO crm_cloud_receipts VALUES('receipt','phone','delivered');");
 const before=Object.fromEntries(tables.map(table=>[table,rows(original,table)]));
 const reads=[];
 const response=databaseBackup({prepare(sql){return {bind(...args){return {async all(){reads.push(sql);return {results:original.prepare(sql).all(...args)};}};}};}});

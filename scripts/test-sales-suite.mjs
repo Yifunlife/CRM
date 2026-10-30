@@ -5,7 +5,7 @@ import ts from 'typescript';
 const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),pure=module('lib/sales-suite.ts'),err='data:text/javascript,export class AllocationError extends Error{constructor(message,status=400){super(message);this.status=status;}}';
 const source=module('lib/sales-quote-source.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err});
-const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts')}));
+const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const {quoteCommercialAmount,suiteForecast}=await import(pure);
 function wrapper(sqlite,readonly=false){let q=Promise.resolve();function stmt(sql,args=[]){if(readonly)assert.match(sql.trim(),/^SELECT\s/i,'quotation binding is SELECT-only');return {bind:(...v)=>stmt(sql,v),async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){return {meta:sqlite.prepare(sql).run(...args)}}};}return {prepare:sql=>stmt(sql),batch(statements){const p=q.then(async()=>{sqlite.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());sqlite.exec('COMMIT');return out}catch(e){sqlite.exec('ROLLBACK');throw e}});q=p.catch(()=>{});return p;}};}
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));const db=wrapper(sqlite);
@@ -43,7 +43,7 @@ await assert.rejects(get('quote-detail?id=foreign'),e=>e.status===404);
 const commercial=await get('quote-detail?id=q1');assert.equal(commercial.amount_minor,23000);assert.ok(!JSON.stringify(commercial).includes('cost'));
 await call('quotes/link',{project_id:p1,quote_id:'q1',reason:'核对客户与项目属于本次采购'});assert.equal((await detail()).quotes.length,1);
 await assert.rejects(call('quotes/link',{project_id:p2,quote_id:'q1',reason:'重复关联'}),e=>e.status===409);
-qrow('q2','sales@example.test','2026-02-01');await call('quotes/sync',{project_id:p1});assert.equal((await detail()).quotes[0].summary.current_id,'q2');
+qrow('q2','sales@example.test','2026-02-01');await call('quotes/sync',{project_id:p1});assert.equal((await detail()).quotes[0].summary.current_id,'q1','Unaccepted revisions do not replace the explicitly linked version');
 await call('project/record',{id:p1,kind:'报价已发送',quote_id:'q2',content:'已发邮件',evidence:'邮件发件记录',occurred_at:'2026-02-02T00:00:00Z'});
 assert.notEqual((await detail()).project.stage,'won');
 const beforeQuote=JSON.stringify(qs.prepare('SELECT * FROM quotation_history ORDER BY id').all());
@@ -73,6 +73,7 @@ const sample={created:'2026-09-29T12:00:00Z',status:'跟进中',next_date:'',rev
 assert.ok(dormantReason(sample,checkAt));
 for(const change of [{created:'2026-09-30T12:00:00Z'},{note_at:'2026-10-28T12:00:00Z'},{assigned_at:'2026-10-28T12:00:00Z'},{review:1},{status:'已成交'},{next_date:'2026-11-01'},{revival:JSON.stringify({outcome:'已无需求'})},{revival:JSON.stringify({review_date:'2026-11-01'})}])assert.equal(dormantReason({...sample,...change},checkAt),'');
 sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('sleep-test','Dormant fixture','Meta','sales','{}','sleep-test','2026-09-01')").run();
+sqlite.exec("UPDATE crm_leads SET cohort='new' WHERE id='sleep-test'");
 const beforeDormant=JSON.stringify(sqlite.prepare("SELECT * FROM crm_leads WHERE id='sleep-test'").get());
 await refreshSalesSuite(db,undefined,checkAt,false);
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE lead_id='sleep-test' AND dedupe_key LIKE 'dormant:%'").get().n,0,'five-minute run must not create dormant notifications');

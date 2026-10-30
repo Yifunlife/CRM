@@ -4,12 +4,12 @@ export function teamCustomer(lead:any,at:string){
  const today=teamDay(at),detail=typeof lead.detail==='string'?JSON.parse(lead.detail):lead.detail;
  const contacted=[lead.last_contact,lead.human_contact].filter(Boolean).sort().at(-1)||'';
  const closed=['已成交','已结束','暂停跟进'].includes(lead.status)||lead.deal_count>0;
- const uncontacted=!contacted&&lead.status==='待首次联系'&&!closed;
+ const uncontacted=lead.cohort==='new'&&!contacted&&lead.status==='待首次联系'&&!closed;
  const unverified=!contacted&&!uncontacted&&!closed;
  const repeat=!!lead.inquiry_at&&(!contacted||Date.parse(lead.inquiry_at)>Date.parse(contacted))&&!closed;
  const reference=contacted||lead.created;
  const waiting_days=reference&&Number.isFinite(Date.parse(reference))?Math.max(0,Math.floor((Date.parse(today)-Date.parse(teamDay(reference)))/86400000)):null;
- const stale=!closed&&waiting_days!==null&&waiting_days>=7;
+ const stale=(lead.cohort==='new'||!!contacted)&&!closed&&waiting_days!==null&&waiting_days>=7;
  const unplanned=!closed&&(!String(lead.next_step||'').trim()||!lead.next_date);
  const flags={attention:repeat||stale||unplanned||(!closed&&!!lead.next_date&&lead.next_date<today),stale,unplanned,assigned:true,uncontacted,unverified,today:!closed&&lead.next_date===today,overdue:!closed&&!!lead.next_date&&lead.next_date<today,repeat,won:lead.deal_count>0};
  return {waiting_days,id:lead.id,name:lead.name,owner_id:lead.owner_id,phone:lead.phone,email:lead.email,country:lead.country,source:lead.source,business_scope:lead.business_scope,company:detail?.['公司名称']||'',requirement:detail?.['项目需求描述']||detail?.['项目类型']||'',status:lead.status,grade:lead.grade,last_contact:contacted,next_date:lead.next_date,last_note:lead.last_note||'',next_step:lead.next_step||'',inquiry_at:lead.inquiry_at||'',flags};

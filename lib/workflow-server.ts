@@ -27,7 +27,7 @@ export async function workflowEndpoint(db:D1Database,user:any,actor:any,path:str
  if(!path.startsWith('workflow/'))return undefined;
  if(path==='workflow/report'&&method==='GET'){
   const all=can(user,'customers_all'),where=user.role==='followup'?' WHERE 0':all?'':' WHERE l.owner_id=?',args=all||user.role==='followup'?[]:[user.id];
-  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.status,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
+  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.status,l.cohort,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
   const issues:any[]=[];const add=(kind:string,entity_id:string,name:string,owner:string,issue:string,due='')=>issues.push({kind,entity_id,name,owner,issue,due});
   for(const l of leads){
    if(l.status==='已成交'&&!l.deal_count)add('customer',l.id,l.name,l.owner_name,'已成交但无有效成交单，待核查');
@@ -36,7 +36,7 @@ export async function workflowEndpoint(db:D1Database,user:any,actor:any,path:str
    if(['已成交','已结束'].includes(l.status))continue;
    if(!l.next_date)add('customer',l.id,l.name,l.owner_name,'缺少下次跟进／复查日期，待核查');
    else if(l.next_date<chinaToday())add('customer',l.id,l.name,l.owner_name,'跟进／复查逾期',l.next_date);
-   if(l.owner_id&&!l.last_contact){const due=nextChinaWorkday(l.assigned_at);if(!due)add('customer',l.id,l.name,l.owner_name,'首次联系期限待核查：缺分配时间或法定工作日日历');else if(due<=chinaToday())add('customer',l.id,l.name,l.owner_name,due<chinaToday()?'首次联系逾期':'今日须首次联系',due);}
+   if(l.cohort==='new'&&l.owner_id&&!l.last_contact){const due=nextChinaWorkday(l.assigned_at);if(!due)add('customer',l.id,l.name,l.owner_name,'首次联系期限待核查：缺分配时间或法定工作日日历');else if(due<=chinaToday())add('customer',l.id,l.name,l.owner_name,due<chinaToday()?'首次联系逾期':'今日须首次联系',due);}
   }
   const deals=(await db.prepare('SELECT d.*,l.name AS customer_name FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id'+where+' ORDER BY d.created DESC').bind(...args).all<any>()).results;
   // Read all payment rows once, avoiding per-customer queries in the report.
@@ -109,6 +109,7 @@ export async function workflowEndpoint(db:D1Database,user:any,actor:any,path:str
   const reason=required(body.reason,'关联核查依据');const result=await db.batch([db.prepare('UPDATE crm_followup_orders SET deal_id=?,version=version+1,change_token=?,updated=?,updated_by=? WHERE id=? AND version=? AND deal_id IS NULL').bind(deal.id,id(),now(),actor.id,order.id,body.version),workflowAudit(db,actor,'人工关联成交',order.id,{deal_id:deal.id,reason},true)]);if(!result[0].meta.changes)fail('订单已更新，请刷新',409);return {ok:true};
  }
  if(path==='workflow/releases'){
+  if(await db.prepare('SELECT project_id FROM crm_contract_confirmations WHERE order_id=?').bind(body.order_id).first())fail('新流程订单须由销售确认付款或提交CEO审批');
   const order:any=await db.prepare('SELECT * FROM crm_followup_orders WHERE id=? AND archived=0').bind(body.order_id).first();if(!order?.deal_id)fail('请先核查并关联正式成交单');const deal=await dealAccess(db,user,order.deal_id);if(deal.cancelled)fail('成交已撤销');
   const payment=await paymentSummary(db,deal.id),c=payment.contract;if(!c)fail('合同金额与应收计划待核实，不能放行');if(body.version!==c.version)fail('收款或应收已变化，请刷新核对',409);
   const special=body.special===true,reason=required(body.reason,special?'特殊放行原因及依据':'发货核对依据');if(!special&&(payment.cross_currency||payment.net_minor<payment.ship_due_minor))fail('跨币种到账待核查或未满足发货前应收；须管理员填写特殊放行原因');

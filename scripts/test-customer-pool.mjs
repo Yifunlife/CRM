@@ -1,3 +1,4 @@
+const RealDate=Date;globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-02T01:00:00Z']));}static now(){return RealDate.parse('2026-11-02T01:00:00Z');}};
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -31,9 +32,9 @@ await assert.rejects(confirm(one,{name:'unknown'}),/联系方式/);
 await assert.rejects(confirm(one,{...values(1),email:'not-an-email'}),/邮箱/);
 await assert.rejects(call('/confirm',{id:one,version:0,fields:values(1)},sales),/权限/);
 await confirm(one,values(1));
-assert.equal(pool(one).state,'待分配');assert.equal(lead(one).owner_id,null);
+assert.equal(pool(one).state,'已入CRM');assert.equal(lead(one).owner_id,null);
 assert.equal((await report(other)).rows.length,0,'other salesperson cannot see unassigned submissions');
-configure();await processCustomerPool(db);
+configure();await distribute(db,[one],'all','admin');await processCustomerPool(db);
 assert.equal(pool(one).state,'已入CRM');assert.equal(lead(one).owner_id,'a');assert.equal(JSON.parse(lead(one).detail)['项目需求描述'],'室内游乐场');
 assert.equal((await report(sales)).rows[0].can_open,true);
 await processCustomerPool(db);assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,1);
@@ -63,15 +64,15 @@ assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_leads WHERE phone=?').ge
 assert.ok([pool(same1).state,pool(same2).state].includes('待确认'));
 // Concurrent processors and an injected post-create interruption must remain resumable and idempotent.
 const retry=await submit(6);configure({...config,rule:{...config.rule,automatic:false}});await confirm(retry,values(6));
-assert.equal(pool(retry).state,'待分配');assert.equal(lead(retry).owner_id,null);
-configure();await Promise.all([processCustomerPool(db),processCustomerPool(db)]);
+assert.equal(pool(retry).state,'已入CRM');assert.equal(lead(retry).owner_id,null);
+configure();await distribute(db,[retry],'all','admin');await Promise.all([processCustomerPool(db),processCustomerPool(db)]);
 assert.equal(pool(retry).state,'已入CRM');assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments WHERE lead_id=?').get(retry).n,1);
 // Leave/disabled accounts and historical performance never affect the equal pool.
 assert.deepEqual((await allocationWeights(db,'whatsapp')).weights.map(r=>[r.user_id,r.share]),[['a',50],['b',50]]);
 configure({...config,members:members.map(m=>m.user_id==='a'?{...m,state:'请假'}:m)});
 const leave=await submit(7);await confirm(leave,values(7));assert.equal(lead(leave).owner_id,'b');
-configure({...config,members:members.map(m=>({...m,state:'暂停'}))});const noStaff=await submit(8);await confirm(noStaff,values(8));assert.equal(pool(noStaff).state,'待分配');
-configure();await processCustomerPool(db);assert.equal(pool(noStaff).state,'已入CRM');
+configure({...config,members:members.map(m=>({...m,state:'暂停'}))});const noStaff=await submit(8);await confirm(noStaff,values(8));assert.equal(pool(noStaff).state,'已入CRM');
+configure();await distribute(db,[one],'all','admin');await processCustomerPool(db);assert.equal(pool(noStaff).state,'已入CRM');
 const count=sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n;
 await distribute(db,[one,two],'whatsapp','admin');assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,count);
 // Historical waiting leads are not swept by the worker.
@@ -80,7 +81,7 @@ await processCustomerPool(db);assert.equal(lead('history').owner_id,null);
 // Fresh confirmations are rejected if the reviewer no longer has permission.
 const revoked=await submit(9);configure({...config,rule:{...config.rule,automatic:false}});await confirm(revoked,values(9));
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='admin'").run();configure();await processCustomerPool(db);assert.equal(lead(revoked).owner_id,null);
-sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='admin'").run();await processCustomerPool(db);assert.ok(lead(revoked).owner_id);
+sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='admin'").run();await distribute(db,[revoked],'all','admin');await processCustomerPool(db);assert.ok(lead(revoked).owner_id);
 const today=(await report()).today;
 sqlite.prepare("UPDATE crm_leads SET next_date=?,status='正在沟通' WHERE id=?").run(today,one);
 assert.ok((await report(sales)).todo.some(l=>l.id===one));assert.ok(!(await report(other)).todo.some(l=>l.id===one));

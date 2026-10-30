@@ -13,7 +13,7 @@ try{
  assert.equal(customerMarket({country:'Egypt'}),'外贸');
  assert.equal(customerMarket({source:'Meta'}),'待确认');
  assert.equal(customerMarket({business_scope:'douyin-local'}),'内贸');
- const lead=(id,country,extra={})=>({id,name:id,country,created:'2026-10-02T00:00:00Z',entered:'2026-10-02',grade:'A',status:'正在沟通',owner_id:'sales',last_contact:'2026-10-03',...extra});
+ const lead=(id,country,extra={})=>({id,name:id,country,cohort:'new',created:'2026-10-02T00:00:00Z',entered:'2026-10-02',grade:'A',status:'正在沟通',owner_id:'sales',last_contact:'2026-10-03',...extra});
  const leads=[lead('cn','中国'),lead('foreign','Egypt'),lead('repeat','Egypt',{entered:'2026-10-03'}),lead('pending','',{last_contact:'',owner_id:null}),lead('ali','中国',{source:'阿里',last_contact:'',next_date:'2026-10-10'})];
  const subjects=[{lead_id:'foreign',subject_id:'f'},{lead_id:'repeat',subject_id:'f'}],campaigns=[{id:'mix',name:'共用',currency:'USD'},{id:'ali-c',name:'阿里活动',currency:'CNY'}];
  const attrs=leads.map(l=>({lead_id:l.id,source_kind:'广告活动',campaign_id:l.id==='ali'?'ali-c':'mix'}));
@@ -23,7 +23,7 @@ try{
  const report=operationsReport({leads,subjects,campaigns,attrs,quality,deals,summary,from:'2026-10-01',to:'2026-10-31',asOf:'2026-10-29',spendRecorded:['mix','ali-c']});
  const dashboard=acquisitionDashboard({report,leads,subjects,campaigns,deals,notes:[{lead_id:'foreign',created:'2026-10-03T02:00:00Z'}],assignments:[{lead_id:'foreign',created:'2026-10-03T00:00:00Z'}],contracts:[{deal_id:'d',currency:'USD',total_minor:100000}],receipts:[{id:'r',deal_id:'d',currency:'USD',amount_minor:50000,received_date:'2026-10-12'},{id:'cancel',deal_id:'d',currency:'USD',amount_minor:90000,received_date:'2026-10-12',cancelled:1}],refunds:[{receipt_id:'r',amount_minor:10000,refunded_date:'2026-10-20'},{receipt_id:'r',amount_minor:10000,refunded_date:'2027-01-01'}],outcomes:[]});
  const foreign=dashboard.sections.find(s=>s.market==='外贸'),cn=dashboard.sections.find(s=>s.market==='内贸'),unknown=dashboard.sections.find(s=>s.market==='待确认');
- assert.equal(foreign.total,2);assert.equal(cn.total,1);assert.equal(unknown.total,1);
+ assert.equal(foreign.total,2);assert.equal(foreign.new,2);assert.equal(foreign.historical,0);assert.equal(cn.total,1);assert.equal(unknown.total,1);
  assert.equal(foreign.orders,1);assert.equal(foreign.countries.find(c=>c.country==='埃及').orders,1);assert.equal(foreign.channels.find(c=>c.key==='mix').money.USD,100000);assert.equal(foreign.converted,1);assert.equal(cn.converted,0);assert.equal(foreign.money.USD,100000);assert.equal(foreign.cash.USD,40000);
  assert.equal(foreign.first_hours,2);assert.equal(foreign.timing_samples,1);assert.equal(foreign.overdue,1);assert.equal(foreign.uncontacted,1);assert.equal(unknown.unassigned,1);
  assert.deepEqual(foreign.spend,{CNY:6000});assert.equal(dashboard.shared.length,1);assert.equal(dashboard.shared[0].spent_minor,10000);
@@ -31,5 +31,6 @@ try{
  assert.equal(cn.first_hours,null);assert.equal(foreign.channels.find(c=>c.key==='mix').shared_spend,true);
  const rawLead={...leads[0],source:'Meta'};const raw=acquisitionDashboard({report:{...report,customers:[{...report.customers[0],source_key:'未知来源'}]},leads:[rawLead],subjects:[],campaigns:[],deals:[{id:'one',lead_id:'cn',deal_date:'2026-10-10'},{id:'two',lead_id:'cn',deal_date:'2026-10-11'}],notes:[],assignments:[],contracts:[],receipts:[],refunds:[],outcomes:[]});const rs=raw.sections.find(s=>s.market==='内贸');assert.equal(rs.orders,2);assert.equal(rs.missingContracts,2);assert.equal(rs.channels[0].deal_customers,1);assert.equal(rs.channels[0].label,'Meta（原始来源·待归因）');assert.equal(rs.channels[0].spent_minor,null);assert.equal(rs.channels[0].shared_spend,false);
  assert.equal(foreign.platforms.find(p=>p.platform==='阿里').spend.CNY,6000);assert.equal(foreign.platforms.find(p=>p.platform==='阿里').countries[0].country,'中国');assert.equal(rs.platforms[0].platform,'Meta');assert.equal(rs.platforms[0].spend.USD,undefined);
+ const historicalLeads=leads.map(l=>({...l,cohort:'historical'}));const historyReport=operationsReport({leads:historicalLeads,subjects,campaigns,attrs,quality,deals,summary,from:'2026-10-01',to:'2026-10-31',asOf:'2026-10-29',spendRecorded:[]});assert(historyReport.customers.every(c=>c.cohort==='historical'&&c.contacted));assert.equal(historyReport.rows.reduce((n,r)=>n+r.new,0),0);assert.equal(historyReport.rows.reduce((n,r)=>n+r.historical,0),4);
  console.log('PASS: market rules, identity deduplication, mixed-market spend, assigned/uncontacted/overdue, timing samples, cancelled/future deals and receipts, refunds, currencies.');
 }finally{rmSync(dir,{recursive:true,force:true});}

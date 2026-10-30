@@ -30,6 +30,10 @@
     {
       "binding": "BUCKET",
       "bucket_name": "yifun-crm-files"
+    },
+    {
+      "binding": "QUOTE_BUCKET",
+      "bucket_name": "yifunlife-erp-images"
     }
   ]
 }

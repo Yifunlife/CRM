@@ -12,7 +12,7 @@ for(const [id,role] of [['admin','admin'],['a','sales'],['b','management'],['c',
 const config={members:['a','b','c'].map(user_id=>({user_id,state:'参与',share:0})),rule:{performance:30,maxChange:10,minimum:5,automatic:true}};
 const save=(scope,value=config)=>sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run(scope,JSON.stringify(value),'now','admin');
 save('all');for(const s of BUSINESS_SCOPES)save(s.id);
-const insert=(id,scope)=>{const s=BUSINESS_SCOPES.find(s=>s.id===scope);sqlite.prepare('INSERT INTO crm_leads(id,name,source,business_scope,detail,fingerprint,created) VALUES(?,?,?,?,?,?,?)').run(id,id,s.source,scope,'{}',id,new Date().toISOString());};
+const insert=(id,scope)=>{const s=BUSINESS_SCOPES.find(s=>s.id===scope);sqlite.prepare('INSERT INTO crm_leads(id,name,source,business_scope,detail,fingerprint,created) VALUES(?,?,?,?,?,?,?)').run(id,id,s.source,scope,'{}',id,new Date().toISOString());sqlite.prepare("UPDATE crm_leads SET cohort='new' WHERE id=?").run(id);};
 const owner=id=>sqlite.prepare('SELECT owner_id FROM crm_leads WHERE id=?').get(id).owner_id;
 for(const [i,scope] of ['google','meta-product','whatsapp'].entries()){insert('first-'+i,scope);await distribute(db,['first-'+i],scope,'admin');}
 assert.deepEqual([0,1,2].map(i=>owner('first-'+i)),['a','b','c'],'Different channels must share one allocation counter');

@@ -1,3 +1,4 @@
+import {recordCommunication} from './communication-progress';
 import {AllocationError} from './allocation-server';
 import {can,clean,digest,id,now,phoneKey} from './crm';
 type Runtime={CLOUD_COMMUNICATION_KEY?:string};
@@ -12,7 +13,7 @@ async function unseal(value:string,env:Runtime){const [iv,data]=value.split('.')
 async function config(db:D1Database,env:Runtime){const row:any=await db.prepare("SELECT value FROM crm_cloud_settings WHERE id='company'").first();return row?JSON.parse(await unseal(row.value,env)):{};}
 async function leadFor(db:D1Database,user:any,leadId:string){const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=? AND owner_id=?').bind(leadId,user.id).first();if(!lead)fail('客户不存在或不属于本人',404);return lead;}
 async function graph(path:string,token:string,init:RequestInit={}){const r=await fetch('https://graph.facebook.com/v26.0/'+path,{...init,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...init.headers},signal:AbortSignal.timeout(25000)});if(!r.ok)fail('WhatsApp平台未完成请求，请核对授权及号码状态；未自动重试',502);return r.json() as Promise<any>;}
-async function contactNote(db:D1Database,m:any){if(!m.lead_id)return;const lead:any=await db.prepare('SELECT id,owner_id,status FROM crm_leads WHERE id=? AND owner_id=?').bind(m.lead_id,m.owner_id).first();if(!lead)return;const incoming=m.direction==='in';await db.batch([db.prepare('INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)').bind('cloud-'+m.id,lead.id,m.owner_id,(incoming?'WhatsApp客户回复：':'WhatsApp发送已确认：')+m.content,incoming?'系统收信':'WhatsApp','',m.created),db.prepare("UPDATE crm_leads SET status=CASE WHEN status IN ('待首次联系','已联系待回复','正在沟通') THEN ? ELSE status END,last_contact=CASE WHEN last_contact>? THEN last_contact ELSE ? END WHERE id=? AND owner_id=?").bind(incoming?'正在沟通':lead.status==='正在沟通'?'正在沟通':'已联系待回复',m.created,m.created,lead.id,m.owner_id)]);}
+async function contactNote(db:D1Database,m:any){if(m.lead_id)await recordCommunication(db,m.owner_id,m.lead_id,'cloud:'+m.id,m.content,m.direction==='in',m.created);}
 async function applyReceipt(db:D1Database,providerId:string,phoneId:string){
  const receipt:any=await db.prepare('SELECT status FROM crm_cloud_receipts WHERE provider_id=? AND phone_id=?').bind(providerId,phoneId).first();if(!receipt)return;
  const m:any=await db.prepare('SELECT * FROM crm_cloud_messages WHERE provider_id=? AND phone_id=?').bind(providerId,phoneId).first();if(!m)return;

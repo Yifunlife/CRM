@@ -15,7 +15,7 @@ assert.equal(nextChinaWorkday('2026-10-23T00:00:00Z'),'2026-10-26');
 assert.equal(nextChinaWorkday('2026-12-31T00:00:00Z'),null);
 assert.equal(nextChinaWorkday(''),null);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
-for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0015_')&&!f.startsWith('0025_')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
+for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0015_')&&!f.startsWith('0025_')&&!f.startsWith('0031_')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 const admin={id:'admin',role:'admin',name:'管理员'},sales={id:'sales',role:'sales'},other={id:'other',role:'sales'},staff={id:'staff',role:'operations'};
 for(const u of [admin,sales,other,staff])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unchanged','2026-01-01');
 for(const [id,owner,status] of [['lead','sales','已成交'],['legacy','sales','已成交'],['other-lead','other','正在沟通']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,status,detail,fingerprint,created) VALUES(?,?,'Meta',?,?,'{}',?,'2026-01-01')").run(id,id,owner,status,id);
@@ -26,7 +26,7 @@ const before=snapshot();sqlite.exec(readFileSync('drizzle/0015_stormy_blizzard.s
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());sqlite.exec('COMMIT');return out;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
 const call=(path,body={},user=admin,method='POST',actor=user)=>workflowEndpoint(db,user,actor,'workflow/'+path,method,body);
-const report=await call('report',{},admin,'GET');assert(report.issues.some(i=>i.entity_id==='legacy'&&i.issue.includes('无有效成交')));assert.equal(snapshot(),before,'report must be read-only');
+const report=await call('report',{},admin,'GET');assert(report.issues.some(i=>i.entity_id==='legacy'&&i.issue.includes('无有效成交')));assert.equal(snapshot(),before,'report must be read-only');sqlite.exec(readFileSync('drizzle/0031_workflow_confirmations.sql','utf8'));
 await assert.rejects(validateLeadFollowup(db,{id:'legacy'},{status:'已成交'}),/有效成交/);
 await assert.rejects(validateLeadFollowup(db,{id:'lead'},{status:'暂停跟进',next_date:'2099-01-01'}),/暂停原因/);
 await validateLeadFollowup(db,{id:'lead'},{status:'正在沟通',next_date:'2099-01-01'});
