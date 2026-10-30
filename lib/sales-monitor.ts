@@ -1,15 +1,17 @@
+import {customerEntryMonitor} from './customer-entry-monitor';
 import {can,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {assignmentReminders} from './assignment-reminders';
 export type MonitorItem={id:string;stage:string;level:'异常'|'待确认'|'待处理'|'到期提醒'|'历史对齐';title:string;evidence:string;suggestion:string;owner_id:string;owner_name:string;lead_id?:string;project_id?:string;order_id?:string;page:string;count:number};
 const list=async(db:D1Database,sql:string,args:any[]=[]) => (await db.prepare(sql).bind(...args).all<any>()).results;
-export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:any,path:string,method:string){
- if(path!=='sales-monitor')return undefined;
+export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:any,path:string,method:string,url?:URL){
+ if(path!=='sales-monitor'&&path!=='sales-monitor/customer-rules')return undefined;
  if(!['sales','admin','ceo','management'].includes(u.role))throw new AllocationError('没有销售监控查看权限',403);
  if(method!=='GET')throw new AllocationError('监控平台仅提供查看和业务入口',405);
+ if(path==='sales-monitor/customer-rules')return customerEntryMonitor(db,u,{rule:Number(url?.searchParams.get('rule')),page:Number(url?.searchParams.get('page')||1)});
  const all=can(u,'customers_all'),orderAll=all&&can(u,'followup_all'),scope=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
  const orderScope=orderAll?'1=1':'o.commercial_id=?',orderArgs=orderAll?[]:[u.id];
- const [people,projects,quotes,confirmations,orders,requests,salesNotices,orderNotices,devices,run,unassigned]=await Promise.all([
+ const [people,projects,quotes,confirmations,orders,requests,salesNotices,orderNotices,devices,run,customerChecks]=await Promise.all([
   list(db,'SELECT id,name FROM crm_users WHERE active=1 AND '+(all?"role IN ('sales','ceo')":'id=?')+' ORDER BY name',args),
   list(db,'SELECT p.project_id,p.lead_id,p.stage,p.next_action,p.name,l.owner_id,u.name AS owner_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_users u ON u.id=l.owner_id WHERE '+scope,args),
   list(db,'SELECT q.id,q.quote_id,q.project_id,q.sync_error,q.summary,p.lead_id,l.owner_id,u.name AS owner_name FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_users u ON u.id=l.owner_id WHERE '+scope,args),
@@ -20,13 +22,12 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
   list(db,"SELECT n.id,n.order_id,n.title,n.created,n.recipient_id,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_followup_orders o ON o.id=n.order_id JOIN crm_users u ON u.id=n.recipient_id WHERE n.resolved_at='' AND o.archived=0 AND "+orderScope+(orderAll?'':' AND (n.recipient_id=? OR o.commercial_id=?)'),orderAll?[]:[u.id,u.id,u.id]),
   list(db,'SELECT d.owner_id,d.status,d.enabled,d.seen,d.desired,u.name FROM crm_linked_devices d JOIN crm_users u ON u.id=d.owner_id WHERE d.enabled=1 AND '+(all?'1=1':'d.owner_id=?'),args),
   db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first<any>(),
-  all?list(db,"SELECT cohort,COUNT(*) AS count FROM crm_leads WHERE owner_id IS NULL GROUP BY cohort"):Promise.resolve([])
+  customerEntryMonitor(db,u)
  ]);
  const items:MonitorItem[]=[];
  const add=(v:Omit<MonitorItem,'count'> & {count?:number})=>items.push({...v,count:v.count||1});
  const assigned=await Promise.all(people.map(async p=>({p,rows:(await assignmentReminders(db,{...u,id:p.id})).filter(l=>l.assignment_category==='new')})));
  for(const {p,rows} of assigned)if(rows.length)add({id:'first:'+p.id,stage:'客户',level:'待处理',title:'新增客资待首次联系',evidence:`${rows.length} 条新增分配客资尚无符合规则的首次联系记录。`,suggestion:'打开客户看板核对，并记录真实联系结果。',owner_id:p.id,owner_name:p.name,page:'客户看板',count:rows.length,lead_id:rows[0].id});
- for(const r of unassigned)if(r.count)add({id:'unassigned:'+r.cohort,stage:'客户',level:r.cohort==='historical'?'历史对齐':'待处理',title:r.cohort==='historical'?'历史客资归属待对齐':r.cohort==='new'?'新增客资待分配':'原始日期待核对',evidence:`${r.count} 条记录尚未关联负责人。`,suggestion:r.cohort==='historical'?'从旧数据库对齐原归属；不计新增分配或首次联系逾期。':'在客户管理核对原始日期、原归属后按现有规则处理。',owner_id:'',owner_name:'管理者',page:'工作台',count:r.count});
  for(const p of projects)if(!['won','lost','paused'].includes(p.stage)&&!p.next_action?.trim())add({id:'next:'+p.project_id,stage:'项目',level:'待处理',title:p.name+'：缺少下一步计划',evidence:'项目仍在推进，未填写下一步行动。',suggestion:'与负责业务员确认当前进度和下一步安排。',owner_id:p.owner_id,owner_name:p.owner_name||'待确认',lead_id:p.lead_id,project_id:p.project_id,page:'客户与项目'});
  for(const q of quotes){
   const summary=JSON.parse(q.summary||'{}');
@@ -48,5 +49,5 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
   for(const p of links){const rows=await list(source,"SELECT DISTINCT q.id,q.project_name FROM quotation_history q JOIN quotation_crm_messages m ON m.quotation_id=q.id JOIN app_users a ON a.email=m.author AND a.status='active' WHERE m.direction='quote' AND m.kind='业务员确认报价' AND m.author=? AND q.created_by=? AND q.voided_at IS NULL AND q.archived_at IS NULL AND q.project_status<>'lost'",[p.quote_email,p.quote_email]);for(const q of rows)if(!await db.prepare('SELECT quote_id FROM crm_quote_acceptances WHERE quote_id=?').bind(q.id).first())add({id:'accept:'+q.id,stage:'报价',level:'待确认',title:q.project_name+'：报价待接收',evidence:'业务员已在报价系统确认，此版本尚未在 CRM 接收。',suggestion:'由所属业务员选择对应客户并确认接收，系统随后自动建档。',owner_id:p.user_id,owner_name:p.name,page:'报价与协作'});}
  }catch{quoteConnection='暂时无法读取';}}else quoteConnection='未配置';
  const order=['异常','待确认','到期提醒','待处理','历史对齐'];items.sort((a,b)=>order.indexOf(a.level)-order.indexOf(b.level)||a.id.localeCompare(b.id));
- return {at:now(),scope:all?'全团队':'本人',items,people,summary:{customers:assigned.reduce((n,x)=>n+x.rows.length,0),projects:projects.length,orders:orders.filter(o=>!o.archived).length,exceptions:items.filter(i=>i.level==='异常').length},sources:{quote:quoteConnection,daily:run?.finished||'',reminderRule:'每天北京时间 08:00 检查到期事项；业务操作后立即同步'},team:all?people.map(p=>({...p,items:items.filter(i=>i.owner_id===p.id).length,exceptions:items.filter(i=>i.owner_id===p.id&&i.level==='异常').length})):[]};
+ return {customerRules:customerChecks.rules,customerClassification:customerChecks.classification,customerRuleNote:customerChecks.note,at:now(),scope:all?'全团队':'本人',items,people,summary:{customers:assigned.reduce((n,x)=>n+x.rows.length,0),projects:projects.length,orders:orders.filter(o=>!o.archived).length,exceptions:items.filter(i=>i.level==='异常').length},sources:{quote:quoteConnection,daily:run?.finished||'',reminderRule:'每天北京时间 08:00 检查到期事项；业务操作后立即同步'},team:all?people.map(p=>({...p,items:items.filter(i=>i.owner_id===p.id).length,exceptions:items.filter(i=>i.owner_id===p.id&&i.level==='异常').length})):[]};
 }

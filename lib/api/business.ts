@@ -29,7 +29,7 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
- const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method);if(monitor!==undefined)return json(monitor);
+ const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method,url);if(monitor!==undefined)return json(monitor);
  const template=await contractTemplateEndpoint(user,path,req.method,body);if(template!==undefined)return template instanceof Response?template:json(template);
  const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined)return json(dashboard);
   const workspace=await roleWorkspaceEndpoint(db,user,path,req.method,url);if(workspace!==undefined)return json(workspace);
