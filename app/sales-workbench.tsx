@@ -1,4 +1,5 @@
 'use client';
+import CustomerService from './customer-service';
 import {useEffect,useRef,useState} from 'react';
 import CloudCommunication from './cloud-communication';
 import {SceneManager,CustomerArchive} from './workbench-modules';
@@ -92,6 +93,10 @@ function CustomerGroup({name,items,selected,select,initiallyOpen}:{name:string;i
 }
 
 export default function SalesWorkbench(props:{initialLeadIds?:string[];initialLeadId?:string;user:any;leads:any[];request:(path:string,body?:any)=>Promise<any>;openLead:(lead:any)=>void}){
+ return ['admin','ceo'].includes(props.user.role)?<CustomerService {...props}/>:<SalesCommunication {...props}/>;
+}
+
+function SalesCommunication(props:{initialLeadIds?:string[];initialLeadId?:string;user:any;leads:any[];request:(path:string,body?:any)=>Promise<any>;openLead:(lead:any)=>void}){
  const [desktop,D]=useState<boolean|null>(null);
  useEffect(()=>{let active=true;D(null);Promise.allSettled([props.request('workbench/snapshot'),props.request('workbench/live'),props.request('cloud/status')]).then(([snapshot,live,cloud])=>{if(!active)return;const history=snapshot.status==='fulfilled'&&snapshot.value?.snapshot;const hasHistory=!!(history?.clients?.length||history?.groups?.length);const desktopOnline=live.status==='fulfilled'&&!!live.value?.online;const cloudOnline=cloud.status==='fulfilled'&&!!cloud.value?.connection?.active;D(hasHistory&&(desktopOnline||!cloudOnline));});return()=>{active=false;};},[props.user.id,props.request]);
  if(desktop===null)return <p role="status">正在读取客户沟通工作台…</p>;

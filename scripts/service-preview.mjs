@@ -1,0 +1,2 @@
+import {createServer} from 'vite';import react from '@vitejs/plugin-react';
+const server=await createServer({configFile:false,root:decodeURIComponent(new URL('../../../outputs/customer-service-20261030',import.meta.url).pathname),plugins:[react()],server:{host:'127.0.0.1',port:5188,fs:{allow:[decodeURIComponent(new URL('../../..',import.meta.url).pathname)]}}});await server.listen();console.log('Preview http://127.0.0.1:5188/preview.html');

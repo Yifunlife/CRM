@@ -10,7 +10,7 @@ import { googleConnection } from '../../../lib/api/google';
 import { json,Problem } from '../../../lib/api/http';
 import { customerImport } from '../../../lib/api/intake';
 import { cloudWebhook } from '../../../lib/cloud-communication';
-import { can,clean,digest,id,now,passwordHash,verifyPassword } from "../../../lib/crm";
+import { can,ceoRequestAllowed,clean,digest,id,now,passwordHash,verifyPassword } from "../../../lib/crm";
 import { customerFiles } from '../../../lib/customer-files';
 import { databaseBackup } from '../../../lib/database-backup';
 import { finishGoogle } from "../../../lib/google";
@@ -60,6 +60,8 @@ async function execute(req: Request,trace:RequestTrace) {
   if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
+  const personalCeo=actor.role==='ceo'&&user.personal_business&&user.id===actor.id&&user.role==='sales';
+  if((!personalCeo&&!ceoRequestAllowed(actor,path,req.method))||!ceoRequestAllowed(user,path,req.method))throw new Problem('CEO拥有全部查看权限，不能修改业务数据或系统设置',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
   if(path==='assign'||path==='allocation/distribute')permissionDenied('leads_allocate');
@@ -67,7 +69,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project'))permissionDenied('customers_edit');
   if(path==='advertising'||path.startsWith('operations/'))permissionDenied(write?'advertising_edit':'advertising_view');
   if(path==='users/permissions'&&req.method==='POST')return json(await setAccountPermissions(db,user,body));
-  if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
+  if(path==='admin/backup' &&req.method==='GET'){if(!['admin','ceo'].includes(actor.role)||!['admin','ceo'].includes(user.role))throw new Problem('没有导出备份权限',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
   const businessResult=await businessModules({db,env,req,url,path,write,body,user,actor,token});if(businessResult!==undefined)return businessResult;

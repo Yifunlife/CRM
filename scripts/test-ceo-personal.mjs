@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import ts from 'typescript';
+const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
+const envUrl='data:text/javascript,'+encodeURIComponent(`const objects=new Map();export const env={BUCKET:{async put(key,input){const bytes=new Uint8Array(await new Response(input).arrayBuffer());objects.set(key,bytes);return {size:bytes.length};},async get(key){const bytes=objects.get(key);return bytes?{size:bytes.length,body:bytes,json:async()=>JSON.parse(new TextDecoder().decode(bytes))}:null;},async delete(key){objects.delete(key);}}};`);
+const storageUrl=moduleUrl('lib/object-storage.ts',{"'cloudflare:workers'":JSON.stringify(envUrl)});
+const bridgeUrl=moduleUrl('lib/workbench-bridge.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
+const {bridgeDeviceEndpoint}=await import(bridgeUrl);
+const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
+const db={prepare:sql=>new Statement(sql),batch:async statements=>Promise.all(statements.map(s=>s.run()))},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
+for(const u of [admin,winnie,other,ops])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unchanged','2026-10-18');
+for(const u of [winnie,other])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-18')").run(u.id,u.id,u.id,u.id);
+
+const ceo={id:'ceo',role:'ceo',permissions:JSON.stringify({customers_all:true,customers_edit:false})};
+const personal=await viewUser(db,ceo,'personal');
+const {can,authorizedLead}=await import(moduleUrl('lib/crm.ts'));
+assert.equal(personal.id,ceo.id);assert.equal(personal.role,'sales');assert.equal(personal.actor_role,'ceo');
+assert.equal(can(personal,'customers_edit'),true);assert.equal(can(personal,'customers_all'),false);
+assert.equal(authorizedLead(personal,{owner_id:ceo.id}),true);assert.equal(authorizedLead(personal,{owner_id:winnie.id}),false);
+assert.equal((await viewUser(db,ceo,'boss')).role,'ceo');
+await assert.rejects(viewUser(db,ceo,'winnie'),e=>e.status===403);
+await assert.rejects(viewUser(db,other,'personal'),e=>e.status===403);
+assert.equal((await workbenchEndpoint(db,personal,ceo,'workbench/snapshot','GET',{})).snapshot,null);
+console.log('PASS: CEO personal view retains identity, uses own-customer sales permissions, cannot impersonate Winnie, and returns to read-only management.');
+
+const {moduleURL}=await import('./test-form-intake.mjs');
+const {salesSuiteEndpoint}=await import(moduleURL('lib/sales-suite-server.ts'));
+sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(ceo.id,ceo.id,ceo.id,'ceo','unchanged','2026-10-30');
+sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('ceo-lead','CEO customer','Meta','ceo','{}','ceo-lead','2026-10-30')").run();
+const suite=(path,body,u=personal,method='POST')=>salesSuiteEndpoint(db,undefined,u,ceo,'sales-suite/'+path.split('?')[0],method,body,new URL('https://test/api/sales-suite/'+path));
+await assert.rejects(suite('project/create',{lead_id:'winnie',name:'Denied',reason:'Test'}),e=>e.status===404);
+const project=(await suite('project/create',{lead_id:'ceo-lead',name:'CEO project',reason:'Own customer'})).id;
+const detail=await suite('project?id='+project,{},personal,'GET');
+await suite('project/update',{id:project,version:detail.project.version,section:'qualification',qualification:{site:{value:'Confirmed site',state:'verified',evidence:'Customer confirmation'}},reason:'Follow up'});
+assert.equal((await suite('project?id='+project,{},personal,'GET')).project.details.qualification.site.value,'Confirmed site');
+assert.equal((await suite('report',{},personal,'GET')).leads.every(l=>l.owner_id===ceo.id),true);
+assert.equal(sqlite.prepare('SELECT role FROM crm_users WHERE id=?').get(ceo.id).role,'ceo');
+console.log('PASS: CEO personal view creates and updates own projects, rejects other owners and preserves the stored CEO role.');

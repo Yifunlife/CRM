@@ -1,0 +1,14 @@
+.customer-service .service-setup,.customer-service .service-detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+.customer-service .service-actions{display:flex;gap:8px;flex-wrap:wrap}
+.customer-service .service-toggle{display:flex;align-items:center;gap:8px;margin:12px 0}
+.customer-service .service-toggle input{width:auto}
+.customer-service .service-qr{width:240px;max-width:100%;margin-top:16px}
+.customer-service .service-snippet{max-width:320px;white-space:normal;overflow-wrap:anywhere}
+.customer-service td small{display:block;max-width:220px;white-space:normal}
+.customer-service .service-messages{max-height:460px;overflow:auto}
+.customer-service .service-messages article{padding:12px 0;border-bottom:1px solid #dce3ec}
+.customer-service .service-messages p{white-space:pre-wrap;overflow-wrap:anywhere}
+.customer-service form label{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.customer-service form .service-toggle{flex-direction:row}
+.customer-service .service-detail>div,.customer-service form{min-width:0}
+@media(max-width:760px){.customer-service .service-setup,.customer-service .service-detail{grid-template-columns:1fr;gap:20px}.customer-service .form-row{flex-direction:column}.customer-service .page-heading{align-items:flex-start;gap:12px}.customer-service .service-snippet{min-width:180px}}

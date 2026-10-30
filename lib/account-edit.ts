@@ -1,4 +1,4 @@
-import {passwordHash,PERMISSION_FIELDS,SALES_PERSONAL_ONLY} from './crm';
+import {passwordHash,PERMISSION_FIELDS,SALES_PERSONAL_ONLY,permissionDefaults} from './crm';
 import {AllocationError} from './allocation-server';
 export async function editAccount(db:D1Database,actor:any,body:any){
  if(actor.role!=='admin')throw new AllocationError('只有管理员可以编辑账号',403);
@@ -32,6 +32,7 @@ export async function setAccountPermissions(db:D1Database,actor:any,body:any){
  if(body.role==='followup'&&PERMISSION_FIELDS.some(([k])=>k!=='followup_edit'&&p[k]))throw new AllocationError('跟单员仅可维护分配给本人的订单，不能开放全公司或业务员权限');
  if(body.role==='sales'&&SALES_PERSONAL_ONLY.some(k=>p[k]))throw new AllocationError('业务员仅使用本人客户功能；全公司管理请使用相应管理角色');
  if((p.leads_allocate||p.performance_view||p.customers_edit&&body.role!=='sales')&&!p.customers_all||p.followup_edit&&body.role!=='followup'&&!p.followup_all||p.advertising_edit&&!p.advertising_view)throw new AllocationError('维护或分配功能需要同时开放对应查看权限');
+ if(body.role==='ceo'&&PERMISSION_FIELDS.some(([k])=>p[k]!==permissionDefaults('ceo')[k]))throw new AllocationError('CEO权限固定为全部查看，不能修改');
  await db.prepare('UPDATE crm_users SET role=?,permissions=? WHERE id=?').bind(body.role,JSON.stringify(p),target.id).run();
  return {ok:true};
 }

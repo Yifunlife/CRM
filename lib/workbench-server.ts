@@ -1,9 +1,10 @@
 import {readJson,storeJson} from './object-storage';
 import {bridgeUserEndpoint} from './workbench-bridge';
-import {id,now,clean,phoneKey,emailKey,digest} from './crm';
+import {id,now,clean,phoneKey,emailKey,digest,permissionDefaults} from './crm';
 import {AllocationError} from './allocation-server';
 export async function viewUser(db:D1Database,actor:any,view:string|null){
  if(!view||view==='boss')return actor;
+ if(view==='personal'&&actor.role==='ceo')return {...actor,role:'sales',permissions:permissionDefaults('sales'),actor_role:'ceo',personal_business:true};
  if(view!=='winnie'||actor.role!=='admin')throw new AllocationError('无权切换此视角',403);
  const target:any=await db.prepare("SELECT id,username,name,role,permissions FROM crm_users WHERE id=COALESCE((SELECT owner_id FROM crm_workbench_snapshots ORDER BY updated LIMIT 1),(SELECT id FROM crm_users WHERE username='winnie')) AND role='sales' AND active=1").first();
  if(!target)throw new AllocationError('Winnie账号不存在或已停用',409);

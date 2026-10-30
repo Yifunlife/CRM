@@ -1,0 +1,19 @@
+import {spawnSync} from 'node:child_process';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const verifyObjects=!process.argv.includes('--tables-only');
+const phase=process.argv[2];assert(['before','after'].includes(phase));
+const out='../../outputs/ceo-permissions-20261030/',cfg=JSON.parse(readFileSync('wrangler.json'));
+const auth=spawnSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','auth','token','--json'],{encoding:'utf8',timeout:20000});assert.equal(auth.status,0,'Cloudflare auth unavailable');const {token}=JSON.parse(auth.stdout);
+async function call(path,sql){if(sql)assert.match(sql,/^SELECT\s/);const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfg.account_id}`+path,{signal:AbortSignal.timeout(20000),method:sql?'POST':'GET',headers:{Authorization:'Bearer '+token,...(sql?{'Content-Type':'application/json'}:{})},...(sql?{body:JSON.stringify({sql})}:{})});assert.equal(r.status,200,'Read-only verification failed');const d=await r.json();assert(d.success);return d;}
+async function query(sql){const d=await call('/d1/database/'+cfg.d1_databases[0].database_id+'/query',sql);assert(d.result[0].success);return d.result[0].results;}
+const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const schema=await query("SELECT type,name,sql FROM sqlite_master WHERE name LIKE 'crm_%' ORDER BY type,name");
+const tables=['crm_users','crm_leads','crm_assignments','crm_notes','crm_deals','crm_receipts','crm_files','crm_followup_files','crm_followup_orders','crm_sales_projects','crm_workflow_contracts','crm_contract_confirmations','crm_service_contacts','crm_sales_account_links'];
+const results={};let index=0;
+await Promise.all(Array.from({length:4},async()=>{while(index<tables.length){const table=tables[index++];assert(schema.some(s=>s.name===table),'Missing table '+table);let rows=[];for(let offset=0;;offset+=500){const page=await query(`SELECT * FROM ${table} ORDER BY rowid LIMIT 500 OFFSET ${offset}`);rows.push(...page);if(page.length<500)break;}results[table]={count:rows.length,sha256:sha(rows)};}}));
+const buckets={};for(const b of (verifyObjects?cfg.r2_buckets:[])){let objects=[],cursor='';for(let page=0;page<100;page++){const d=await call('/r2/buckets/'+b.bucket_name+'/objects?per_page=1000'+(cursor?'&cursor='+encodeURIComponent(cursor):''));objects.push(...d.result);const next=d.result_info?.cursor;if(d.result_info?.is_truncated===false||!next||!d.result.length)break;assert.notEqual(next,cursor,'Object pagination stalled');cursor=next;assert(page<99,'Object pagination incomplete');}objects.sort((a,b)=>a.key.localeCompare(b.key));writeFileSync(out+'objects-'+phase+'-'+b.bucket_name+'.json',JSON.stringify(objects),{mode:0o600});buckets[b.bucket_name]={count:objects.length,sha256:sha(objects)};}
+const result={at:new Date().toISOString(),schema:sha(schema),tables:results,buckets,bindings:{databases:cfg.d1_databases.map(d=>({binding:d.binding,id:d.database_id})),buckets:cfg.r2_buckets}};
+writeFileSync(out+'data-'+phase+'.json',JSON.stringify(result,null,2));
+if(phase==='after'){const before=JSON.parse(readFileSync(out+'data-before.json'));assert.equal(result.schema,before.schema,'Schema changed');assert.deepEqual(result.bindings,before.bindings);const changed=tables.filter(t=>JSON.stringify(before.tables[t])!==JSON.stringify(results[t]));const objectChanges=Object.keys(buckets).filter(b=>JSON.stringify(before.buckets[b])!==JSON.stringify(buckets[b]));writeFileSync(out+'data-comparison.json',JSON.stringify({changedTables:changed,changedBuckets:objectChanges,objectVerification:verifyObjects?'complete':'not_repeated'},null,2));console.log({customers:results.crm_leads.count,changedTables:changed,changedBuckets:objectChanges});}else console.log({customers:results.crm_leads.count,tables:tables.length,buckets:Object.keys(buckets).length});

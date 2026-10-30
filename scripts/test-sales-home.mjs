@@ -43,6 +43,7 @@ assert.ok(result.projects.some(r=>r.id==='negotiation'));
 assert.equal(result.handovers[0].incoming,true);
 assert.deepEqual(result.tasks.map(t=>t.id).sort(),['collaborator','mine']);
 assert.equal(result.tasks.find(t=>t.id==='mine').mine,true);
+assert.equal(result.tasks.find(t=>t.id==='mine').order_id,'other-order');
 assert.equal(result.performance.deals,2,'historical deal owner retained after transfer');
 assert.equal(result.performance.unpriced,1);
 assert.deepEqual(result.performance.contracts,[{currency:'USD',amount:1200000}]);

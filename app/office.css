@@ -24,10 +24,11 @@
 .office-app button { min-height: 36px; padding: 6px 12px; font-weight: 500; }
 .office-app button.text { min-height: 32px; padding: 0; }
 .office-app button.icon { padding: 6px; }
-.office-app input:not([type=checkbox]), .office-app select { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
+.office-app input:where(:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]):not([type=color])), .office-app select:where(:not([multiple]):not([size])) { height: 44px; min-height: 44px; min-width: 0; padding-top: 7px; padding-bottom: 7px; }
 .office-app label { font-size: 14px; font-weight: 500; margin-bottom: 16px; }
 .office-app label > input, .office-app label > select, .office-app label > textarea { margin-top: 6px; }
-.office-app .form-row { gap: 16px; }
+.office-app .form-row { gap: 16px; align-items: start; }
+.office-app .form-row > *, .office-app .followup-form-grid > * { min-width: 0; }
 .office-app .notice { margin-bottom: 16px; overflow-wrap: anywhere; }
 .office-app table { font-size: 14px; }
 .office-app th { font-size: 13px; font-weight: 600; }
@@ -45,8 +46,8 @@
 .office-app .customer-grade-filters button { min-height: 30px; padding: 3px 9px; }
 .office-app .customer-overview > .tabs { gap: 20px; flex-wrap: nowrap; margin-bottom: 14px; }
 .office-app .customer-overview > .tabs button { flex-shrink: 0; padding: 8px 0; min-height: 38px; }
-.office-app .customer-overview .filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(100px, 1fr)); gap: 8px; margin-bottom: 12px; }
-.office-app .customer-overview .filters:has(select[aria-label=负责人]) { grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(100px, 1fr)); }
+.office-app .customer-overview .filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(100px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.office-app .customer-overview .filters:has(select[aria-label=负责人]) { grid-template-columns: minmax(220px, 2fr) repeat(6, minmax(100px, 1fr)); }
 .office-app .customer-overview .filters .search { min-width: 0; }
 .office-app .customer-overview .filters select { width: 100%; min-width: 0; }
 .office-app .customer-results { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 13px; }
@@ -162,3 +163,31 @@
 .office-app .customer-detail dt,.office-app .customer-detail dd{min-width:0;margin:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.5}
 .office-app .customer-detail .customer-contact-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #customer-contact-form{scroll-margin-top:80px}
+
+/* Shared filter alignment, including native Safari selects. */
+.office-app :is(.ss-toolbar, .ops-filters, .sales-pipeline-filters, .followup-toolbar) { align-items: flex-end; }
+.office-app :is(.ss-toolbar, .ops-filters, .sales-pipeline-filters, .accounts-filters, .followup-toolbar) > label { margin-bottom: 0; }
+.office-app label.search { margin: 0; }
+.office-app label.search > input { margin-top: 0; }
+.office-app :is(.ss-toolbar, .ops-filters, .sales-pipeline-filters, .accounts-filters, .followup-toolbar) > button,
+.office-app .followup-view button { min-height: 44px; }
+.office-app :is(.ops-filters, .sales-pipeline-filters) > label { flex: 1 1 180px; min-width: 0; }
+.office-app .ss-toolbar > label { min-width: min(160px, 100%); }
+.office-app :is(.form-row, .followup-form-grid) > label > :is(input, select, textarea) { max-width: 100%; }
+.office-app .crm-monthly .crm-monthly-toolbar select { height: 32px; min-height: 32px; margin: 0; }
+.office-app .wb-customer-management .wb-customer-tools :is(input, select),
+.office-app .wb-customer-management .wb-customer-sheet td select { height: 32px; min-height: 32px; }
+.office-app .meta-ad-report .meta-ad-filters select { height: 44px; min-height: 44px; }
+.office-app .meta-ad-report .meta-ad-filters .tabs,
+.office-app .meta-ad-report .meta-ad-filters .tabs button { height: 44px; min-height: 44px; }
+@media (max-width: 720px) {
+  .office-app :is(.accounts-filters, .followup-toolbar) .search { min-width: 0; flex-basis: 100%; }
+  .office-app .ss-toolbar > input { max-width: 100%; min-width: 0; }
+}
+
+.office-app .ss-panelhead label.checkbox { margin: 0; }
+.office-app .ss-panelhead label.checkbox > input { margin: 0; }
+@media (max-width: 720px) {
+  .office-app .followup-drawer { width: 100%; max-width: 100%; }
+}
+.office-app .wb-table-pagination :is(button, select) { height: 36px; min-height: 36px; }

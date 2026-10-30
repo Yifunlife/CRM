@@ -7,7 +7,8 @@ const errors='data:text/javascript,export class AllocationError extends Error {c
 const workflow=moduleUrl('lib/order-followup.ts');
 const importRules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)});
 const importServer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(importRules)});
-const server=moduleUrl('lib/order-followup-server.ts',{"'./order-import-server'":JSON.stringify(importServer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow)});
+const {moduleURL}=await import('./test-form-intake.mjs');
+const server=moduleURL('lib/order-followup-server.ts');
 const {followupEndpoint,followupOrder}=await import(server),{ORDER_STEPS,orderReminders,blankSteps}=await import(workflow);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
@@ -30,13 +31,13 @@ await setAccountPermissions(db,admin,{id:'sales',role:'ceo',permissions:ceoPermi
 const ceo=sqlite.prepare("SELECT id,role,permissions FROM crm_users WHERE id='sales'").get();
 assert.deepEqual(sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='sales'").get(),initial);
 assert.equal(sqlite.prepare("SELECT owner_id FROM crm_leads WHERE id='lead1'").get().owner_id,'sales');
-assert.equal(can(ceo,'customers_all'),true);assert.equal(can(ceo,'customers_edit'),false);assert.equal(can(ceo,'leads_allocate'),true);assert.equal(can(ceo,'performance_view'),true);assert.equal(can(ceo,'followup_all'),true);assert.equal(can(ceo,'followup_edit'),false);
+assert.equal(can(ceo,'customers_all'),true);assert.equal(can(ceo,'customers_edit'),false);assert.equal(can(ceo,'leads_allocate'),false);assert.equal(can(ceo,'performance_view'),true);assert.equal(can(ceo,'followup_all'),true);assert.equal(can(ceo,'followup_edit'),false);
 assert.equal(authorizedLead(ceo,{owner_id:'other'}),true);assert.equal(authorizedLead(other,{owner_id:'sales'}),false);
 const endpoint=(path,method,body={})=>allocationEndpoint(db,ceo,path,method,body,new URL('https://test.invalid/api/'+path));
 assert.equal((await endpoint('allocation/report','GET')).receiptPolicy,true);
 await assert.rejects(endpoint('allocation/config','POST',{}),e=>e.status===403);
 await assert.rejects(endpoint('allocation/confirm','POST',{}),e=>e.status===403);
-await assert.rejects(endpoint('allocation/distribute','POST',{}),e=>e.status===400);
+await assert.rejects(endpoint('allocation/distribute','POST',{}),e=>e.status===403);
 await followupEndpoint(db,admin,admin,'followup/staff','POST',{user_id:'staff',enabled:true});
 const created=await followupEndpoint(db,admin,admin,'followup','POST',{project:'Permission test',order_number:'PERMISSIONS-ORDER',lead_id:'lead2',logistics_id:'staff'});
 assert.equal((await followupEndpoint(db,ceo,ceo,'followup','GET',{})).orders.length,1);
@@ -50,7 +51,8 @@ await assert.rejects(followupEndpoint(db,revoked,revoked,'followup','GET',{}),e=
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: CEO defaults, granular permissions, own/all visibility, admin-only settings, administrator protection, unknown/dependent permission rejection, cross-owner read-only followup, allocation vs rule separation, logistics grant revocation and unchanged credentials/ownership.');
 
-assert.deepEqual(permissionDefaults('management'),permissionDefaults('ceo'));
+assert.equal(permissionDefaults('management').leads_allocate,true);
+assert.equal(permissionDefaults('ceo').advertising_view,true);
 const beforeManagement=sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='other'").get();
 await setAccountPermissions(db,admin,{id:'other',role:'management',permissions:permissionDefaults('management')});
 const management=sqlite.prepare("SELECT id,role,permissions FROM crm_users WHERE id='other'").get();
@@ -66,7 +68,7 @@ await followupEndpoint(db,admin,admin,'followup','POST',{project:'Other owner or
 const managementOrders=await followupEndpoint(db,management,management,'followup','GET',{});
 assert.equal(managementOrders.orders.length,2);assert.equal(managementOrders.can_manage,false);
 await assert.rejects(followupEndpoint(db,management,management,'followup','POST',{project:'Denied'}),e=>e.status===403);
-console.log('PASS: management role matches CEO defaults, reads company-wide projects and performance, allocates leads without rule/account/followup maintenance or self-escalation, and preserves credentials and ownership.');
+console.log('PASS: management role retains its existing defaults, reads company-wide projects and performance, allocates leads without rule/account/followup maintenance or self-escalation, and preserves credentials and ownership.');
 
 // Sales stays personal even when a historical permission record grants company-wide access.
 const broadSales={...other,permissions:JSON.stringify(Object.fromEntries(Object.keys(permissionDefaults('sales')).map(k=>[k,true])))};
@@ -76,3 +78,18 @@ assert.equal(authorizedLead(broadSales,{owner_id:'sales'}),false);
 assert.equal(authorizedLead(broadSales,{owner_id:other.id}),true);
 await assert.rejects(setAccountPermissions(db,admin,{id:'staff',role:'sales',permissions:{...permissionDefaults('sales'),customers_all:true}}),/业务员仅使用本人/);
 console.log('PASS: historical broad sales grants cannot expose other customers or advertising; normal own-customer editing and management permissions remain available.');
+
+const {ceoRequestAllowed}=await import(crmUrl);
+for(const permissions of [Object.fromEntries(Object.keys(ceoPermissions).map(k=>[k,true])),Object.fromEntries(Object.keys(ceoPermissions).map(k=>[k,false]))]){
+ const legacy={...ceo,permissions};
+ for(const key of Object.keys(ceoPermissions))assert.equal(can(legacy,key),ceoPermissions[key],key);
+}
+for(const path of ['assign','users','users/permissions','google/config','linked/send','cloud/send','sales-suite/project/record','followup/priority','service/register']){
+ for(const method of ['POST','PATCH','DELETE','PUT'])assert.equal(ceoRequestAllowed(ceo,path,method),false,path+method);
+}
+for(const path of ['users','google/status','service/inbox','workflow/report'])assert.equal(ceoRequestAllowed(ceo,path,'GET'),true);
+for(const path of ['logout','password','service/conversation'])assert.equal(ceoRequestAllowed(ceo,path,'POST'),true);
+await assert.rejects(setAccountPermissions(db,admin,{id:ceo.id,role:'ceo',permissions:{...ceoPermissions,customers_edit:true}}),/CEO权限固定/);
+sqlite.prepare('INSERT OR IGNORE INTO crm_followup_staff(user_id) VALUES(?)').run(ceo.id);
+assert.equal((await followupOrder(db,ceo,created.id)).manager,false);
+console.log('PASS: CEO historical overrides and staff membership cannot grant writes; management reads and personal account security remain available.');

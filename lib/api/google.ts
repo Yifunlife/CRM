@@ -5,7 +5,7 @@ import type { ApiContext } from './context';
 import { json,Problem } from './http';
 export async function googleConnection({db,env,req,url,path,write,body,user,actor}:ApiContext):Promise<Response|undefined>{
   if (path.startsWith("google/")) {
-   if(user.role!=="admin")throw new Problem("只有管理员可以配置Google连接",403);
+   if(user.role!=="admin"&&!(user.role==='ceo'&&path==='google/status'&&!write))throw new Problem("只有管理员可以配置Google连接",403);
    const secret=(env as any).GOOGLE_TOKEN_KEY;
    if(path==='google/forms/preview'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,preview:true,actor:actor.id}));
    if(path==='google/forms/run'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,actor:actor.id}));

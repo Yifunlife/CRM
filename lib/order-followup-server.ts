@@ -1,11 +1,13 @@
+import {followupPerformance} from './role-workspaces';
+import {suiteDay} from './sales-suite';
 import {importOrders} from './order-import-server';
 import {AllocationError} from './allocation-server';
 import {id,now,clean,can,permissionOverrides} from './crm';
 import {ORDER_STEPS,ORDER_FIELDS,LOGISTICS_FIELDS,ORDER_DATES,blankSteps} from './order-followup';
-export async function followupManager(db:D1Database,user:any){const current=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current||current.role==='followup')return false;user={...user,...current};return can(user,'followup_edit')||(permissionOverrides(user).followup_edit!==false&&!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first());}
+export async function followupManager(db:D1Database,user:any){const current=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current||(current.role==='followup'||current.role==='ceo'))return false;user={...user,...current};return can(user,'followup_edit')||(permissionOverrides(user).followup_edit!==false&&!!await db.prepare('SELECT user_id FROM crm_followup_staff WHERE user_id=?').bind(user.id).first());}
 export async function followupAssignee(db:D1Database,user:any){const current:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();return !!current&&(current.role==='followup'?can(current,'followup_edit'):await followupManager(db,current));}
 export async function followupOrder(db:D1Database,user:any,orderId:string){
- const current:any=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)throw new AllocationError('订单不存在或无权查看',404);user={...user,...current};
+ const current:any=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(user.id).first();if(!current)throw new AllocationError('订单不存在或无权查看',404);user={...user,...current,...(current.role==='ceo'&&user.personal_business?{role:'sales',permissions:{}}:{})};
  const manager=await followupManager(db,user);
  const row:any=await db.prepare('SELECT * FROM crm_followup_orders WHERE id=?').bind(orderId).first();
  if(!row||(!manager&&!can(user,'followup_all')&&(user.role==='followup'?row.logistics_id!==user.id:row.commercial_id!==user.id)))throw new AllocationError('订单不存在或无权查看',404);
@@ -43,7 +45,11 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   const deals=manager?(await db.prepare('SELECT d.id,d.order_number,d.lead_id,d.owner_id,l.name AS customer_name FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE d.cancelled=0 AND NOT EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) ORDER BY d.created DESC').all()).results:[];
   const leads=manager?(await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE owner_id IS NOT NULL ORDER BY name').all()).results:[];
   const logistics=manager?(await db.prepare("SELECT u.id,u.name FROM crm_users u WHERE u.active=1 AND (u.role='admin' OR (u.role='followup' AND COALESCE(json_extract(u.permissions,'$.followup_edit'),1)=1) OR json_extract(u.permissions,'$.followup_edit')=1 OR (json_extract(u.permissions,'$.followup_edit') IS NULL AND EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=u.id))) ORDER BY u.name").all()).results:user.role==='followup'?people.filter((p:any)=>p.id===user.id):[];
-  return {orders,tasks,can_mark_priority:['admin','ceo','management'].includes(user.role),people,staff,deals,leads,logistics,can_manage:manager,can_edit:manager||user.role==='followup'&&can(user,'followup_edit'),is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
+  const amounts=user.role==='followup'?(await db.prepare('SELECT o.id,o.deal_id,o.logistics_id,o.details,d.cancelled,c.currency,c.total_minor FROM crm_followup_orders o JOIN crm_deals d ON d.id=o.deal_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE o.logistics_id=?').bind(user.id).all<any>()).results.map(r=>({...r,details:JSON.parse(r.details)})):[];
+  for(const o of orders){const amount=amounts.find(r=>r.id===o.id&&!r.cancelled);Object.assign(o,{contract_amount:amount?.total_minor??null,contract_currency:amount?.currency||''});}
+  const performance=user.role==='followup'?followupPerformance(amounts,user.id,suiteDay().slice(0,7)):null;
+  const pending_handovers=Number((await db.prepare("SELECT COUNT(*) AS n FROM crm_workflow_handovers WHERE to_id=? AND state='待接收'").bind(user.id).first<any>())?.n||0);
+  return {pending_handovers,performance,orders,tasks,can_mark_priority:['admin','management'].includes(user.role),people,staff,deals,leads,logistics,can_manage:manager,can_edit:manager||user.role==='followup'&&can(user,'followup_edit'),is_admin:user.role==='admin',timezone:'Asia/Shanghai'};
  }
  if(path==='followup/import'&&method==='POST'){
   if(!manager)fail('只有管理员及指定后勤可以导入跟单',403);
@@ -79,7 +85,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
   return {order:{...row,confirmed_workflow:!!await db.prepare('SELECT project_id FROM crm_contract_confirmations WHERE order_id=?').bind(row.id).first()},events,files};
  }
  if(match[2]==='priority'){
-  if(!['admin','ceo','management'].includes(user.role)||!['admin','ceo','management'].includes(actor.role))fail('只有老板或管理层可以标记优先订单',403);
+  if(!['admin','management'].includes(user.role)||!['admin','management'].includes(actor.role))fail('只有老板或管理层可以标记优先订单',403);
   if(method!=='POST'||typeof body.priority!=='boolean')fail('请指定是否优先');
   if(row.archived)fail('已归档订单不能标记优先',409);
   const priority=body.priority?{by:actor.name||actor.id,at:now()}:null;

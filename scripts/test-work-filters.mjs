@@ -1,0 +1,9 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const {workTodos,workProjectGroups}=await import(module('lib/work-todos.ts',{"'./sales-suite'":module('lib/sales-suite.ts')}));
+const base={owner_id:'me',stage:'design',next_action:'确认图纸'},projects=[{...base,project_id:'due',next_date:'2026-10-30'},{...base,project_id:'late',next_date:'2026-10-29',blocker:'等待图纸'},{...base,project_id:'missing',next_action:'',next_date:''},{...base,project_id:'future',next_date:'2026-11-03'},{...base,project_id:'closed',stage:'won',next_date:''},{...base,project_id:'other',owner_id:'other',next_date:''}];
+const groups=workProjectGroups(projects,'me','2026-10-30');assert.deepEqual(groups.due.map(p=>p.project_id),['due','late']);assert.deepEqual(groups.exceptions.map(p=>p.project_id),['late','missing']);assert.equal(groups.exceptions[0].issues.length,2);assert.equal(groups.exceptions[1].issues.length,2);
+assert.equal(workProjectGroups([...projects,projects[1]],'me','2026-10-30').exceptions.length,2);
+const rows=workTodos({projects,assigned_leads:[{id:'new',assignment_category:'new'}]},null,{id:'me'},[],[],[],'2026-10-30T02:00:00Z');assert.equal(rows.filter(r=>r.kind==='新增客资').length,1);for(const p of [...groups.due,...groups.exceptions])assert.equal(rows.filter(r=>r.item.project_id===p.project_id).length,1);assert.ok(!rows.some(r=>['closed','other','future'].includes(r.item.project_id)));console.log('PASS: due and exception counts, multi-issue project deduplication, personal scope, closed exclusion, detail coverage.');

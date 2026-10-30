@@ -7,7 +7,10 @@ const errors='data:text/javascript,export class AllocationError extends Error {c
 const workflow=moduleUrl('lib/order-followup.ts');
 const importRules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)});
 const importServer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(importRules)});
-const server=moduleUrl('lib/order-followup-server.ts',{"'./order-import-server'":JSON.stringify(importServer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow)});
+const suite=moduleUrl('lib/sales-suite.ts');
+const assignments=moduleUrl('lib/assignment-reminders.ts',{"'./assignment-categories'":JSON.stringify(moduleUrl('lib/assignment-categories.ts'))});
+const role=moduleUrl('lib/role-workspaces.ts',{"'./assignment-reminders'":JSON.stringify(assignments),"'./assignment-categories'":JSON.stringify(moduleUrl('lib/assignment-categories.ts')),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors),"'./sales-suite'":JSON.stringify(suite)});
+const server=moduleUrl('lib/order-followup-server.ts',{"'./role-workspaces'":JSON.stringify(role),"'./sales-suite'":JSON.stringify(suite),"'./order-import-server'":JSON.stringify(importServer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow)});
 const {followupEndpoint,followupOrder}=await import(server),{ORDER_STEPS,orderReminders,blankSteps}=await import(workflow);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}

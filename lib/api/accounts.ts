@@ -7,7 +7,7 @@ import type { ApiContext } from './context';
 import { json,Problem } from './http';
 export async function accountRecords({db,req,path,write,body,user,actor,token}:ApiContext):Promise<Response|undefined>{
   if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,must_change_password:!!actor.must_change_password,can_switch:actor.role==='admin',can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
+  if (path === "me" && !write) return json({...user,must_change_password:!!actor.must_change_password,can_switch:['admin','ceo'].includes(actor.role),actor_role:actor.role,can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
   if (path === "password" && req.method === "POST") {
    if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
    const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();

@@ -1,3 +1,4 @@
+import {receiveServiceMessage,serviceWorker} from './customer-service';
 import {recordCommunication} from './communication-progress';
 import {AllocationError} from './allocation-server';
 import {clean,digest,now,phoneKey} from './crm';
@@ -6,7 +7,7 @@ const online=(row:any)=>!!row?.enabled&&Date.now()-row.seen<20000;
 async function device(db:D1Database,owner:string){return db.prepare('SELECT * FROM crm_linked_devices WHERE owner_id=?').bind(owner).first<any>();}
 export async function linkedEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('linked/'))return undefined;
- if(user.role!=='sales'||actor.id!==user.id)fail('请用本人业务员账号连接WhatsApp',403);
+ if(!['sales','admin'].includes(user.role)||actor.id!==user.id)fail('请用本人业务员账号连接WhatsApp',403);
  const row=await device(db,user.id);
  if(path==='linked/status'&&method==='GET')return {enabled:!!row?.enabled,serviceOnline:online(row),state:online(row)?row.status:'offline',active:online(row)&&row.status==='connected',phone:row?.phone||'',qr:online(row)&&row.qr_expires>Date.now()?JSON.parse(row.qr):[],qr_expires:row?.qr_expires||0,error:row?.error||'',synced_count:row?.synced_count||0};
  if(path.startsWith('linked/send-status/')&&method==='GET'){const command:any=await db.prepare('SELECT state FROM crm_linked_commands WHERE id=? AND owner_id=?').bind(user.id+':'+path.slice('linked/send-status/'.length),user.id).first();if(!command)fail('发送记录不存在',404);return {status:command.state};}
@@ -19,6 +20,7 @@ export async function linkedEndpoint(db:D1Database,user:any,actor:any,path:strin
   await db.prepare("UPDATE crm_linked_devices SET desired='disconnect',status='disconnecting',qr='[]',qr_expires=0 WHERE owner_id=?").bind(user.id).run();return {ok:true};
  }
  if(path==='linked/send'&&method==='POST'){
+  if(user.role!=='sales')fail('客服页面只发送已设置的首次自动回复',403);
   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=? AND owner_id=?').bind(String(body.lead_id||''),user.id).first();if(!lead)fail('客户不存在或不属于本人',404);
   const request=String(body.request_id||''),text=clean(body.text,12000),peer=phoneKey(lead.phone);
   if(!/^[a-zA-Z0-9-]{16,80}$/.test(request)||!text||!/^\d{8,15}$/.test(peer))fail('请填写消息，并核对客户完整国际电话号码');
@@ -33,7 +35,7 @@ export async function linkedEndpoint(db:D1Database,user:any,actor:any,path:strin
 export async function linkedWorker(db:D1Database,req:Request,body:any){
  const token=req.headers.get('authorization')?.match(/^Bearer (.{32,200})$/)?.[1];
  const row:any=token?await db.prepare("SELECT d.*,u.active,u.role FROM crm_linked_devices d JOIN crm_users u ON u.id=d.owner_id WHERE d.token_hash=?").bind(await digest(token)).first():null;
- if(!row?.enabled||!row.active||row.role!=='sales')fail('连接服务认证失败',401);
+ if(!row?.enabled||!row.active||!['sales','admin','ceo'].includes(row.role))fail('连接服务认证失败',401);
  const owner=row.owner_id,timestamp=Date.now();
  if(body.ack==='reconnect')await db.prepare("UPDATE crm_linked_devices SET desired='connect',qr='[]',qr_expires=0 WHERE owner_id=? AND desired='reconnect'").bind(owner).run();
  if(body.state){
@@ -51,7 +53,8 @@ export async function linkedWorker(db:D1Database,req:Request,body:any){
    const peer=phoneKey(m.peer),at=new Date(m.created);if(!m.id||!/^\d{8,15}$/.test(peer)||!['in','out'].includes(m.direction)||!Number.isFinite(at.getTime())||at.getTime()>timestamp+300000)fail('消息格式无效');
    const matches=leads.filter(l=>phoneKey(l.phone)===peer),lead=matches.length===1?matches[0].id:null,provider='linked:'+owner+':'+clean(m.id,200),key='linked-'+await digest(provider),content=clean(m.content,12000)||'[非文字消息，请在手机查看附件]',status=m.history?'history':m.direction==='in'?'received':'sent';
    await db.prepare('INSERT OR IGNORE INTO crm_cloud_messages(id,owner_id,phone_id,lead_id,peer,direction,content,status,provider_id,created) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(key,owner,'linked:'+owner,lead,peer,m.direction,content,status,provider,at.toISOString()).run();
-   if(lead&&!m.history)await recordCommunication(db,owner,lead,provider,content,m.direction==='in',at.toISOString());
+   if(row.role==='admin')await receiveServiceMessage(db,owner,{...m,peer,content,created:at.toISOString()});
+   if(lead&&!m.history&&row.role==='sales')await recordCommunication(db,owner,lead,provider,content,m.direction==='in',at.toISOString());
   }
   await db.prepare("UPDATE crm_linked_devices SET synced_count=(SELECT COUNT(*) FROM crm_cloud_messages WHERE owner_id=? AND phone_id=?) WHERE owner_id=?").bind(owner,'linked:'+owner,owner).run();
  }
@@ -75,5 +78,6 @@ export async function linkedWorker(db:D1Database,req:Request,body:any){
   const next:any=await db.prepare("SELECT * FROM crm_linked_commands WHERE owner_id=? AND state='queued' ORDER BY created LIMIT 1").bind(owner).first();
   if(next){const claimed=await db.prepare("UPDATE crm_linked_commands SET state='running',updated=? WHERE id=? AND owner_id=? AND state='queued' RETURNING id").bind(timestamp,next.id,owner).first();if(claimed)command={id:next.id,peer:next.peer,content:next.content};}
  }
+ if(row.role==='admin')command=await serviceWorker(db,owner,body,!body.messages&&current?.status==='connected'&&current.desired==='idle'&&online(current));
  return {desired:current?.desired||'idle',command};
 }

@@ -1,3 +1,5 @@
+import {customerServiceEndpoint} from '../customer-service';
+import {roleWorkspaceEndpoint} from '../role-workspaces';
 import { advertisingEndpoint } from '../advertising-server';
 import { allocationEndpoint } from '../allocation-server';
 import { json } from '../api/http';
@@ -24,6 +26,7 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+  const workspace=await roleWorkspaceEndpoint(db,user,path,req.method,url);if(workspace!==undefined)return json(workspace);
   const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
   const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined){if(req.method==='POST'&&path==='confirmations/quote'&&'id' in confirmation)await afterWorkflowWrite(db,env.QUOTE_DB,confirmation,{project:confirmation.id});return json(confirmation);}
   const bridgeResult=await quoteBridgeEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(bridgeResult!==undefined)return json(bridgeResult);
@@ -39,6 +42,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined){if(req.method==='POST'&&'id' in phase1Result&&phase1Result.id)await afterWorkflowWrite(db,env.QUOTE_DB,phase1Result,{order:phase1Result.id});return json(phase1Result);}
   const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined){if(req.method==='POST'&&'id' in executionResult&&typeof executionResult.id==='string')await afterWorkflowWrite(db,env.QUOTE_DB,executionResult,{order:executionResult.id});return json(executionResult);}
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined){if(req.method==='POST'&&'id' in followupResult&&followupResult.id)await afterWorkflowWrite(db,env.QUOTE_DB,followupResult,{order:followupResult.id});return json(followupResult);}
+  const service=await customerServiceEndpoint(db,user,actor,path,req.method,body);if(service!==undefined)return json(service);
   const linked=await linkedEndpoint(db,user,actor,path,req.method,body);if(linked!==undefined)return json(linked);
   const cloud=await cloudEndpoint(db,env as any,user,actor,path,req.method,body,url);if(cloud!==undefined)return json(cloud);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);

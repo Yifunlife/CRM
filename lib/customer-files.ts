@@ -3,8 +3,8 @@ import { ownedDesktop } from './workbench-bridge';
 import { AllocationError } from './allocation-server';
 
 export async function customerFiles(req:Request,db:D1Database,user:any,actor:any):Promise<Response>{
- if(!['admin','sales'].includes(user.role))throw new AllocationError('无权查看客户附件',403);
- const owner:any=user.role==='admin'?await db.prepare("SELECT id FROM crm_users WHERE id=COALESCE((SELECT owner_id FROM crm_workbench_snapshots ORDER BY updated LIMIT 1),(SELECT id FROM crm_users WHERE username='winnie')) AND active=1 AND role='sales'").first():user;
+ if(!['admin','sales','ceo'].includes(user.role))throw new AllocationError('无权查看客户附件',403);
+ const owner:any=['admin','ceo'].includes(user.role)?await db.prepare("SELECT id FROM crm_users WHERE id=COALESCE((SELECT owner_id FROM crm_workbench_snapshots ORDER BY updated LIMIT 1),(SELECT id FROM crm_users WHERE username='winnie')) AND active=1 AND role='sales'").first():user;
  if(!owner)throw new AllocationError('客户账号不存在',404);
  const url=new URL(req.url),download=/^\/api\/workbench\/files\/([a-z0-9-]+)$/.exec(url.pathname);
  const json=(data:unknown)=>Response.json(data,{headers:{'Cache-Control':'no-store'}});
