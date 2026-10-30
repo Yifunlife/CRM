@@ -12,7 +12,7 @@ export default function CustomerEntryMonitor({rules,classification,note,revision
  },[selected,page,revision,api,retry]);
  return <section className="panel customer-entry-monitor" aria-label="客户进入与归属六项监控">
   <h2>客户进入与归属 · 6 项规则</h2>
-  <p className="monitor-source">现有分类：历史 {classification.historical} 条 · 新增 {classification.new} 条 · 日期待确认 {classification.unknown} 条</p>
+  <p className="monitor-source">记录分类（含未入档咨询）：历史 {classification.historical} 条 · 新增 {classification.new} 条 · 日期待确认 {classification.unknown} 条</p>
   <div className="entry-rule-list">{rules.map(rule=><button className="entry-rule" type="button" key={rule.number} aria-pressed={selected===rule.number} onClick={()=>{S(rule.number);P(1);}}><span className="entry-rule-text"><strong>{rule.number}. {rule.name}</strong><span>{rule.description}</span></span><span className="entry-rule-result">{rule.count?rule.count+' 条待核查':'未发现待核查记录'}</span></button>)}</div>
   <p className="monitor-source">{note}</p>
   {selected&&<div className="entry-rule-detail" aria-busy={busy}>
