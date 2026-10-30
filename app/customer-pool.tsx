@@ -10,8 +10,8 @@ export default function CustomerPool({request,openLead,submitting,closeSubmit,re
  const [source,SRC]=useState('WhatsApp／其他'),[raw,RAW]=useState(''),[selected,SEL]=useState<any>(null),[values,V]=useState(empty),[candidates,C]=useState<any[]|null>(null),[events,EV]=useState<any[]>([]),[target,TARGET]=useState(''),[reason,REASON]=useState('');
  const submissionId=useRef(''),reviewHeading=useRef<HTMLHeadingElement>(null);
  useEffect(()=>{if(selected){reviewHeading.current?.focus({preventScroll:true});reviewHeading.current?.scrollIntoView({block:'start'});}},[selected?.id]);
- async function load(){const [data,leads,progress]=await Promise.all([request('customer-pool'),request('leads'),request('customer-pool/progress')]);const report={...data,progress};R(report);onReport(report,leads);}
- useEffect(()=>{let mounted=true;const refresh=()=>Promise.all([request('customer-pool'),request('leads'),request('customer-pool/progress')]).then(([data,leads,progress])=>{if(mounted){const report={...data,progress};R(report);onReport(report,leads);}}).catch(e=>{if(mounted)E(e.message);});refresh();const timer=setInterval(refresh,60000);return()=>{mounted=false;clearInterval(timer);};},[request,onReport]);
+ async function load(){const [data,leads,progress]=await Promise.all([request('customer-pool'),Promise.resolve([]),request('customer-pool/progress')]);const report={...data,progress};R(report);onReport(report,leads);}
+ useEffect(()=>{let mounted=true;const refresh=()=>Promise.all([request('customer-pool'),Promise.resolve([]),request('customer-pool/progress')]).then(([data,leads,progress])=>{if(mounted){const report={...data,progress};R(report);onReport(report,leads);}}).catch(e=>{if(mounted)E(e.message);});refresh();const timer=setInterval(refresh,60000);return()=>{mounted=false;clearInterval(timer);};},[request,onReport]);
  useEffect(()=>{if(reviewRow)edit(reviewRow);else SEL(null);},[reviewRow]);
  async function act(fn:()=>Promise<void>){B(true);E('');M('');try{await fn();}catch(e:any){E(e.message);}finally{B(false);}}
  function edit(row:any){SEL(row);V({...empty,...row.payload});C(null);TARGET('');REASON('');EV([]);}

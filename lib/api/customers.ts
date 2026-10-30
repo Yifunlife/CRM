@@ -1,3 +1,4 @@
+import {customerPage} from '../customer-page';
 import { assignmentCategory } from '../assignment-categories';
 import { assignmentFields,assignmentJoin } from '../assignment-reminders';
 import { closingOutcome } from '../attribution-server';
@@ -7,6 +8,7 @@ import { validateLeadFollowup } from '../workflow-server';
 import type { ApiContext } from './context';
 import { json,Problem } from './http';
 export async function customerRecords({db,req,path,write,body,user,actor}:ApiContext):Promise<Response|undefined>{
+  if(path==='leads-page'&&!write)return json(await customerPage(db,user,new URL(req.url)));
   const scope = !can(user,'customers_all') ? " WHERE l.owner_id=?" : "";
   if (path === "leads" && !write) {
    const result = await db.prepare(`SELECT l.*,${assignmentFields},CASE WHEN EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) THEN 'existing' ELSE 'new' END AS customer_type,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin}${scope} ORDER BY l.created DESC,l.id LIMIT 10000`).bind(...(scope ? [user.id] : [])).all(); return json(result.results.map((r: any) => ({...r,assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)})));

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';import {readFileSync,readdirSync} from 'node:fs';import {DatabaseSync} from 'node:sqlite';import {moduleURL,database} from './test-form-intake.mjs';
+const {customerPage}=await import(moduleURL('lib/customer-page.ts'));
+const sql=new DatabaseSync(':memory:');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));const db=database(sql);
+const admin={id:'admin',role:'admin'},sales={id:'sales',role:'sales'};for(const u of [admin,sales,{id:'other',role:'sales'}])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
+for(let i=0;i<65;i++)sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,original_owner,cohort,status,grade,fingerprint,detail,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run('lead'+String(i).padStart(2,'0'),'Customer '+i,'Meta',i<60?'sales':'other','',i%2?'new':'historical','待首次联系',i%3?'A':'','fp'+i,JSON.stringify({'公司名称':'Company '+i}),'2026-11-02');
+const read=(params={},u=admin)=>customerPage(db,u,new URL('http://test/?'+new URLSearchParams(params)));
+assert.equal((await read()).total,65);assert.equal((await read({},sales)).total,60);assert.equal((await read({page:'99'})).page,3);assert.equal((await read({q:"' OR 1=1 --"})).total,0);
+assert.equal((await read({q:'company 64'})).total,1);assert.equal((await read({cohort:'historical',status:'待首次联系'})).total,0);assert.equal((await read({queue:'待首次联系'},sales)).total,30);
+const ids=[];for(let page=1;page<=3;page++)ids.push(...(await read({page:String(page)})).rows.map(r=>r.id));assert.equal(new Set(ids).size,65);
+sql.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,created,updated,created_by,state,lead_id) VALUES('pool','Meta','Raw search token',?,'2026-11-03','2026-11-03','admin','待分配','lead00')").run(JSON.stringify({name:'Pending customer',phone:'1234567',country:'澳洲',business_scope:'meta-full'}));
+const first=await read();assert.equal(first.total,65);assert.equal(first.rows[0].id,'intake:pool');assert(!first.rows.some(r=>r.id==='lead00'));assert.equal((await read({stage:'待分配'})).total,1);assert.equal((await read({q:'raw search'})).total,1);assert.equal((await read({cohort:'historical'})).rows.some(r=>r.intake),false);
+assert.equal((await read({source:'Meta'})).total,65);assert.equal(first.sources.Meta,65);assert.equal(Object.values(first.grades).reduce((a,b)=>a+b,0),65);
+const snapshot=sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n;await read({page:'2',grade:'A'});assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,snapshot);
+console.log('PASS: bounded server pagination, owner isolation, historical contact semantics, counts, exact search, pending intake position and duplicate suppression, no writes.');

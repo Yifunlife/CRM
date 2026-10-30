@@ -3,7 +3,7 @@ export const MODULES={
  intake:{name:'客资进入',entry:'lib/api/intake.ts',tests:['confirmed-intake','form-intake','customer-pool']},
  history:{name:'历史归属对齐',entry:'lib/historical-alignment.ts',tests:['confirmed-intake','confirmed-cohort']},
  allocation:{name:'客资分配',entry:'lib/allocation-server.ts',tests:['global-allocation','assignment-reminders','assignment-sync']},
- customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['sales-access','customer-progress','customer-identity']},
+ customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['sales-access','customer-progress','customer-identity','customer-page']},
  communication:{name:'客户沟通',entry:'lib/communication-progress.ts',tests:['communication-progress','linked-whatsapp','cloud-communication']},
  projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite']},
  quotes:{name:'报价确认接收',entry:'lib/confirmation/quotes.ts',tests:['workflow-confirmations']},
@@ -24,7 +24,7 @@ export const MODULES={
 export type ModuleId=keyof typeof MODULES;
 export type Operation={module:ModuleId;operation:string};
 export function identifyOperation(path:string,method:string,body?:any):Operation{
- const exact:Record<string,ModuleId>={login:'accounts',logout:'accounts',me:'accounts',password:'accounts',users:'accounts',import:'intake',batches:'intake','business-scope':'intake',review:'intake','import-assignments':'history',assign:'allocation',leads:'customers',grade:'customers',deals:'finance',receipts:'finance',advertising:'reports','admin/backup':'backup','followup/execution/quotes':'execution','confirmations/quotes':'quotes','confirmations/quote':'quotes','confirmations/contract':'contracts','confirmations/followers':'contracts','confirmations/documents':'documents','confirmations/releases':'release','confirmations/release':'release','confirmations/release/decision':'release'};
+ const exact:Record<string,ModuleId>={login:'accounts',logout:'accounts',me:'accounts',password:'accounts',users:'accounts',import:'intake',batches:'intake','business-scope':'intake',review:'intake','import-assignments':'history',assign:'allocation',leads:'customers','leads-page':'customers',grade:'customers',deals:'finance',receipts:'finance',advertising:'reports','admin/backup':'backup','followup/execution/quotes':'execution','confirmations/quotes':'quotes','confirmations/quote':'quotes','confirmations/contract':'contracts','confirmations/followers':'contracts','confirmations/documents':'documents','confirmations/releases':'release','confirmations/release':'release','confirmations/release/decision':'release'};
  if(exact[path])return {module:exact[path],operation:path};
  if(path==='followup')return {module:method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project')?'customers':'orders',operation:method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project')?'customers/followup':'followup'};
  const execution=/^followup\/orders\/[^/]+\/execution(?:\/(configure|source|stage|quote))?$/.exec(path);
