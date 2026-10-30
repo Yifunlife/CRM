@@ -21,6 +21,10 @@ assert.equal(own.scope,'本人');assert(own.items.some(i=>i.id==='accept:ready-a
 const boss=await salesMonitor(db,source,{id:'boss',role:'ceo'},'sales-monitor','GET');
 assert.equal(boss.scope,'全团队');assert(boss.items.some(i=>i.id==='accept:ready-b'));assert(boss.items.some(i=>i.level==='历史对齐'));assert.equal(boss.summary.customers,2);assert(boss.items.some(i=>i.id==='device:b'));assert(boss.items.some(i=>i.id==='sync:qa'));assert.equal(boss.sources.daily,'2026-11-02T00:00:00Z');
 assert.equal(snapshot(),before,'monitor cannot create reminders, reallocate or alter records');
+sql.prepare("DELETE FROM crm_sales_account_links WHERE user_id='a'").run();
+assert.equal((await salesMonitor(db,source,{id:'a',role:'sales'},'sales-monitor','GET')).sources.quote,'尚未关联报价账号');
+sql.prepare("INSERT INTO crm_sales_account_links(user_id,quote_email,updated,updated_by) VALUES('a','a@test.invalid','now','boss')").run();
+
 assert.equal((await salesMonitor(db,undefined,{id:'a',role:'sales'},'sales-monitor','GET')).sources.quote,'未配置');
 assert.equal((await salesMonitor(db,{prepare(){throw Error('private upstream token');}},{id:'a',role:'sales'},'sales-monitor','GET')).sources.quote,'暂时无法读取');
 await assert.rejects(salesMonitor(db,source,{id:'f',role:'followup'},'sales-monitor','GET'),e=>e.status===403);

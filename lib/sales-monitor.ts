@@ -42,7 +42,9 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
  for(const d of devices)if(d.status==='connected'&&Date.now()-d.seen>=20000||d.status==='error'||['connect','reconnect'].includes(d.desired)&&d.status!=='connected')add({id:'device:'+d.owner_id,stage:'连接',level:'异常',title:d.name+'：WhatsApp 连接待检查',evidence:d.status==='connected'?'连接服务最近20秒没有上报在线状态。':'该账号的连接尚未完成或需要重新连接。',suggestion:'由该账号在客户沟通中检查连接；监控页不代发消息。',owner_id:d.owner_id,owner_name:d.name,page:'销售工作台'});
  let quoteConnection='已连接';
  if(source){try{
+  const tables=await list(source,"SELECT name FROM sqlite_master WHERE type='table' AND name IN ('quotation_history','quotation_crm_messages','app_users')");if(tables.length!==3)throw Error('Quote source incomplete');
   const links=await list(db,'SELECT a.user_id,a.quote_email,u.name FROM crm_sales_account_links a JOIN crm_users u ON u.id=a.user_id WHERE u.active=1 AND '+(all?'1=1':'a.user_id=?'),args);
+  if(!links.length)quoteConnection='尚未关联报价账号';
   for(const p of links){const rows=await list(source,"SELECT DISTINCT q.id,q.project_name FROM quotation_history q JOIN quotation_crm_messages m ON m.quotation_id=q.id JOIN app_users a ON a.email=m.author AND a.status='active' WHERE m.direction='quote' AND m.kind='业务员确认报价' AND m.author=? AND q.created_by=? AND q.voided_at IS NULL AND q.archived_at IS NULL AND q.project_status<>'lost'",[p.quote_email,p.quote_email]);for(const q of rows)if(!await db.prepare('SELECT quote_id FROM crm_quote_acceptances WHERE quote_id=?').bind(q.id).first())add({id:'accept:'+q.id,stage:'报价',level:'待确认',title:q.project_name+'：报价待接收',evidence:'业务员已在报价系统确认，此版本尚未在 CRM 接收。',suggestion:'由所属业务员选择对应客户并确认接收，系统随后自动建档。',owner_id:p.user_id,owner_name:p.name,page:'报价与协作'});}
  }catch{quoteConnection='暂时无法读取';}}else quoteConnection='未配置';
  const order=['异常','待确认','到期提醒','待处理','历史对齐'];items.sort((a,b)=>order.indexOf(a.level)-order.indexOf(b.level)||a.id.localeCompare(b.id));
