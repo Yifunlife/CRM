@@ -1,22 +1,11 @@
-import {refreshQuoteBridge} from '../lib/quote-bridge';
-import {refreshSalesSuite} from '../lib/sales-suite-server';
-import {processCustomerPool} from '../lib/customer-pool';
-import {syncGoogleForms} from '../lib/google-form-sync';
-import {refreshFollowupNotifications} from '../lib/followup-notifications';
+import {runScheduledWorkflow} from '../lib/workflow-scheduler';
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 
 export default {
   async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
-    if (env.CRM_BACKEND_ORIGIN) return;
-    if (!env.DB) throw new Error('CRM database binding is missing');
-    await refreshFollowupNotifications(env.DB);
-    await processCustomerPool(env.DB);
-    await syncGoogleForms(env.DB);
-    // The shared scheduler runs every five minutes; dormant leads run at 08:00 Beijing only.
-    await refreshSalesSuite(env.DB,env.QUOTE_DB,undefined,new Date(_event.scheduledTime).toISOString().slice(11,16)==='00:00');
-    await refreshQuoteBridge(env.DB,env.QUOTE_DB);
+    await runScheduledWorkflow(_event.scheduledTime,env);
   },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     // Keep the original company URL and desktop bridge working after cutover.

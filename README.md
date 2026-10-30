@@ -184,3 +184,7 @@ Cloudflare Workers Builds 连接 `Yifunlife/CRM` 的 `main`，构建命令为 `n
 结构迁移仅为 `0022_soft_carlie_cooper.sql`（6张新表及索引）和 `0023_nervous_captain_flint.sql`（新销售项目的成交唯一约束）。先单独备份、应用这两项迁移，再发布程序；自动构建不执行迁移、数据导入或R2覆盖。报价源库无迁移。
 
 验证：`scripts/test-sales-suite.mjs`、`scripts/test-sales-suite-http.mjs`、`scripts/test-sales-suite-scheduled.mjs`、26项业务回归、TypeScript、Cloudflare构建，桌面1440px与手机393px浏览器验证。HTTP、种子数据及定时入口验证仅在 `127.0.0.1:8806` 的独立 `work/sales-suite-state` 运行，不能对生产使用。
+
+## 业务模块维护（2026-10-30）
+
+业务步骤、输入输出、人工确认边界、失败排查及验收入口见 [MODULE_BOUNDARIES.md](MODULE_BOUNDARIES.md)。修改某一步时先确认所属模块及上下游约定；保持既有 API、权限、数据及其他人的修改。构建后运行 `npm run test:modules`，逐模块验收并检查整条业务链。生产发布与数据库迁移、导入、附件覆盖分开执行。

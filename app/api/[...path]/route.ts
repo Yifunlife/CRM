@@ -1,44 +1,25 @@
-import {assignmentFields,assignmentJoin} from '../../../lib/assignment-reminders';
-import {assignmentCategory} from '../../../lib/assignment-categories';
-import {linkedEndpoint,linkedWorker} from '../../../lib/linked-whatsapp';
-import {confirmedWorkflow} from '../../../lib/confirmed-workflow';
-import {cloudEndpoint,cloudWebhook} from '../../../lib/cloud-communication';
-import {quoteBridgeEndpoint,refreshQuoteBridge} from '../../../lib/quote-bridge';
-import {executionEndpoint} from '../../../lib/order-execution-server';
-import {salesSuiteEndpoint} from '../../../lib/sales-suite-server';
-import {teamFollowupEndpoint} from '../../../lib/team-followup-server';
-import {salesHomeEndpoint} from '../../../lib/sales-home-server';
-import {salesPipelineEndpoint} from '../../../lib/sales-pipeline-server';
-import {customerChange,customerChanges} from '../../../lib/customer-changes';
-import {customerPoolEndpoint} from '../../../lib/customer-pool';
-import {syncGoogleForms} from '../../../lib/google-form-sync';
-import {importForms} from '../../../lib/form-intake';
-import {phase1Endpoint} from '../../../lib/followup-phase1-server';
-import {notificationEndpoint} from '../../../lib/followup-notifications';
-import {attributionEndpoint,closingOutcome} from '../../../lib/attribution-server';
-import {customerIdentityEndpoint} from '../../../lib/customer-identity-server';
-import {workflowEndpoint,workflowAudit,validateLeadFollowup} from '../../../lib/workflow-server';
-import {followupEndpoint,followupManager} from '../../../lib/order-followup-server';
-import {followupFiles} from '../../../lib/order-followup-files';
-import {databaseBackup} from '../../../lib/database-backup';
-import {customerFiles} from '../../../lib/customer-files';
-import {editAccount,resetAccountPassword,setAccountPermissions} from '../../../lib/account-edit';
-import {initializeEmployeeLogin} from '../../../lib/employee-login';
-import {bridgeDeviceEndpoint} from '../../../lib/workbench-bridge';
-import {viewUser,workbenchEndpoint} from '../../../lib/workbench-server';
-import {BUSINESS_SCOPES} from '../../../lib/allocation';
-import {historicalAlignment} from '../../../lib/historical-alignment';
-import {syncAssignments} from '../../../lib/assignment-sync';
-import {operationsEndpoint} from '../../../lib/operations-server';
-import {advertisingEndpoint} from '../../../lib/advertising-server';
-import {allocationEndpoint,AllocationError,allocationWeights,distribute} from '../../../lib/allocation-server';
-import {connection,startGoogle,finishGoogle,previewGoogle,seal,GOOGLE_SHEET_ID} from "../../../lib/google";
+import {tracedRequest,type RequestTrace} from '../../../lib/api/diagnostics';
 import { env } from "cloudflare:workers";
-import { SOURCES, STATUSES, GRADES, id, now, clean, phoneKey, emailKey, digest, passwordHash, verifyPassword, authorizedLead,can } from "../../../lib/crm";
+import { setAccountPermissions } from '../../../lib/account-edit';
+import { AllocationError } from '../../../lib/allocation-server';
+import { accountRecords } from '../../../lib/api/accounts';
+import { businessModules } from '../../../lib/api/business';
+import { customerRecords } from '../../../lib/api/customers';
+import { financeRecords } from '../../../lib/api/finance';
+import { googleConnection } from '../../../lib/api/google';
+import { json,Problem } from '../../../lib/api/http';
+import { customerImport } from '../../../lib/api/intake';
+import { cloudWebhook } from '../../../lib/cloud-communication';
+import { can,clean,digest,id,now,passwordHash,verifyPassword } from "../../../lib/crm";
+import { customerFiles } from '../../../lib/customer-files';
+import { databaseBackup } from '../../../lib/database-backup';
+import { finishGoogle } from "../../../lib/google";
+import { linkedWorker } from '../../../lib/linked-whatsapp';
+import { followupFiles } from '../../../lib/order-followup-files';
+import { bridgeDeviceEndpoint } from '../../../lib/workbench-bridge';
+import { viewUser } from '../../../lib/workbench-server';
 export const dynamic = "force-dynamic";
-const json = (data: unknown, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra } });
-class Problem extends Error { constructor(message: string, public status = 400) { super(message); } }
-async function handle(req: Request) {
+async function execute(req: Request,trace:RequestTrace) {
  try {
   const db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
@@ -46,6 +27,7 @@ async function handle(req: Request) {
   if (write && path!=="bridge/poll" && path!=="linked/worker" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
+  trace.identify(body);
   if(path==="linked/worker"&&req.method==="POST")return json(await linkedWorker(db,req,body));
   if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
   if (path === "google/callback" && !write) {
@@ -74,6 +56,7 @@ async function handle(req: Request) {
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
   const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
+  trace.actor(actor.id);
   if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
@@ -87,175 +70,15 @@ async function handle(req: Request) {
   if(path==='admin/backup' &&req.method==='GET'){if(actor.role!=='admin'||user.role!=='admin')throw new Problem('只有管理员可以导出备份',403);return databaseBackup(db);}
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
-  const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
-  const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined)return json(confirmation);
-  const bridgeResult=await quoteBridgeEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(bridgeResult!==undefined)return json(bridgeResult);
-  const suiteResult=await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(suiteResult!==undefined){if(req.method==='POST'&&['sales-suite/project/record','sales-suite/quotes/link','sales-suite/quotes/unlink','sales-suite/quotes/sync'].includes(path)){try{await refreshQuoteBridge(db,env.QUOTE_DB,body.project_id||body.id);}catch{(suiteResult as any).message='CRM记录已保存；报价端同步暂未完成，系统将自动重试。';}}return json(suiteResult);}
-  if(path==='followup-notifications/read'&&req.method==='POST'&&await db.prepare('SELECT id FROM crm_sales_notifications WHERE id=?').bind(String(body.id||'')).first())return json(await salesSuiteEndpoint(db,env.QUOTE_DB,user,actor,'sales-suite/notices/read','POST',body,url));
-  const homeResult=await salesHomeEndpoint(db,user,path,req.method);if(homeResult!==undefined)return json(homeResult);
-  const salesResult=await salesPipelineEndpoint(db,user,actor,path,req.method,body);if(salesResult!==undefined)return json(salesResult);
-  const poolResult=await customerPoolEndpoint(db,user,actor,path,req.method,body);if(poolResult!==undefined)return json(poolResult);
-  const attributionResult=await attributionEndpoint(db,user,actor,path,req.method,body,url);if(attributionResult!==undefined)return json(attributionResult);
-  const teamResult=await teamFollowupEndpoint(db,user,path,req.method);if(teamResult!==undefined)return json(teamResult);
-  const identityResult=await customerIdentityEndpoint(db,user,actor,path,req.method,body);if(identityResult!==undefined)return json(identityResult);
-  const workflowResult=await workflowEndpoint(db,user,actor,path,req.method,body);if(workflowResult!==undefined)return json(workflowResult);
-  const notificationResult=await notificationEndpoint(db,user,actor,path,req.method,body);if(notificationResult!==undefined){if(req.method==='GET'&&user.role!=='followup'){const ns=(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel FROM crm_sales_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE "+(path.endsWith('/audit')&&can(user,'customers_all')?'1=1':"n.recipient_id=? AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+")")+" ORDER BY n.created DESC LIMIT 200").bind(...(path.endsWith('/audit')&&can(user,'customers_all')?[]:[user.id,user.id,user.id])).all()).results;(notificationResult as any).notifications=[...(notificationResult as any).notifications,...ns].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200);}return json(notificationResult);}
-  const phase1Result=await phase1Endpoint(db,user,actor,path,req.method,body);if(phase1Result!==undefined)return json(phase1Result);
-  const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined)return json(executionResult);
-  const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined)return json(followupResult);
-  const linked=await linkedEndpoint(db,user,actor,path,req.method,body);if(linked!==undefined)return json(linked);
-  const cloud=await cloudEndpoint(db,env as any,user,actor,path,req.method,body,url);if(cloud!==undefined)return json(cloud);
-  const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);
-  const operationsResult=await operationsEndpoint(db,user,path,req.method,body);
-  if(operationsResult!==undefined)return json(operationsResult);
-  const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
-  if(advertisingResult!==undefined)return json(advertisingResult);
-  const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
-  if(allocationResult!==undefined)return json(allocationResult);
-  if (path === "logout" && req.method === "POST") { await db.prepare("DELETE FROM crm_sessions WHERE token=?").bind(await digest(token)).run(); return json({ ok: true }, 200, { "Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" }); }
-  if (path === "me" && !write) return json({...user,must_change_password:!!actor.must_change_password,can_switch:actor.role==='admin',can_followup:['sales','followup'].includes(user.role)||can(user,'followup_all')||await followupManager(db,user),capabilities:Object.fromEntries(['customers_all','customers_edit','leads_allocate','performance_view','followup_all','followup_edit','advertising_view','advertising_edit'].map(k=>[k,can(user,k as any)]))});
-  if (path === "password" && req.method === "POST") {
-   if(user.id!==actor.id)throw new Problem("请切回老板视角修改登录账号密码",403);
-   const stored: any = await db.prepare("SELECT password FROM crm_users WHERE id=?").bind(user.id).first();
-   if (!await verifyPassword(clean(body.current,200), stored.password)) throw new Problem("原密码不正确");
-   if(typeof body.password!=='string'||body.password!==body.password.trim()||body.password.length<8||body.password.length>200)throw new Problem('新密码需为8–200位，首尾不能有空格');
-   if(await verifyPassword(body.password,stored.password))throw new Problem('新密码不能与原密码相同');
-   await db.batch([db.prepare("UPDATE crm_users SET password=?,must_change_password=0 WHERE id=?").bind(await passwordHash(body.password),user.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=? AND token<>?").bind(user.id,await digest(token))]); return json({ok:true});
-  }
-  if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
-  if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
-  if (path === "users") {
-   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,role,permissions,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
-   if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);
-   if (req.method === "POST") {
-    const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
-    if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
-    if (!["admin","operations","sales","ceo","management","followup"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
-    if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
-    if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
-    const userId = id();
-    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password) VALUES(?,?,?,?,?,1,?,1)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
-    if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
-    if(body.role==='followup')statements.push(db.prepare("UPDATE crm_users SET permissions=? WHERE id=?").bind(JSON.stringify({followup_edit:true}),userId));
-    await db.batch(statements);return json({ok:true});
-   }
-   if (req.method === "PATCH") {
-    if ('name' in body || 'username' in body) return json(await editAccount(db,user,body));
-    if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
-    await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id),workflowAudit(db,actor,body.active?'启用账号':'停用账号待交接',body.id,{active:body.active})]);return json({ok:true});
-   }
-  }
-  if (path.startsWith("google/")) {
-   if(user.role!=="admin")throw new Problem("只有管理员可以配置Google连接",403);
-   const secret=(env as any).GOOGLE_TOKEN_KEY;
-   if(path==='google/forms/preview'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,preview:true,actor:actor.id}));
-   if(path==='google/forms/run'&&req.method==='POST')return json(await syncGoogleForms(db,{manual:true,actor:actor.id}));
-   if(path==='google/forms/config'&&req.method==='POST'){
-    if(user.id!==actor.id||typeof body.enabled!=='boolean')throw new Problem('请使用本人管理员账号设置每日抓取',403);
-    await db.prepare("INSERT INTO crm_google_form_sync(id,enabled,actor_id) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled,actor_id=excluded.actor_id").bind(body.enabled?1:0,actor.id).run();return json({ok:true});
-   }
-   if(path==="google/status"&&!write){const c=await connection(db);return json({configured:!!(c?.client_id&&c.client_secret&&secret),client_id:c?.client_id||"",connected:!!c?.refresh_token,email:c?.email||"",connected_at:c?.connected||"",checked:c?.checked||"",sheet_id:GOOGLE_SHEET_ID,callback_url:url.origin+"/api/google/callback",last_error:c?.last_error||"",protected:!!secret,form_sync:await db.prepare("SELECT enabled,last_cutoff,finished,last_error,result FROM crm_google_form_sync WHERE id='main'").first()});}
-   if(path==="google/config"&&req.method==="POST"){
-    if(!secret)throw new Problem("服务器凭证保护尚未配置",503);
-    const clientId=clean(body.client_id,300),clientSecret=clean(body.client_secret,2000);
-    if(!/^[a-zA-Z0-9._-]+\.apps\.googleusercontent\.com$/.test(clientId)||!clientSecret)throw new Problem("请填写Google OAuth客户端ID和客户端密钥");
-    await db.batch([db.prepare("INSERT INTO crm_google_connection(id,client_id,client_secret) VALUES('main',?,?) ON CONFLICT(id) DO UPDATE SET client_id=excluded.client_id,client_secret=excluded.client_secret,refresh_token='',email='',connected='',checked='',last_error=''").bind(clientId,await seal(clientSecret,secret)),db.prepare("DELETE FROM crm_google_oauth")]);return json({ok:true});
-   }
-   if(path==="google/start"&&req.method==="POST"){try{const r=await startGoogle(db,env,user.id,url.origin);return json({url:r.url},200,{"Set-Cookie":r.cookie});}catch(e:any){throw new Problem(e.message);}}
-   if(path==="google/preview"&&req.method==="POST"){try{return json(await previewGoogle(db,env));}catch(e:any){const message=e.name==='TimeoutError'?'Google连接超时，请稍后重试':e.message;await db.prepare("UPDATE crm_google_connection SET last_error=? WHERE id='main'").bind(clean(message,200)).run();throw new Problem(message);}}
-   if(path==="google/disconnect"&&req.method==="POST"){await db.batch([db.prepare("UPDATE crm_google_connection SET refresh_token='',email='',connected='',checked='',last_error='' WHERE id='main'"),db.prepare("DELETE FROM crm_google_oauth")]);return json({ok:true});}
-  }
-  const scope = !can(user,'customers_all') ? " WHERE l.owner_id=?" : "";
-  if (path === "leads" && !write) {
-   const result = await db.prepare(`SELECT l.*,${assignmentFields},CASE WHEN EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) THEN 'existing' ELSE 'new' END AS customer_type,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin}${scope} ORDER BY l.created DESC,l.id LIMIT 10000`).bind(...(scope ? [user.id] : [])).all(); return json(result.results.map((r: any) => ({...r,assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)})));
-  }
-  if (path.startsWith("leads/") && !write) {
-   const lead: any = await db.prepare(`SELECT l.*,${assignmentFields},CASE WHEN EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) THEN 'existing' ELSE 'new' END AS customer_type,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE l.id=?`).bind(path.split("/")[1]).first();
-   if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权查看",404);
-   const notes = await db.prepare("SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE lead_id=? ORDER BY n.created DESC,n.rowid DESC").bind(lead.id).all(); const deals=await db.prepare("SELECT d.*,u.name AS owner_name FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id WHERE d.lead_id=? ORDER BY deal_date DESC,created DESC").bind(lead.id).all();const receipts=await db.prepare('SELECT r.* FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.lead_id=? ORDER BY received_date DESC,r.created DESC').bind(lead.id).all();return json({...lead,assignment_category:assignmentCategory(lead),detail:JSON.parse(lead.detail),notes:notes.results,deals:deals.results,receipts:receipts.results,changes:await customerChanges(db,user,can(user,'customers_all'),lead.id)});
-  }
-  if (path === "followup" && req.method === "POST") {
-   const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
-   if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
-   if (!STATUSES.includes(body.status) || !clean(body.content)) throw new Problem("请填写跟进结果并选择状态");
-   await validateLeadFollowup(db,lead,body);
-   const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
-   const outcomeStatements=await closingOutcome(db,lead,body,actor);
-   await db.batch([...outcomeStatements,customerChange(db,actor,lead.id,'status',body.status,clean(body.content)),db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
-  }
-  if (path === "grade" && req.method === "POST") {
-   const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
-   if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
-   if (!["",...GRADES].includes(body.grade)) throw new Problem("请选择VIP、A、B、C或未评级");
-   await db.batch([customerChange(db,actor,body.id,'grade',body.grade),db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id)]);return json({ok:true});
-  }
+  const businessResult=await businessModules({db,env,req,url,path,write,body,user,actor,token});if(businessResult!==undefined)return businessResult;
+  const accountRecordsResult=await accountRecords({db,env,req,url,path,write,body,user,actor,token});if(accountRecordsResult!==undefined)return accountRecordsResult;
+  const googleConnectionResult=await googleConnection({db,env,req,url,path,write,body,user,actor,token});if(googleConnectionResult!==undefined)return googleConnectionResult;
+  const customerRecordsResult=await customerRecords({db,env,req,url,path,write,body,user,actor,token});if(customerRecordsResult!==undefined)return customerRecordsResult;
   if (user.role === 'sales'&&!can(user,'customers_all')) throw new Problem('此操作需要对应功能权限',403);
-  if(path==='import-assignments'&&req.method==='POST')return json(await syncAssignments(db,user,body));
-  if(path==='business-scope'&&req.method==='POST'){
-   const lead:any=await db.prepare('SELECT id,source FROM crm_leads WHERE id=?').bind(body.id).first(),business=BUSINESS_SCOPES.find(v=>v.id===body.scope);
-   if(!lead||!business||business.source!==lead.source)throw new Problem('业务范围必须与客资来源匹配');
-   if(await db.prepare('SELECT id FROM crm_deals WHERE lead_id=? LIMIT 1').bind(body.id).first())throw new Problem('已有成交记录的客资不能更改业务范围');
-   await db.prepare('UPDATE crm_leads SET business_scope=? WHERE id=?').bind(business.id,lead.id).run();return json({ok:true});
-  }
-  if(path==='receipts'&&(req.method==='POST'||req.method==='PATCH')){
-   if(user.role!=='admin')throw new Problem('只有管理员可以确认或撤销实际收款',403);
-   if(req.method==='PATCH'){const reason=clean(body.reason);if(!reason)throw new Problem('请填写撤销收款原因；实际退款请单独登记');const result=await db.batch([db.prepare('UPDATE crm_receipts SET cancelled=1 WHERE id=? AND cancelled=0').bind(clean(body.id,100)),workflowAudit(db,actor,'撤销收款',body.id,{reason},true)]);if(!result[0].meta.changes)throw new Problem('有效收款不存在');return json({ok:true});}
-   const deal:any=await db.prepare('SELECT * FROM crm_deals WHERE id=? AND cancelled=0').bind(clean(body.deal_id,100)).first();
-   if(!deal)throw new Problem('请先确认有效成交单');
-   const reference=clean(body.reference,100),currency=clean(body.currency,3),date=clean(body.received_date,10),amount=String(body.amount||''),today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   const minor=Math.round(Number(amount)*100);
-   if(!reference||!['CNY','USD'].includes(currency)||!/^\d+(\.\d{1,2})?$/.test(amount)||!Number.isSafeInteger(minor)||minor<=0||minor>1_000_000_000_000)throw new Problem('请填写唯一收款凭证号、人民币或美元及有效正数金额（最多两位小数）');
-   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>today)throw new Problem('请填写不晚于今天的有效收款日期');
-   if(await db.prepare('SELECT id FROM crm_receipts WHERE reference=?').bind(reference).first())throw new Problem('此收款凭证号已登记，不可重复计算');
-   await db.batch([db.prepare('INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency,received_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),reference,deal.id,minor,currency,date,now(),actor.id),workflowAudit(db,actor,'确认收款',deal.id,{reference,amount_minor:minor,currency,received_date:date})]);return json({ok:true});
-  }
-  if(path==='deals'&&req.method==='POST'){
-   if(user.role!=='admin')throw new Problem('只有管理员可以确认成交单',403);
-   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(body.lead_id).first();
-   if(!lead?.owner_id||!BUSINESS_SCOPES.some(v=>v.id===lead.business_scope))throw new Problem('请先设置业务范围与客资负责人');
-   const order=clean(body.order_number,100),date=clean(body.deal_date,10),today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   if(!order||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>today)throw new Problem('请填写唯一订单编号与有效成交日期，不能选择未来日期');
-   if(await db.prepare('SELECT id FROM crm_deals WHERE order_number=?').bind(order).first())throw new Problem('此订单编号已经录入，不可重复计数');
-   await db.prepare('INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES(?,?,?,?,?,?,?,?)').bind(id(),order,lead.id,lead.owner_id,lead.business_scope,date,now(),user.id).run();return json({ok:true});
-  }
-  if(path==='deals'&&req.method==='PATCH'){
-   if(user.role!=='admin')throw new Problem('只有管理员可以撤销成交单',403);
-   const reason=clean(body.reason);if(!reason)throw new Problem('请填写撤销成交原因');const result=await db.batch([db.prepare('UPDATE crm_deals SET cancelled=1 WHERE id=? AND cancelled=0').bind(body.id),workflowAudit(db,actor,'撤销成交',body.id,{reason},true)]);if(!result[0].meta.changes)throw new Problem('有效成交不存在');return json({ok:true});
-  }
-  if (path === "batches" && !write) return json((await db.prepare("SELECT b.*,u.name AS author,(SELECT COUNT(*) FROM crm_leads l WHERE l.batch_id=b.id) AS inserted FROM crm_batches b JOIN crm_users u ON u.id=b.creator ORDER BY b.created DESC LIMIT 100").all()).results);
-  if (path === "assign" && req.method === "POST") {
-   throw new Problem("新增客户已统一平均分配，请刷新页面使用全渠道共同平均分配；已有客户交接请使用交接流程",409);
-  }
-  if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
-  if (path === "import" && req.method === "POST") {
-   if(!SOURCES.includes(body.source)||!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem("请选择来源，每次导入1至3000条");
-   const businessScope=clean(body.business_scope,80),business=BUSINESS_SCOPES.find(s=>s.id===businessScope);
-   if(businessScope&&(!business||business.source!==body.source))throw new Problem('业务范围与来源渠道不匹配');
-   if(body.source==='Meta'&&body.rows.every((r:any)=>r.id&&r.form_id))return json(await importForms(db,body.rows,actor.id,{scope:businessScope,filename:clean(body.filename,200),preview:body.preview===true}));
-   const autoIds:string[]=[];
-   const allUsers = (await db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role='sales'").all()).results;
-   const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint FROM crm_leads").all()).results;
-   const fingerprints = new Set(existing.map(r=>r.fingerprint)), phones = new Set(existing.map(r=>phoneKey(r.phone)).filter(Boolean)), emails = new Set(existing.map(r=>emailKey(r.email)).filter(Boolean));
-   const batchId=id(); let inserted=0,skipped=0,reviewed=0,unmatched=0;
-   const statements = [db.prepare("INSERT INTO crm_batches(id,filename,source,created,creator,total) VALUES(?,?,?,?,?,?)").bind(batchId,clean(body.filename,200)||"人工新增",body.source,now(),user.id,body.rows.length)];
-   for(const raw of body.rows) {
-    const detail: Record<string,string> = {};for(const [k,v] of Object.entries(raw))detail[clean(k,100)]=clean(v);
-    const name = clean(detail["客户名称"]||detail["姓名"]||detail["name"],200),phone=clean(detail["联系方式"]||detail["电话"]||detail["phone"],100),email=clean(detail["邮箱"]||detail["email"],200);
-    if(!name || (!phone && !email)) { skipped++;continue; }
-    const metaId = body.source === "Meta" && detail["form_id"] ? clean(detail["id"],200) : "";
-    const fingerprint = await digest(metaId ? "Meta:lead:"+metaId : body.source+JSON.stringify(Object.keys(detail).sort().map(k=>[k,detail[k]])));
-    if(fingerprints.has(fingerprint)){skipped++;continue;}fingerprints.add(fingerprint);
-    const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) ? 1:0;
-    if(pk)phones.add(pk);if(ek)emails.add(ek);if(review)reviewed++;
-    const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original);
-    const owner = original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
-    const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";
-    const leadId=id();if(!original&&!review&&businessScope)autoIds.push(leadId);
-    statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(leadId,name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now(),businessScope));inserted++;
-   }
-   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客户管理处理剩余待分配记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
-  }
+  const financeRecordsResult=await financeRecords({db,env,req,url,path,write,body,user,actor,token});if(financeRecordsResult!==undefined)return financeRecordsResult;
+  const customerImportResult=await customerImport({db,env,req,url,path,write,body,user,actor,token});if(customerImportResult!==undefined)return customerImportResult;
   throw new Problem("操作不存在",404);
- } catch(e:any) { if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); const guardMessages=['成交与对应跟单须关联同一项目','接收账号已停用','接收人不再是业务员','接收人已无后勤维护权限','任务或订单已结束','订单已归档','标记已成交前需管理员确认有效成交单','退款金额超过可退金额或收款已撤销','已有退款的收款不能撤销','存在有效收款或跟单，不能直接撤销成交','请先由管理员核实应收并确认发货放行；收款变化后须重新确认'];const guard=guardMessages.find(m=>String(e?.message).includes(m)||String(e?.cause?.message).includes(m));if(guard)return json({error:guard},409);console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
+ } catch(e:any) { trace.failure(e); if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); const guardMessages=['成交与对应跟单须关联同一项目','接收账号已停用','接收人不再是业务员','接收人已无后勤维护权限','任务或订单已结束','订单已归档','标记已成交前需管理员确认有效成交单','退款金额超过可退金额或收款已撤销','已有退款的收款不能撤销','存在有效收款或跟单，不能直接撤销成交','请先由管理员核实应收并确认发货放行；收款变化后须重新确认'];const guard=guardMessages.find(m=>String(e?.message).includes(m)||String(e?.cause?.message).includes(m));if(guard)return json({error:guard},409);console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
 }
+const handle=(req:Request)=>tracedRequest(req,execute);
 export const GET=handle,POST=handle,PATCH=handle,PUT=handle;
