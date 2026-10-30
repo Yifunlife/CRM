@@ -1,3 +1,4 @@
+import {moduleURL} from './test-form-intake.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -5,7 +6,7 @@ import ts from 'typescript';
 const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),pure=module('lib/sales-suite.ts'),err='data:text/javascript,export class AllocationError extends Error{constructor(message,status=400){super(message);this.status=status;}}';
 const source=module('lib/sales-quote-source.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err});
-const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
+const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./sales-home-server'":moduleURL('lib/sales-home-server.ts'),"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const {quoteCommercialAmount,suiteForecast}=await import(pure);
 function wrapper(sqlite,readonly=false){let q=Promise.resolve();function stmt(sql,args=[]){if(readonly)assert.match(sql.trim(),/^SELECT\s/i,'quotation binding is SELECT-only');return {bind:(...v)=>stmt(sql,v),async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){return {meta:sqlite.prepare(sql).run(...args)}}};}return {prepare:sql=>stmt(sql),batch(statements){const p=q.then(async()=>{sqlite.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());sqlite.exec('COMMIT');return out}catch(e){sqlite.exec('ROLLBACK');throw e}});q=p.catch(()=>{});return p;}};}
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));const db=wrapper(sqlite);
@@ -20,6 +21,12 @@ const oldLead=JSON.stringify(sqlite.prepare('SELECT * FROM crm_leads ORDER BY id
 const call=(path,body={},u=sales,method='POST')=>salesSuiteEndpoint(db,quote,u,u,'sales-suite/'+path.split('?')[0],method,body,new URL('http://test/api/sales-suite/'+path));
 const get=(path,u=sales)=>call(path,{},u,'GET');
 await assert.rejects(get('report',followup),e=>e.status===403);
+await assert.rejects(get('work',admin),e=>e.status===403);
+const combined=await get('work'), separate=await get('report');
+assert.deepEqual({...combined.data,at:''},{...separate,at:''});
+const {salesHomeEndpoint}=await import(moduleURL('lib/sales-home-server.ts'));
+const separateHome=await salesHomeEndpoint(db,sales,'sales-home','GET');
+assert.deepEqual({...combined.home,at:''},{...separateHome,at:''});
 await assert.rejects(call('project/create',{lead_id:'other-lead',name:'越权',reason:'测试'}),e=>e.status===404);
 const p1=(await call('project/create',{lead_id:'lead',name:'悉尼二店',reason:'客户新店计划'})).id,p2=(await call('project/create',{lead_id:'lead',name:'墨尔本店',reason:'第二个独立项目'})).id;
 const detail=(id=p1,u=sales)=>get('project?id='+id,u);

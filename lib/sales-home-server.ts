@@ -5,7 +5,7 @@ import {salesDay} from './sales-pipeline';
 import {homeCustomer,sortHomeCustomers} from './sales-home';
 
 // This endpoint is deliberately personal, including for sales accounts with company-wide visibility.
-export async function salesHomeEndpoint(db:D1Database,user:any,path:string,method:string){
+export async function salesHomeEndpoint(db:D1Database,user:any,path:string,method:string,assigned?:Promise<any[]>){
  if(path!=='sales-home')return undefined;
  if(user.role!=='sales')throw new AllocationError('此首页仅用于业务员本人工作',403);
  if(method!=='GET')throw new AllocationError('首页只支持读取',405);
@@ -23,7 +23,7 @@ export async function salesHomeEndpoint(db:D1Database,user:any,path:string,metho
   db.prepare(`SELECT COUNT(*) AS deals,COALESCE(SUM(c.deal_id IS NULL),0) AS unpriced FROM crm_deals d LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.owner_id=? AND d.cancelled=0 AND substr(d.deal_date,1,7)=?`).bind(user.id,month).first<any>(),
   db.prepare(`SELECT r.currency,SUM(r.amount_minor) AS amount FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.owner_id=? AND d.cancelled=0 AND r.cancelled=0 AND substr(r.received_date,1,7)=? GROUP BY r.currency`).bind(user.id,month).all<any>(),
   db.prepare(`SELECT r.currency,SUM(f.amount_minor) AS amount FROM crm_workflow_refunds f JOIN crm_receipts r ON r.id=f.receipt_id JOIN crm_deals d ON d.id=r.deal_id WHERE d.owner_id=? AND d.cancelled=0 AND r.cancelled=0 AND substr(f.refunded_date,1,7)=? GROUP BY r.currency`).bind(user.id,month).all<any>(),
-  assignmentReminders(db,user)
+  assigned||assignmentReminders(db,user)
  ]);
  const contracts=(await db.prepare(`SELECT c.currency,SUM(c.total_minor) AS amount FROM crm_workflow_contracts c JOIN crm_deals d ON d.id=c.deal_id WHERE d.owner_id=? AND d.cancelled=0 AND substr(d.deal_date,1,7)=? GROUP BY c.currency`).bind(user.id,month).all<any>()).results;
  const dealMap=new Map<string,any[]>();for(const deal of dealResult.results){const list=dealMap.get(deal.lead_id)||[];list.push(deal);dealMap.set(deal.lead_id,list);}
