@@ -5,10 +5,12 @@ import {orderReminders,orderToday} from '../lib/order-followup';
 import OrderFollowup from './order-followup';
 import FollowupBoard from './followup-board';
 import './role-workspace.css';
-export default function FollowupWorkspace({page:initialPage,user,api,openOrder}:{page:string;user:any;api:(path:string,body?:any)=>Promise<any>;openOrder:(id:string)=>void}){
- if(initialPage==='跟单管理')return <FollowupBoard user={user} api={api}/>;
- return <LegacyFollowupWorkspace page={initialPage} user={user} api={api} openOrder={openOrder}/>;
+export default function FollowupWorkspace({page:initialPage,user,api,openOrder,initialOrderId}:{initialOrderId?:string;page:string;user:any;api:(path:string,body?:any)=>Promise<any>;openOrder:(id:string)=>void}){
+ const [section,S]=useState('节点跟进表');
+ if(initialPage!=='跟单管理')return <LegacyFollowupWorkspace page={initialPage} user={user} api={api} openOrder={openOrder}/>;
+ return <><div className="tabs" aria-label="跟单管理栏目">{['我的待办','交接确认','节点跟进表'].map(name=><button key={name} className={section===name?'selected':''} aria-pressed={section===name} onClick={()=>S(name)}>{name}</button>)}</div>{section==='节点跟进表'?<FollowupBoard initialOrderId={initialOrderId} user={user} api={api}/>:<LegacyFollowupWorkspace key={section} page={section==='我的待办'?'跟单看板':'接单确认'} user={user} api={api} openOrder={openOrder}/>}</>;
 }
+
 function LegacyFollowupWorkspace({page:initialPage,user,api,openOrder}:{page:string;user:any;api:(path:string,body?:any)=>Promise<any>;openOrder:(id:string)=>void}){
  const unified=false;
  const [page,P]=useState(unified?'接单确认':initialPage),[full,FULL]=useState(false),[tools,TOOLS]=useState(false);

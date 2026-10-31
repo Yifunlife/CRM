@@ -1,3 +1,4 @@
+import {salesWorkflowEndpoint} from '../sales-workflow-server';
 import {salesMonitor} from '../sales-monitor';
 import {salesManagementEndpoint} from '../sales-management-server';
 import {roleWorkspaceEndpoint as roleDashboardEndpoint} from '../role-workspace-server';
@@ -31,6 +32,7 @@ import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);
+ const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);
  const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method,url);if(monitor!==undefined)return json(monitor);
  const template=await contractTemplateEndpoint(user,path,req.method,body);if(template!==undefined)return template instanceof Response?template:json(template);
  const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined)return json(dashboard);

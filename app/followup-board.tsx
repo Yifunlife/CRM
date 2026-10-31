@@ -7,15 +7,15 @@ import {previewFollowup} from '../lib/crm-preview-data';
 import OrderFollowup from './order-followup';
 import './role-workspace.css';
 import './followup-board.css';
-type Props={user:any;api:(path:string,body?:any,method?:string)=>Promise<any>};
-export default function FollowupBoard({user,api}:Props){
- const [data,D]=useState<any>(null),[demo,DEMO]=useState(false),[samples,SAMPLES]=useState(previewFollowup),[query,Q]=useState(''),[scope,SCOPE]=useState('在办'),[selected,S]=useState(''),[page,P]=useState('接单确认'),[detail,T]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[loading,L]=useState(true),[revision,R]=useState(0),[tools,TOOLS]=useState(false),[advanced,ADVANCED]=useState(false);
+type Props={initialOrderId?:string;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>};
+export default function FollowupBoard({user,api,initialOrderId}:Props){
+ const [data,D]=useState<any>(null),[demo,DEMO]=useState(false),[samples,SAMPLES]=useState(previewFollowup),[query,Q]=useState(''),[scope,SCOPE]=useState(initialOrderId?'全部':'在办'),[selected,S]=useState(''),[page,P]=useState('接单确认'),[detail,T]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[loading,L]=useState(true),[revision,R]=useState(0),[tools,TOOLS]=useState(false),[advanced,ADVANCED]=useState(false);
  const active=useRef('');
  useEffect(()=>{DEMO(new URLSearchParams(window.location.search).get('demo')==='1');},[]);
  useEffect(()=>{let live=true;L(true);E('');api('followup').then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}).finally(()=>{if(live)L(false);});return()=>{live=false;};},[api,user.id,revision]);
  const view=demo?samples:data,orders=view?.orders||[],tasks=view?.tasks||[],node=FOLLOWUP_NODES.find(n=>n.page===page)!;
  useEffect(()=>{let live=true;active.current=selected;T(null);E('');M('');if(selected){if(demo){const order=samples.orders.find((o:any)=>o.id===selected);if(order)T({order,files:[],events:[]});}else api('followup/orders/'+selected).then(d=>{if(live)T(d);}).catch(e=>{if(live)E(e.message);});}return()=>{live=false;};},[api,selected,revision,user.id,demo]);
- const filtered=orders.filter((o:any)=>(scope==='全部'||scope==='已归档'?scope==='全部'||!!o.archived:!o.archived)&&(!query||[o.project,o.order_number,o.customer_name,o.commercial_name,o.logistics_name].join(' ').toLowerCase().includes(query.trim().toLowerCase())));
+ const filtered=orders.filter((o:any)=>(!initialOrderId||o.id===initialOrderId)&&(scope==='全部'||scope==='已归档'?scope==='全部'||!!o.archived:!o.archived)&&(!query||[o.project,o.order_number,o.customer_name,o.commercial_name,o.logistics_name].join(' ').toLowerCase().includes(query.trim().toLowerCase())));
  const row=detail?.order,entry=orders.find((o:any)=>o.id===selected),saved=row?.details.business_process?.[page],fields=PROCESS_FIELDS[page]||[],editable=!!view?.can_edit&&!!row&&!row.archived;
  async function reload(id=selected){const next=await api('followup/orders/'+id),list=await api('followup');if(active.current===id)T(next);D(list);}
  function select(id:string,value:string){if(busy)return;ADVANCED(false);if(id===selected&&value===page){S('');return;}S(id);P(value);E('');M('');}
