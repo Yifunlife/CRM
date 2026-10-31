@@ -14,7 +14,7 @@ export const MODULES={
  release:{name:'付款与特殊放行',entry:'lib/confirmation/release.ts',tests:['workflow-confirmations']},
  finance:{name:'成交与实际收款',entry:'lib/api/finance.ts',tests:['workflow','sales-suite']},
  notifications:{name:'站内通知',entry:'lib/api/notifications.ts',tests:['followup-phase1-scheduled','workflow-confirmations']},
- monitor:{name:'销售智能监控',entry:'lib/sales-monitor.ts',tests:['sales-monitor','customer-entry-monitor']},
+ monitor:{name:'销售智能监控',entry:'lib/sales-monitor.ts',tests:['sales-monitor','customer-entry-monitor','sales-monitor-groups']},
  reports:{name:'销售与运营统计',entry:'lib/sales-home-server.ts',tests:['sales-home','sales-pipeline','operations-report','operations-dashboard','crm-monthly-cohort','team-followup','attribution']},
  accounts:{name:'账号与权限',entry:'lib/api/accounts.ts',tests:['permissions','sales-access']},
  google:{name:'Google来源连接',entry:'lib/api/google.ts',tests:['form-intake']},

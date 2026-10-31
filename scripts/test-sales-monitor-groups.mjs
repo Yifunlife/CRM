@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';import {build} from 'esbuild';
+const out=await build({entryPoints:['lib/sales-monitor-groups.ts'],bundle:true,write:false,platform:'node',format:'esm'});
+const {groupMonitorItems}=await import('data:text/javascript;base64,'+Buffer.from(out.outputFiles[0].text).toString('base64'));
+const item=(id,title='',extra={})=>({id,title,stage:'报价',level:'异常',evidence:'evidence',suggestion:'suggestion',owner_id:'a',owner_name:'A',page:'报价与协作',count:1,...extra});
+const items=[item('sync:1','项目A'),item('sync:2','项目B'),item('accept:1'),item('first:a','待首次联系',{count:5}),item('first:b','待首次联系',{count:7}),item('order-notice:1','任务逾期',{stage:'跟单',level:'到期提醒'}),item('order-notice:2','任务到期跟进',{stage:'跟单',level:'到期提醒'}),item('order-notice:3','金额待确认',{stage:'跟单',level:'待处理'}),item('order-notice:4','异常待处理',{stage:'跟单',level:'待处理'}),item('unrecognized:1','Other',{stage:'客户',level:'待确认'})];
+const before=JSON.stringify(items),groups=groupMonitorItems(items);
+assert.equal(groups.find(g=>g.id==='sync').count,2);assert.equal(groups.find(g=>g.id==='sync').items.length,2);assert.equal(groups.find(g=>g.id==='first').count,12);
+assert.equal(groups.find(g=>g.id==='order:due').count,2);assert.equal(groups.find(g=>g.id==='order:money').count,1);assert.equal(groups.find(g=>g.id==='order:exception').count,1);
+assert(groups.some(g=>g.id==='other:客户:待确认'));assert.equal(groups.flatMap(g=>g.items).length,items.length);assert.equal(JSON.stringify(items),before);assert.deepEqual(groupMonitorItems([]),[]);
+console.log('PASS: same issue types grouped across customers, accurate aggregated counts, distinct order issue categories, unknown-item fallback, empty results and no mutation.');

@@ -13,10 +13,11 @@ export default function CustomerEntryMonitor({rules,classification,note,revision
  return <section className="panel customer-entry-monitor" aria-label="客户进入与归属六项监控">
   <h2>客户进入与归属 · 6 项规则</h2>
   <p className="monitor-source">记录分类（含未入档咨询）：历史 {classification.historical} 条 · 新增 {classification.new} 条 · 日期待确认 {classification.unknown} 条</p>
-  <div className="entry-rule-list">{rules.map(rule=><button className="entry-rule" type="button" key={rule.number} aria-pressed={selected===rule.number} onClick={()=>{S(rule.number);P(1);}}><span className="entry-rule-text"><strong>{rule.number}. {rule.name}</strong><span>{rule.description}</span></span><span className="entry-rule-result">{rule.count?rule.count+' 条待核查':'未发现待核查记录'}</span></button>)}</div>
-  <p className="monitor-source">{note}</p>
+  <div className="entry-rule-list">{rules.map(rule=><button className="entry-rule" type="button" key={rule.number} aria-pressed={selected===rule.number} onClick={()=>{S(rule.number);P(1);}}><span className="entry-rule-text"><strong>{rule.number}. {rule.name}</strong></span><span className="entry-rule-result">{rule.count} 条</span></button>)}</div>
+  <details className="monitor-rules"><summary>查看统计口径</summary><p>{note}</p></details>
   {selected&&<div className="entry-rule-detail" aria-busy={busy}>
    <div className="section-heading"><h3>第 {selected} 项：{rules.find(r=>r.number===selected)?.name}</h3><button type="button" onClick={()=>{S(null);D(null);}}>收起明细</button></div>
+   <p className="monitor-source">{rules.find(r=>r.number===selected)?.description}</p>
    {busy&&<p role="status">正在读取规则明细…</p>}
    {error&&<p role="alert" className="notice error">{error} <button type="button" onClick={()=>R(v=>v+1)}>重试读取</button></p>}
    {!busy&&!error&&data&&data.selectedRule===selected&&<><p>涉及 {data.total} 条记录</p>{data.rows.map(item=><article key={item.id} className="monitor-item"><div className="monitor-item-main"><div className="monitor-item-heading"><span>{item.level}</span><span>{item.owner_name}</span></div><h3>{item.title}</h3><p>{item.evidence}</p><p className="monitor-suggestion">建议：{item.suggestion}</p></div><button type="button" onClick={()=>openItem(item)}>{item.lead_id?'查看客户':'查看客户管理'}</button></article>)}
