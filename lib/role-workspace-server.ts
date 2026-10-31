@@ -1,3 +1,4 @@
+import {reportPeriod,inReportPeriod} from './report-period';
 import {can,authorizedLead,id,now,GRADES} from './crm';
 import {PROCESS_STATUSES,FOLLOWUP_NODES} from './followup-board';
 import {paymentSummary} from './workflow-server';
@@ -16,7 +17,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   if(method!=='GET')fail('看板仅支持读取',405);
   const personal=u.role==='sales',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
   if(!personal&&!all)fail('没有销售看板权限',403);
-  const month=url.searchParams.get('month')||suiteDay().slice(0,7);if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('月份无效');
+  const month=url.searchParams.get('month')||suiteDay().slice(0,7);let period:ReturnType<typeof reportPeriod>;try{period=reportPeriod(url.searchParams,suiteDay().slice(0,7));}catch(e){return fail((e as Error).message);}
   const market=url.searchParams.get('market')||'内贸';if(!['内贸','外贸','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
@@ -25,7 +26,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    list(db,`SELECT d.*,l.name AS customer_name,l.country,l.source,l.business_scope AS lead_scope,c.currency,c.total_minor FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args),
    list(db,`SELECT q.*,p.lead_id,l.owner_id,l.country,l.source,l.business_scope FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
    list(db,`SELECT o.*,l.country,l.source,l.business_scope,l.name AS customer_name,c.name AS commercial_name,s.name AS logistics_name FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users c ON c.id=o.commercial_id JOIN crm_users s ON s.id=o.logistics_id WHERE ${all?'1=1':'o.commercial_id=? AND l.owner_id=?'}`,all?[]:[u.id,u.id]),
-   list(db,`SELECT p.id,p.created,l.owner_id,l.country,l.source,l.business_scope FROM crm_customer_pool p JOIN crm_leads l ON l.id=COALESCE(p.target_lead_id,p.lead_id) WHERE ${where} AND substr(p.created,1,7)=?`,[...args,month]),
+   list(db,`SELECT p.id,p.created,l.owner_id,l.country,l.source,l.business_scope FROM crm_customer_pool p JOIN crm_leads l ON l.id=COALESCE(p.target_lead_id,p.lead_id) WHERE ${where} AND p.created>=? AND p.created<?`,[...args,period.start,period.end]),
    list(db,`SELECT id,name,active FROM crm_users WHERE ${all?"role IN ('sales','ceo','management') OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id)":'id=?'} ORDER BY name`,args),
    list(db,`SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE r.cancelled=0 AND d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args)
   ]);
@@ -34,10 +35,10 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const leads=pick(rawLeads),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes),orders=pick(rawOrders),inquiries=pick(rawInquiries);
   const pending_classification=rawLeads.filter(l=>classify(l)==='待确认').length;
   const ps=projects.map(p=>({...p,details:parse(p.details)})),os=orders.map(o=>({...o,details:parse(o.details),steps:parse(o.steps)})).map(o=>({...o,delivery_stage:deliveryStage(o)}));
-  const monthly=deals.filter(d=>d.deal_date.startsWith(month)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
+  const monthly=deals.filter(d=>inReportPeriod(d.deal_date,period)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
   let qrows=quotes.map(q=>({...q,summary:parse(q.summary)})).filter(q=>q.summary.available);
   if(personal){let account='';try{account=await quoteAccount(db,source,u);}catch{}const allowed=[];for(const q of qrows){if(q.summary.bridge_shared||account&&q.summary.source_owner===account&&await source!.prepare('SELECT id FROM quotation_history WHERE id=? AND created_by=?').bind(q.quote_id,account).first())allowed.push(q);}qrows=allowed;}
-  const forecast=ps.filter(p=>!CLOSED_STAGES.includes(p.stage)&&p.expected_date?.startsWith(month));
+  const forecast=ps.filter(p=>!CLOSED_STAGES.includes(p.stage)&&inReportPeriod(p.expected_date,period));
   const summary=(owner?:string)=>{
    const ls=leads.filter(l=>!owner||l.owner_id===owner),p=ps.filter(p=>!owner||p.owner_id===owner),o=os.filter(o=>!owner||o.commercial_id===owner),ds=monthly.filter(d=>!owner||d.owner_id===owner),qs=qrows.filter(q=>!owner||q.owner_id===owner),fs=forecast.filter(p=>!owner||p.owner_id===owner);
    const won=new Set(deals.filter(d=>!owner||d.owner_id===owner).map(d=>d.lead_id));
@@ -45,7 +46,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    const quoteProjects=new Set(qs.map(q=>q.project_id));
    return {customers:ls.length,projects:keys.size,grades:Object.fromEntries([...GRADES,''].map(g=>[g||'未评级',ls.filter(l=>(l.grade||'')===g).length])),new_inquiries:inquiries.filter(i=>!owner||i.owner_id===owner).length,following:ls.filter(l=>['已联系待回复','正在沟通'].includes(l.status)).length,won_customers:ls.filter(l=>won.has(l.id)).length,lost:ls.filter(l=>l.status==='已结束'&&!won.has(l.id)).length,quote_count:quoteProjects.size,quoted:sumCurrencies(qs.map(q=>q.summary).filter(q=>q.currency===currency),'amount_minor'),quote_unknown:qs.filter(q=>q.summary.amount_minor==null).length,forecast:sumCurrencies(fs.filter(p=>p.currency===currency),'amount_minor'),forecast_unknown:fs.filter(p=>p.amount_minor==null).length,won:sumCurrencies(ds.filter(d=>d.currency===currency),'total_minor'),unpriced:ds.filter(d=>d.total_minor==null).length,deal_count:ds.length,currency_mismatches:qs.filter(q=>q.summary.amount_minor!=null&&q.summary.currency!==currency).length+fs.filter(p=>p.amount_minor!=null&&p.currency!==currency).length+ds.filter(d=>d.total_minor!=null&&d.currency!==currency).length,target:null};
   };
-  return {market,currency,pending_classification,month,at:now(),personal,summary:summary(personal?u.id:undefined),people:people.map(p=>({...p,...summary(p.id)})),projects:ps,orders:os,deals:monthly,quotes:qrows.map(q=>({id:q.id,project_id:q.project_id,owner_id:q.owner_id,lead_id:q.lead_id,summary:q.summary,sync_error:q.sync_error})),forecast};
+  return {market,currency,pending_classification,month,period,at:now(),personal,summary:summary(personal?u.id:undefined),people:people.map(p=>({...p,...summary(p.id)})),projects:ps,orders:os,deals:monthly,quotes:qrows.map(q=>({id:q.id,project_id:q.project_id,owner_id:q.owner_id,lead_id:q.lead_id,summary:q.summary,sync_error:q.sync_error})),forecast};
  }
  if(path==='role-workspace/customer'&&method==='POST'){
   if(!can(u,'customers_edit')||u.role==='ceo')fail('没有客户维护权限',403);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./office.css";
 import "./demo-integration.css";
+import "./crm-density.css";
 
 export const metadata: Metadata = {
   title: "亦玩客资管理",

@@ -21,3 +21,7 @@
 .fb-table .fb-cell[aria-expanded=true]{background:transparent;outline:2px solid var(--fb-ink);outline-offset:2px}
 .fb-legend{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .fb-legend-item{background:var(--fb-bg);color:var(--fb-ink);font-size:12px;font-weight:600;padding:5px 9px;border-radius:4px}
+
+/* Keep every process label and note inside its fixed table column. */
+.fb-table .fb-cell{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.fb-table .fb-cell>*{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
