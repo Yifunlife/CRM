@@ -25,16 +25,16 @@ try{
   const response=await handlers[method](new Request(origin+'/api/'+path,{method,headers:{origin,cookie:'crm_session=test-'+role,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})}));
   const data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));return data;
  }
- const update=scopes=>({id:'sales',name:'sales',username:'sales',trade_scopes:scopes});
+ const update=scopes=>({id:'sales',name:'sales',username:'sales',email:'sales@example.test',trade_scopes:scopes});
  for(const scopes of [['domestic'],['foreign'],['domestic','foreign'],[]]){
   await request('users',update(scopes));
   const user=(await request('users')).find(u=>u.id==='sales');assert.deepEqual(JSON.parse(user.trade_scopes),scopes);
-  const {trade_scopes,...actual}=sql.prepare("SELECT * FROM crm_users WHERE id='sales'").get();
-  assert.deepEqual(actual,{...usersBefore.find(u=>u.id==='sales')});
+  const {trade_scopes,email,...actual}=sql.prepare("SELECT * FROM crm_users WHERE id='sales'").get();
+  const {email:beforeEmail,...beforeAccount}=usersBefore.find(u=>u.id==='sales');assert.deepEqual(actual,beforeAccount);
   for(const [key] of PERMISSION_FIELDS)assert.equal(can(user,key),can(usersBefore.find(u=>u.id==='sales'),key));
  }
  await request('users',update(['domestic','foreign']));
- await request('users',{id:'sales',name:'sales',username:'sales'});
+ await request('users',{id:'sales',name:'sales',username:'sales',email:'sales@example.test'});
  assert.deepEqual(JSON.parse((await request('users')).find(u=>u.id==='sales').trade_scopes),['domestic','foreign']);
  for(const invalid of [['unknown'],['domestic','domestic'],['__proto__'],'domestic',null])await request('users',update(invalid),'admin',400);
  for(const role of ['ceo','management','sales','followup','operations'])await request('users',update(['domestic']),role,403);

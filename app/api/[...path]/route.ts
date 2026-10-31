@@ -37,30 +37,31 @@ async function execute(req: Request,trace:RequestTrace) {
    return new Response(null,{status:302,headers:{Location:url.origin+"/?google="+result,"Set-Cookie":`crm_google_state=; Path=/api/google; HttpOnly; SameSite=Lax; Max-Age=0${url.protocol==="https:"?"; Secure":""}`,"Cache-Control":"no-store","Referrer-Policy":"no-referrer"}});
   }
   if (path === "login" && req.method === "POST") {
-   const username = clean(body.username, 80).toLowerCase(), pw = clean(body.password, 200), key = await digest(username + ":" + (req.headers.get("cf-connecting-ip") || "local"));
-   const attempt: any = await db.prepare("SELECT * FROM crm_login_attempts WHERE key=?").bind(key).first();
-   if (attempt && attempt.until > Date.now() && attempt.count >= 5) throw new Problem("尝试次数过多，请15分钟后重试", 429);
+   const username = clean(body.username, 254).toLowerCase(), pw = clean(body.password, 200);
    const secret = (env as any).INITIAL_ADMIN_PASSWORD;
    if (username === "admin" && secret && pw === secret) {
     const count: any = await db.prepare("SELECT COUNT(*) AS n FROM crm_users").first();
     if (!count.n) await db.prepare("INSERT OR IGNORE INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,1,?)").bind(id(), "admin", "管理员", "admin", await passwordHash(pw), now()).run();
    }
-   const user: any = await db.prepare("SELECT * FROM crm_users WHERE username=? AND active=1").bind(username).first();
+   const user: any = await db.prepare("SELECT * FROM crm_users WHERE (username=? OR (email<>'' AND lower(email)=?)) AND active=1").bind(username,username).first();
+   const key=await digest((user?.id||username)+":"+(req.headers.get("cf-connecting-ip")||"local"));
+   const attempt:any=await db.prepare("SELECT * FROM crm_login_attempts WHERE key=?").bind(key).first();
+   if(attempt&&attempt.until>Date.now()&&attempt.count>=5)throw new Problem("尝试次数过多，请15分钟后重试",429);
    if (!user || !await verifyPassword(pw, user.password)) {
-    await db.prepare("INSERT INTO crm_login_attempts(key,count,until) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN until<? THEN 1 ELSE count+1 END,until=CASE WHEN until<? THEN excluded.until ELSE until END").bind(key, Date.now()+900000, Date.now(), Date.now()).run();throw new Problem("用户名或密码错误，或账号已停用", 401);
+    await db.prepare("INSERT INTO crm_login_attempts(key,count,until) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN until<? THEN 1 ELSE count+1 END,until=CASE WHEN until<? THEN excluded.until ELSE until END").bind(key, Date.now()+900000, Date.now(), Date.now()).run();throw new Problem("邮箱、用户名或密码错误，或账号已停用", 401);
    }
-   if(/^yw\d{3}$/.test(username)&&pw===username.toUpperCase())await db.prepare('UPDATE crm_users SET must_change_password=1 WHERE id=?').bind(user.id).run();
+   if(/^yw\d{3}$/.test(user.username)&&pw===user.username.toUpperCase())await db.prepare('UPDATE crm_users SET must_change_password=1 WHERE id=?').bind(user.id).run();
    await db.prepare("DELETE FROM crm_login_attempts WHERE key=?").bind(key).run();
    const token = id() + id(); await db.prepare("INSERT INTO crm_sessions(token,user_id,expires) VALUES(?,?,?)").bind(await digest(token), user.id, Date.now()+43200000).run();
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.role,u.permissions,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
   trace.actor(actor.id);
   if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
-  if(user.role==='followup'&&!['me','logout','password','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
+  if(user.role==='followup'&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
   const personalCeo=actor.role==='ceo'&&user.personal_business&&user.id===actor.id&&user.role==='sales';
   if((!personalCeo&&!ceoRequestAllowed(actor,path,req.method))||!ceoRequestAllowed(user,path,req.method))throw new Problem('CEO拥有全部查看权限，不能修改业务数据或系统设置',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};

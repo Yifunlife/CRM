@@ -3,15 +3,16 @@ import {passwordHash,PERMISSION_FIELDS,SALES_PERSONAL_ONLY,permissionDefaults} f
 import {AllocationError} from './allocation-server';
 export async function editAccount(db:D1Database,actor:any,body:any){
  if(actor.role!=='admin')throw new AllocationError('只有管理员可以编辑账号',403);
- if(Object.keys(body).some(k=>!['id','name','username','trade_scopes'].includes(k)))throw new AllocationError('只能修改姓名、用户名和业务范围');
+ if(Object.keys(body).some(k=>!['id','name','username','trade_scopes','email'].includes(k)))throw new AllocationError('只能修改姓名、用户名、邮箱和业务范围');
  const name=typeof body.name==='string'?body.name.trim():'',username=typeof body.username==='string'?body.username.trim().toLowerCase():'';
  if(!name||name.length>80||!/^[a-z0-9._-]{3,80}$/.test(username))throw new AllocationError('姓名为1–80字；用户名为3–80位英文、数字、点、下划线或短横线');
  const existing:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(body.id).first();
  if(!existing)throw new AllocationError('账号不存在',404);
+ const email=await accountEmail(db,body.email,existing.id);
  const scopes='trade_scopes' in body?validateTradeScopes(existing.role,body.trade_scopes):null;
  if(await db.prepare('SELECT id FROM crm_users WHERE username=? AND id<>?').bind(username,body.id).first())throw new AllocationError('用户名已存在，请换一个');
  if(existing.role==='sales'&&await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales' AND id<>?").bind(name,body.id).first())throw new AllocationError('此业务员姓名已有账号，请使用不同姓名');
- try{if(scopes!==null)await db.prepare('UPDATE crm_users SET name=?,username=?,trade_scopes=? WHERE id=?').bind(name,username,JSON.stringify(scopes),body.id).run();else await db.prepare('UPDATE crm_users SET name=?,username=? WHERE id=?').bind(name,username,body.id).run();}catch(e:any){if(String(e.message).includes('UNIQUE'))throw new AllocationError('用户名已存在，请换一个');throw e;}
+ try{await db.prepare('UPDATE crm_users SET name=?,username=?,email=COALESCE(?,email),trade_scopes=COALESCE(?,trade_scopes) WHERE id=?').bind(name,username,email,scopes===null?null:JSON.stringify(scopes),body.id).run();}catch(e:any){if(String(e.message).includes('crm_users_email_unique'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');if(String(e.message).includes('UNIQUE'))throw new AllocationError('用户名已存在，请换一个');throw e;}
  return {ok:true};
 }
 
@@ -43,4 +44,17 @@ export function validateTradeScopes(role:string,value:unknown):string[]{
  if(!Array.isArray(value)||value.some(v=>typeof v!=='string'||!Object.hasOwn(TRADE_SCOPES,v))||new Set(value).size!==value.length)throw new AllocationError('业务范围只能选择内贸、外贸，可同时勾选');
  if(role!=='sales'&&value.length)throw new AllocationError('只有业务员可以设置内贸、外贸');
  return Object.keys(TRADE_SCOPES).filter(v=>value.includes(v));
+}
+
+export async function accountEmail(db:D1Database,value:unknown,userId=''){
+ const email=typeof value==='string'?value.trim().toLowerCase():'';
+ if(!email||email.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@').length!==2)throw new AllocationError('请填写有效邮箱，保存后可用邮箱或用户名登录');
+ if(await db.prepare('SELECT id FROM crm_users WHERE lower(email)=? AND id<>?').bind(email,userId).first())throw new AllocationError('此邮箱已绑定其他账号，请换一个');
+ return email;
+}
+export async function saveAccountProfile(db:D1Database,actor:any,body:any){
+ if(Object.keys(body).some(k=>k!=='email'))throw new AllocationError('个人资料仅可修改本人邮箱');
+ const email=await accountEmail(db,body.email,actor.id);
+ try{await db.prepare('UPDATE crm_users SET email=? WHERE id=?').bind(email,actor.id).run();}catch(e:any){if(String(e.message).includes('UNIQUE'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');throw e;}
+ return {ok:true};
 }
