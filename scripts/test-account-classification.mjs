@@ -38,7 +38,16 @@ try{
  assert.deepEqual(JSON.parse((await request('users')).find(u=>u.id==='sales').trade_scopes),['domestic','foreign']);
  for(const invalid of [['unknown'],['domestic','domestic'],['__proto__'],'domestic',null])await request('users',update(invalid),'admin',400);
  for(const role of ['ceo','management','sales','followup','operations'])await request('users',update(['domestic']),role,403);
- await request('users',{id:'management',name:'management',username:'management',trade_scopes:['domestic']},'admin',400);
+ for(const scopes of [['domestic'],['foreign'],['domestic','foreign'],[]]){
+  await request('users',{id:'management',name:'management',username:'management',trade_scopes:scopes});
+  const user=(await request('users')).find(u=>u.id==='management');assert.deepEqual(JSON.parse(user.trade_scopes),scopes);
+  const {trade_scopes,...actual}=sql.prepare("SELECT * FROM crm_users WHERE id='management'").get();
+  assert.deepEqual(actual,{...usersBefore.find(u=>u.id==='management'),email:''});
+  for(const [key] of PERMISSION_FIELDS)assert.equal(can(user,key),can(usersBefore.find(u=>u.id==='management'),key));
+ }
+ await request('users',{username:'new-manager',name:'new-manager',role:'management',password:'test-only-password',trade_scopes:['domestic','foreign']},'admin',200,'POST');
+ assert.deepEqual(JSON.parse((await request('users')).find(u=>u.username==='new-manager').trade_scopes),['domestic','foreign']);
+ await request('users',{id:'ceo',name:'ceo',username:'ceo',trade_scopes:['domestic']},'admin',400);
  await request('users',{...update([]),permissions:{}},'admin',400);
  await request('users',{username:'new-sales',name:'new-sales',role:'sales',password:'test-only-password',trade_scopes:['domestic','foreign']},'admin',200,'POST');
  assert.deepEqual(JSON.parse((await request('users')).find(u=>u.username==='new-sales').trade_scopes),['domestic','foreign']);

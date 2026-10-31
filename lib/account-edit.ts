@@ -42,7 +42,7 @@ export async function setAccountPermissions(db:D1Database,actor:any,body:any){
 
 export function validateTradeScopes(role:string,value:unknown):string[]{
  if(!Array.isArray(value)||value.some(v=>typeof v!=='string'||!Object.hasOwn(TRADE_SCOPES,v))||new Set(value).size!==value.length)throw new AllocationError('业务范围只能选择内贸、外贸，可同时勾选');
- if(role!=='sales'&&value.length)throw new AllocationError('只有业务员可以设置内贸、外贸');
+ if(!['sales','management'].includes(role)&&value.length)throw new AllocationError('只有业务员和管理层可以设置内贸、外贸');
  return Object.keys(TRADE_SCOPES).filter(v=>value.includes(v));
 }
 
