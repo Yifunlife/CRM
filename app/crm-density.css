@@ -1,0 +1,185 @@
+/* Shared operating density for every signed-in CRM role and lazy-loaded page. */
+.office-app {
+  --crm-space-tight: 6px;
+  --crm-space-control: 8px;
+  --crm-space-section: 12px;
+  --crm-space-page: 16px;
+  --crm-control-height: 36px;
+  --crm-status-done-bg: #eaf6ee;
+  --crm-status-done-ink: #205c39;
+  --crm-status-pending-bg: #f3f5f8;
+  --crm-status-pending-ink: #475569;
+  --crm-status-active-bg: #ebf3ff;
+  --crm-status-active-ink: #244e83;
+  --crm-status-wait-bg: #fff5df;
+  --crm-status-wait-ink: #79500d;
+  --crm-status-error-bg: #fff0ef;
+  --crm-status-error-ink: #982e2b;
+}
+.office-app .workspace .content { padding:var(--crm-space-page); max-width:none; }
+.office-app .workspace > header { height:50px; padding:0 var(--crm-space-page); gap:12px; }
+.office-app .workspace .page-heading { margin-bottom:var(--crm-space-section); gap:12px; align-items:center; }
+.office-app .workspace h1 { font-size:22px; line-height:1.3; margin:0; }
+.office-app .workspace h2 { font-size:15px; line-height:1.4; margin-bottom:8px; }
+.office-app .workspace .page-heading p { margin:4px 0 0; line-height:1.45; }
+.office-app .workspace .panel { padding:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .section-heading { gap:12px; margin-bottom:8px; }
+.office-app .workspace :is(.role-toolbar,.ss-toolbar,.followup-toolbar,.filters,.ops-filters) { gap:var(--crm-space-control); }
+.office-app .workspace label { margin-bottom:10px; font-size:13px; }
+.office-app .workspace :is(.role-toolbar,.ss-toolbar,.followup-toolbar,.filters,.ops-filters) label { margin-bottom:0; }
+.office-app .workspace label > :is(input,select,textarea) { margin-top:4px; }
+.office-app .workspace input:where(:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]):not([type=color])),
+.office-app .workspace select:where(:not([multiple]):not([size])) { height:var(--crm-control-height); min-height:var(--crm-control-height); padding:6px 10px; }
+.office-app .workspace textarea { padding:8px 10px; line-height:1.5; min-height:64px; }
+.office-app .workspace button { min-height:32px; padding:5px 10px; }
+.office-app .workspace button.text { min-height:28px; padding:0; }
+.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) { margin-bottom:var(--crm-space-section); gap:20px; }
+.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) button { padding:7px 0; min-height:34px; }
+.office-app .workspace :is(.notice,.allocation) { padding:8px 12px; margin-bottom:var(--crm-space-section); }
+.office-app .workspace :is(.form-row,.role-form-grid,.followup-form-grid,.execution-grid) { gap:10px 14px; }
+.office-app .workspace :is(.form-row,.role-form-grid,.followup-form-grid,.execution-grid) > label { min-width:0; }
+.office-app .workspace :is(.role-form-grid,.followup-form-grid,.execution-grid) > label { margin-bottom:0; }
+.office-app .workspace th,.office-app .workspace td { padding:8px 10px; line-height:1.45; }
+.office-app .workspace .empty { padding:18px 12px; min-height:0; }
+.office-app .workspace .pagination { margin-top:10px; }
+.office-app .workspace :is(.sales-home,.sales-monitor,.customer-detail) { max-width:none; margin-inline:0; }
+.office-app .workspace .customer-next-action { padding:10px 12px; gap:14px; margin-bottom:12px; }
+.office-app .workspace :is(.customer-followup-layout,.customer-finance-layout,.ss-two,.ss-fields,.ss-facts) { gap:12px; }
+.office-app .workspace .history article { padding:10px 0; }
+.office-app .workspace .deal-record { padding:8px 0; margin-bottom:8px; }
+.office-app .workspace .role-metrics { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-bottom:12px; }
+.office-app .workspace .role-metric { min-height:76px; padding:10px 12px; gap:6px; justify-content:flex-start; }
+.office-app .workspace .role-metric span { font-size:13px; line-height:1.4; }
+.office-app .workspace .role-metric strong { font-size:clamp(18px,1.45vw,23px); line-height:1.3; }
+.office-app .workspace .role-metric strong[data-empty=true] { font-size:15px; color:var(--muted); font-weight:500; }
+.office-app .workspace .grade-chart { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:10px; }
+.office-app .workspace .grade-row { grid-template-columns:36px minmax(40px,1fr) 36px 52px; gap:8px; font-size:13px; }
+.office-app .workspace .grade-track { height:8px; }
+.office-app .workspace .grade-distribution > p { margin-bottom:8px; font-size:12px; }
+.office-app .workspace .role-dashboard-overview { display:grid; grid-template-columns:1fr; gap:0; align-items:start; }
+.office-app .workspace .role-dashboard-personal .role-dashboard-overview { grid-template-columns:1fr; }
+.office-app .workspace .report-definitions { margin:0 0 10px; }
+.office-app .workspace .report-definitions summary { padding:3px 0; font-size:12px; font-weight:400; }
+.office-app .workspace .report-definitions p { margin:6px 0 0; }
+.office-app .workspace .report-attention { font-size:12px; margin:0 0 8px; color:var(--crm-status-wait-ink); }
+.office-app .workspace .monitor-overview { gap:10px 20px; margin:12px 0 10px; padding-bottom:10px; }
+.office-app .workspace .monitor-filters { gap:8px; margin:10px 0; }
+.office-app .workspace .monitor-item { padding:12px 0; gap:16px; }
+.office-app .workspace .sales-monitor .panel { margin-top:12px; }
+.office-app .workspace .monitor-rules { margin:12px 0; }
+.office-app .workspace .personal-performance { gap:10px 20px; padding:10px 0; margin-bottom:12px; }
+.office-app .workspace .ss-summary { gap:12px; padding:10px 0; margin-bottom:12px; }
+.office-app .workspace .ss-panelhead { margin-bottom:10px; }
+.office-app .workspace .ss-next { padding:10px 12px; margin:12px 0; gap:12px; }
+.office-app .workspace .sales-home-customer { padding:12px 0; }
+.office-app .workspace .sales-home-context { gap:12px; margin:10px 0; }
+.office-app .workspace .customer-service :is(.service-setup,.service-detail) { gap:12px; }
+.office-app .workspace .execution-summary { gap:10px; padding:10px 0; }
+.office-app .workspace :is(.execution-flow,.execution-source) { padding:10px 0; }
+.office-app .workspace .fb-toolbar { margin-bottom:10px; }
+.office-app .workspace .fb-editor { padding:12px 14px; }
+.office-app .workspace .fb-cell { min-height:100px; gap:5px; padding:3px; }
+.office-app .workspace .followup-dialog-head { padding:12px 16px; }
+.office-app .workspace .followup-dialog { padding:16px; }
+.office-app .workspace .crm-status { display:inline-block; padding:3px 7px; border-radius:4px; font-size:12px; font-weight:600; line-height:1.4; white-space:normal; }
+.office-app .crm-status-done { background:var(--crm-status-done-bg); color:var(--crm-status-done-ink); }
+.office-app .crm-status-pending { background:var(--crm-status-pending-bg); color:var(--crm-status-pending-ink); }
+.office-app .crm-status-active { background:var(--crm-status-active-bg); color:var(--crm-status-active-ink); }
+.office-app .crm-status-wait { background:var(--crm-status-wait-bg); color:var(--crm-status-wait-ink); }
+.office-app .crm-status-error { background:var(--crm-status-error-bg); color:var(--crm-status-error-ink); }
+.office-app .fb-tone-done { --fb-bg:var(--crm-status-done-bg); --fb-ink:var(--crm-status-done-ink); }
+.office-app .fb-tone-pending { --fb-bg:var(--crm-status-pending-bg); --fb-ink:var(--crm-status-pending-ink); }
+.office-app .fb-tone-active { --fb-bg:var(--crm-status-active-bg); --fb-ink:var(--crm-status-active-ink); }
+.office-app .fb-tone-wait { --fb-bg:var(--crm-status-wait-bg); --fb-ink:var(--crm-status-wait-ink); }
+.office-app .fb-tone-error { --fb-bg:var(--crm-status-error-bg); --fb-ink:var(--crm-status-error-ink); }
+@media(min-width:1100px) { .office-app .workspace .role-dashboard-personal .role-metrics { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+@media(max-width:1100px) { .office-app .workspace .role-dashboard-overview { grid-template-columns:1fr; } }
+@media(max-width:720px) {
+ .office-app { --crm-space-page:12px; --crm-control-height:44px; }
+ .office-app .workspace > header { height:auto; min-height:50px; padding:6px 12px; }
+ .office-app .workspace .page-heading { align-items:stretch; gap:8px; }
+ .office-app .workspace h1 { font-size:20px; }
+ .office-app .workspace .role-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .office-app .workspace .role-metric { padding:10px; min-height:76px; }
+ .office-app .workspace .role-metric strong { font-size:20px; }
+ .office-app .workspace button,.office-app .workspace button.text,.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) button { min-height:44px; }
+ .office-app .workspace :is(.form-row,.role-form-grid,.followup-form-grid,.execution-grid) { grid-template-columns:1fr; }
+ .office-app .workspace .role-dashboard-overview { grid-template-columns:1fr; }
+ .office-app .workspace .grade-chart { grid-template-columns:1fr; gap:8px; }
+ .office-app .workspace .fb-cell { min-height:100px; }
+}
+@media(pointer:coarse) { .office-app { --crm-control-height:44px; } .office-app .workspace button,.office-app .workspace button.text { min-height:44px; } }
+
+.office-app .workspace .acquisition-market{padding:12px 0}
+.office-app .workspace .acquisition-market h3{font-size:16px;margin-bottom:10px}
+.office-app .workspace .acquisition-market h4{margin:14px 0 8px}
+.office-app .workspace .acquisition-metrics{gap:10px 14px}
+.office-app .workspace .operations-checks{gap:8px;margin:10px 0;padding:8px 0}
+.office-app .workspace .team-priorities{margin:12px 0}
+.office-app .workspace .team-priorities>button{padding:12px;gap:6px}
+.office-app .workspace .team-priorities strong{font-size:24px}
+@media(min-width:1500px){.office-app .workspace .contract-templates .role-form-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Shared Lucide navigation icon geometry. */
+.office-app aside nav button > svg:first-child { width:20px; height:20px; flex:0 0 20px; stroke-width:1.75; }
+.office-app aside nav .nav-group-chevron { width:16px; height:16px; flex:0 0 16px; stroke-width:1.75; }
+
+/* Page-specific layouts share the same operating rhythm. */
+.office-app .workspace .customer-management .filters { display:grid; grid-template-columns:minmax(200px,1.7fr) repeat(5,minmax(100px,1fr)); align-items:end; margin-bottom:10px; }
+.office-app .workspace .customer-management .filters label { min-width:0; }
+.office-app .workspace .customer-management fieldset { border:0; margin:0; padding:0; min-width:0; }
+.office-app .workspace :is(.role-process-tabs,.ss-toolbar,.work-filters,.customer-stage-tabs,.pool-actions) { margin-bottom:12px; gap:8px; }
+.office-app .workspace :is(.ss-split,.ss-projectlayout,.dashboard-bottom,.detail-columns) { gap:12px; }
+.office-app .workspace :is(.dashboard-bottom,.detail-columns,.home-project-progress) { margin-top:12px; }
+.office-app .workspace :is(.ss-event,.ss-task,.ss-quote,.ss-forecast,.role-profile-person,.role-process-history,.role-template-row) { padding-block:10px; }
+.office-app .workspace :is(.ss-summary strong,.ss-price) { font-size:22px; }
+.office-app .workspace .ss-stages { margin:12px 0; }
+.office-app .workspace .ss-stages li { padding:8px 4px; }
+.office-app .workspace :is(.ss-link-confirm,.ss-note) { padding:12px; margin-top:12px; }
+.office-app .workspace :is(.ss-editor .ss-actions,.customer-save) { padding-top:10px; margin-top:12px; gap:8px; }
+.office-app .workspace .ss-legacy { margin-top:12px; }
+.office-app .workspace .ss-field { padding-bottom:8px; }
+.office-app .workspace :is(.team-project-filters,.sales-amount-filters) { gap:10px 14px; }
+.office-app .workspace :is(.team-project-filters,.sales-amount-filters)>label { gap:4px; }
+.office-app .workspace :is(.team-project-filters,.sales-amount-filters) :is(input,select) { height:var(--crm-control-height); min-height:var(--crm-control-height); padding:6px 10px; }
+.office-app .workspace :is(.monitor-empty,.sales-home-empty) { padding:14px 0; }
+.office-app .workspace :is(.monitor-pages,.sales-home-pages,.work-todos-pages) { margin-top:10px; gap:8px; }
+.office-app .workspace .sales-home-updated { margin-bottom:10px; }
+.office-app .workspace .sales-home-queues { margin:12px 0; }
+.office-app .workspace .sales-home-collaboration { padding:12px 0; gap:12px; }
+.office-app .workspace .sales-home-performance { gap:12px 20px; margin:12px 0; }
+.office-app .workspace .contract-selector { gap:8px; margin-bottom:12px; }
+.office-app .workspace .contract-actions { gap:8px; margin-block:10px; }
+.office-app .workspace .contract-preview { margin-top:12px; padding-top:12px; }
+.office-app .workspace .contract-line { padding-block:10px; }
+.office-app .workspace .role-selected-order { margin:12px 0; }
+.office-app .workspace .fb-cell { min-height:0; }
+.office-app .workspace :is(.pool-review .form-row,.import-confirm) { margin-top:12px; }
+.office-app .workspace .mapping { gap:0 14px; padding-top:12px; }
+.office-app .workspace dl>div { padding-block:8px; gap:10px; }
+.office-app .workspace .customer-detail dl { column-gap:20px; }
+.office-app .workspace .account-toolbar { gap:8px; margin-bottom:12px; }
+.office-app .workspace :is(.account-dialog,.followup-dialog) { max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); overflow:auto; }
+.office-app .workspace .account-dialog-head { padding:12px 16px; }
+.office-app .workspace .account-dialog form { padding:16px; }
+.office-app .workspace .account-dialog-footer { padding-top:12px; gap:8px; }
+.office-app .workspace :is(.section-heading,.page-heading,.pagination) { flex-wrap:wrap; }
+.office-app .workspace :is(.notice,.role-metric,.customer,.ss-badge,.crm-status) { overflow-wrap:anywhere; }
+.office-app .workspace :is(.customer,.ss-badge) { white-space:normal; }
+@media(max-width:1200px) { .office-app .workspace .customer-management .filters { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:720px) {
+ .office-app .workspace .customer-management .filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .office-app .workspace .customer-management .filters>label:first-child { grid-column:1/-1; }
+ .office-app .workspace :is(.ss-fields,.mapping,.customer-detail dl) { grid-template-columns:1fr; }
+ .office-app .workspace :is(.ss-editor,.narrow) { max-width:100%; }
+ .office-app .workspace .ss-editor .form-row>label { min-width:0; }
+ .office-app .workspace .customer-detail-tabs { overflow-x:auto; }
+ .office-app .workspace .customer-detail-tabs button { flex-shrink:0; white-space:nowrap; }
+ .office-app .workspace .search { min-width:0; width:100%; }
+ .office-app .workspace .pagination { gap:8px; }
+ .office-app .workspace :is(.service-setup,.service-detail) { grid-template-columns:1fr; }
+}
+.office-app .workspace .entry-rule-list { margin:12px 0; }
+.office-app .workspace .entry-rule { padding:10px 8px; gap:12px; }
+.office-app .workspace .entry-rule-text { gap:4px; }
+.office-app .workspace .entry-rule-detail { margin-top:12px; }
