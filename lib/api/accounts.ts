@@ -1,4 +1,4 @@
-import { editAccount,resetAccountPassword } from '../account-edit';
+import { editAccount,resetAccountPassword,validateTradeScopes } from '../account-edit';
 import { can,clean,digest,id,now,passwordHash,verifyPassword } from '../crm';
 import { initializeEmployeeLogin } from '../employee-login';
 import { followupManager } from '../order-followup-server';
@@ -19,7 +19,7 @@ export async function accountRecords({db,req,path,write,body,user,actor,token}:A
   if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
   if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
   if (path === "users") {
-   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,role,permissions,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
+   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,role,permissions,trade_scopes,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
    if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);
    if (req.method === "POST") {
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
@@ -27,8 +27,9 @@ export async function accountRecords({db,req,path,write,body,user,actor,token}:A
     if (!["admin","operations","sales","ceo","management","followup"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
+    const tradeScopes=validateTradeScopes(body.role,body.trade_scopes??[]);
     const userId = id();
-    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password) VALUES(?,?,?,?,?,1,?,1)").bind(userId,username,name,body.role,await passwordHash(body.password),now())];
+    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password,trade_scopes) VALUES(?,?,?,?,?,1,?,1,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now(),JSON.stringify(tradeScopes))];
     if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
     if(body.role==='followup')statements.push(db.prepare("UPDATE crm_users SET permissions=? WHERE id=?").bind(JSON.stringify({followup_edit:true}),userId));
     await db.batch(statements);return json({ok:true});

@@ -86,7 +86,7 @@ await assert.rejects(call('command','POST',{id:'command-management-0003',kind:'s
 console.log('PASS: management patch allowlist, batch ownership and company scene permission');
 
 // Account edits retain identity and workbench ownership after login-name changes.
-const {editAccount,resetAccountPassword}=await import(moduleUrl('lib/account-edit.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))}));
+const {editAccount,resetAccountPassword}=await import(moduleUrl('lib/account-edit.ts',{"'./account-classification'":JSON.stringify(moduleUrl('lib/account-classification.ts')),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))}));
 sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='winnie'").run();
 const userBefore=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
 const recordsBefore=JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_workbench_snapshots','crm_workbench_links','crm_workbench_drafts','crm_sessions'].map(t=>sqlite.prepare('SELECT * FROM '+t).all()));
