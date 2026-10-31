@@ -183,3 +183,11 @@
 .office-app .workspace .entry-rule { padding:10px 8px; gap:12px; }
 .office-app .workspace .entry-rule-text { gap:4px; }
 .office-app .workspace .entry-rule-detail { margin-top:12px; }
+
+/* Delivery stages have distinct colors; exception status remains red. */
+.office-app .crm-status-design { background:#f0eafa; color:#694196; }
+.office-app .crm-status-project-order { background:#e7effc; color:#244e83; }
+.office-app .crm-status-toy-order { background:#e1f3f5; color:#11636f; }
+.office-app .crm-status-production { background:#fff0dc; color:#88500d; }
+.office-app .crm-status-shipping { background:#e6f2fc; color:#24618a; }
+.office-app .crm-status-installation { background:#f8ecf2; color:#8a3c65; }
