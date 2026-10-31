@@ -7,11 +7,11 @@ import {previewFollowup} from '../lib/crm-preview-data';
 import OrderFollowup from './order-followup';
 import './role-workspace.css';
 import './followup-board.css';
-type Props={initialOrderId?:string;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>};
-export default function FollowupBoard({user,api,initialOrderId}:Props){
- const [data,D]=useState<any>(null),[demo,DEMO]=useState(false),[samples,SAMPLES]=useState(previewFollowup),[query,Q]=useState(''),[scope,SCOPE]=useState(initialOrderId?'全部':'在办'),[selected,S]=useState(''),[page,P]=useState('接单确认'),[detail,T]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[loading,L]=useState(true),[revision,R]=useState(0),[tools,TOOLS]=useState(false),[advanced,ADVANCED]=useState(false);
+type Props={initialDemo?:boolean;initialNode?:string;openInitially?:boolean;initialOrderId?:string;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>};
+export default function FollowupBoard({user,api,initialOrderId,initialDemo=false,initialNode='接单确认',openInitially=false}:Props){
+ const [data,D]=useState<any>(null),[demo,DEMO]=useState(initialDemo),[samples,SAMPLES]=useState(previewFollowup),[query,Q]=useState(''),[scope,SCOPE]=useState(initialOrderId?'全部':'在办'),[selected,S]=useState(openInitially?initialOrderId||'':''),[page,P]=useState(initialNode),[detail,T]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[loading,L]=useState(true),[revision,R]=useState(0),[tools,TOOLS]=useState(false),[advanced,ADVANCED]=useState(false);
  const active=useRef('');
- useEffect(()=>{DEMO(new URLSearchParams(window.location.search).get('demo')==='1');},[]);
+ useEffect(()=>{DEMO(initialDemo||new URLSearchParams(window.location.search).get('demo')==='1');},[]);
  useEffect(()=>{let live=true;L(true);E('');api('followup').then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}).finally(()=>{if(live)L(false);});return()=>{live=false;};},[api,user.id,revision]);
  const view=demo?samples:data,orders=view?.orders||[],tasks=view?.tasks||[],node=FOLLOWUP_NODES.find(n=>n.page===page)!;
  useEffect(()=>{let live=true;active.current=selected;T(null);E('');M('');if(selected){if(demo){const order=samples.orders.find((o:any)=>o.id===selected);if(order)T({order,files:[],events:[]});}else api('followup/orders/'+selected).then(d=>{if(live)T(d);}).catch(e=>{if(live)E(e.message);});}return()=>{live=false;};},[api,selected,revision,user.id,demo]);

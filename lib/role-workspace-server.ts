@@ -18,7 +18,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const personal=u.role==='sales',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
   if(!personal&&!all)fail('没有销售看板权限',403);
   const month=url.searchParams.get('month')||suiteDay().slice(0,7);let period:ReturnType<typeof reportPeriod>;try{period=reportPeriod(url.searchParams,suiteDay().slice(0,7));}catch(e){return fail((e as Error).message);}
-  const market=url.searchParams.get('market')||'内贸';if(!['内贸','外贸'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
+  const market=url.searchParams.get('market')||'内贸';if(!['内贸','外贸','全部','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
   const branch=url.searchParams.get('branch')||'';if(!['','澳洲分公司','北美分公司'].includes(branch)||branch&&market!=='外贸')fail('分公司选择无效');
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
@@ -32,7 +32,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    list(db,`SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE r.cancelled=0 AND d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args)
   ]);
   const classify=(row:any)=>parse(row.lead_detail)._sales_company?'外贸':customerMarket({...row,business_scope:row.business_scope||row.lead_scope});
-  const pick=(rows:any[])=>rows.filter(r=>classify(r)===market&&(!branch||parse(r.lead_detail)._sales_company===branch));
+  const pick=(rows:any[])=>rows.filter(r=>(market==='全部'||classify(r)===market)&&(!branch||parse(r.lead_detail)._sales_company===branch));
   const leads=pick(rawLeads).filter(l=>inReportPeriod(l.created,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
   const ps=projects.map(p=>({...p,details:parse(p.details)})),os=orders.map(o=>({...o,details:parse(o.details),steps:parse(o.steps)})).map(o=>({...o,delivery_stage:deliveryStage(o)}));
   const monthly=deals.filter(d=>inReportPeriod(d.deal_date,period)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
