@@ -18,7 +18,7 @@ for(const u of [admin,staff,sales,other])sqlite.prepare('INSERT INTO crm_users(i
 for(const [id,owner] of [['lead1','sales'],['lead2','other']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-22')").run(id,id,owner,id);
 
 const crmUrl=moduleUrl('lib/crm.ts'),{can,permissionDefaults,authorizedLead}=await import(crmUrl);
-const {setAccountPermissions}=await import(moduleUrl('lib/account-edit.ts',{"'./crm'":JSON.stringify(crmUrl),"'./allocation-server'":JSON.stringify(errors)}));
+const {setAccountPermissions}=await import(moduleUrl('lib/account-edit.ts',{"'./account-classification'":JSON.stringify(moduleUrl('lib/account-classification.ts')),"'./crm'":JSON.stringify(crmUrl),"'./allocation-server'":JSON.stringify(errors)}));
 const {allocationEndpoint}=await import(moduleUrl('lib/allocation-server.ts',{"'./crm'":JSON.stringify(crmUrl),"'./allocation'":JSON.stringify(moduleUrl('lib/allocation.ts'))}));
 const initial=sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='sales'").get();
 const ceoPermissions=permissionDefaults('ceo');
