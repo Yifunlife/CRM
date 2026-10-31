@@ -1,20 +1,17 @@
 'use client';
-import {useState} from 'react';
-import {ResponsiveContainer,LineChart,Line,XAxis,YAxis,Tooltip,CartesianGrid} from 'recharts';
-type Day={date:string;count:number};
 const money=(currency:string,amount:number|null)=>amount==null?'待核实':currency+' '+(amount/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
-export function DailyLeadTrend({daily}:{daily:Day[]}){
- const total=daily.reduce((n,d)=>n+d.count,0);
- return <section className="panel daily-trend"><div className="section-heading"><h2>每日新增客资趋势</h2><span className="small muted">新增 {total} 位 · 日均 {daily.length?(total/daily.length).toFixed(1):'0'} 位</span></div><p className="small muted">{daily[0]?.date} 至 {daily.at(-1)?.date} · 包含零新增日期</p><div className="daily-trend-chart" role="img" aria-label={'每日新增客资趋势，共 '+total+' 位客户；逐日数据可点击上方每日新增客资数查看。'}><ResponsiveContainer width="100%" height="100%"><LineChart data={daily} margin={{top:12,right:20,bottom:8,left:0}} accessibilityLayer><CartesianGrid stroke="#e0e6ee" vertical={false}/><XAxis dataKey="date" tickFormatter={d=>d.slice(5)} minTickGap={36} tick={{fontSize:12}}/><YAxis allowDecimals={false} width={40} tick={{fontSize:12}}/><Tooltip labelFormatter={v=>String(v)} formatter={v=>[v+' 位','新增客资']}/><Line type="linear" dataKey="count" name="新增客资" stroke="#264b82" strokeWidth={2} dot={daily.length===1} activeDot={{r:5}} isAnimationActive={false}/></LineChart></ResponsiveContainer></div>{total===0&&<p className="empty">所选期间暂无新增客资。</p>}</section>;
-}
-export function SalesMetricDetails({metric,data,owner,currency,daily,openLead,openProject,onClose}:{metric:string;data:any;owner:string;currency:string;daily:Day[];openLead:(id:string)=>void;openProject:(id:string)=>void;onClose:()=>void}){
- const [day,S]=useState('');
+export function SalesMetricDetails({metric,data,owner,currency,openLead,openProject,onClose}:{metric:string;data:any;owner:string;currency:string;openLead:(id:string)=>void;openProject:(id:string)=>void;onClose:()=>void}){
  const owned=(rows:any[]=[])=>rows.filter(r=>!owner||r.owner_id===owner);
  const person=(id:string)=>data.people.find((p:any)=>p.id===id)?.name||'未分配';
- const customerMetric=['客户总数','A类客户','每日新增客资数'].includes(metric),quoteMetric=metric==='已报价金额',quotingMetric=metric==='正在报价项目';
- const customers=owned(data.customers).filter(l=>(metric!=='A类客户'||l.grade==='A')&&(!day||l.created.slice(0,10)===day));
+ const customerMetric=['客户总数','A类客户','所选周期新增客户数'].includes(metric),quoteMetric=metric==='已报价金额',quotingMetric=metric==='正在报价项目';
+ const customers=owned(data.customers).filter(l=>(metric!=='A类客户'||l.grade==='A'));
  const rows=customerMetric?customers:quoteMetric?owned(data.quotes):quotingMetric?owned(data.quoting_projects):owned(data.deals);
- return <section className="panel sales-metric-details" aria-live="polite"><div className="section-heading"><h2>{metric}明细{day?' · '+day:''}</h2><button onClick={onClose}>收起</button></div>
- {metric==='每日新增客资数'&&<><div className="daily-leads"><table><thead><tr><th>日期</th><th>新增客资数</th></tr></thead><tbody>{daily.map(d=><tr key={d.date}><td>{d.date}</td><td><button className="text" aria-pressed={day===d.date} onClick={()=>S(day===d.date?'':d.date)}>{d.count} 位 · 查看名单</button></td></tr>)}</tbody></table></div>{day&&<button onClick={()=>S('')}>查看区间全部新增客户</button>}</>}
+ return <section className="panel sales-metric-details" aria-live="polite"><div className="section-heading"><h2>{metric}明细</h2><button onClick={onClose}>收起</button></div>
+
  <div className="table-wrap"><table><thead><tr><th>{customerMetric?'客户':quoteMetric?'报价合同编号':quotingMetric?'项目':'成交订单 / 客户'}</th><th>业务员</th><th>{customerMetric?'客户等级':quoteMetric?'当前版本':quotingMetric?'当前阶段':'成交日期'}</th><th>{customerMetric?'新增日期':quoteMetric?'报价金额':quotingMetric?'进入阶段日期':'合同金额'}</th><th>操作</th></tr></thead><tbody>{rows.map((r:any)=><tr key={r.id||r.project_id}><td>{customerMetric?r.name:quoteMetric?r.summary.contract_no||'未登记编号':quotingMetric?r.name:<>{r.order_number}<small>{r.customer_name}</small></>}</td><td>{person(r.owner_id)}</td><td>{customerMetric?r.grade||'—':quoteMetric?r.summary.current_id:quotingMetric?({design:'方案设计',quoted:'已报价',negotiation:'价格交涉'} as Record<string,string>)[r.stage]:r.deal_date}</td><td>{customerMetric?r.created.slice(0,10):quotingMetric?r.stage_at.slice(0,10):<>{money(quoteMetric?r.summary.currency:r.currency,quoteMetric?r.summary.amount_minor:r.total_minor)}{(quoteMetric?r.summary.currency:r.currency)!==currency&&<small>币种不匹配，未计入金额汇总</small>}</>}</td><td><button className="text" onClick={()=>customerMetric?openLead(r.id):quoteMetric||quotingMetric?openProject(r.project_id):openLead(r.lead_id)}>{customerMetric?'查看客户':quoteMetric||quotingMetric?'查看项目':'查看合同与收款'}</button></td></tr>)}</tbody></table></div>{!rows.length&&<p className="empty">当前筛选下暂无对应记录。</p>}</section>;
+}
+
+export function PerformanceRanking({people,currency,kind,onSelect}:{people:any[];currency:string;kind:'amount'|'count';onSelect:(id:string)=>void}){
+ const amount=kind==='amount',value=(p:any)=>amount?(p.won[currency]||0):p.deal_count,rows=[...people].sort((a,b)=>value(b)-value(a)||a.name.localeCompare(b.name,'zh-CN')),max=Math.max(1,...rows.map(value));
+ return <section className="panel"><div className="section-heading"><h2>{amount?'业务员成交金额排行':'业务员成交项目数对比'}</h2><span className="small muted">{amount?currency:'项目数'} · 由高到低</span></div><div className="performance-ranking">{rows.map(p=><button className="performance-rank" key={p.id} onClick={()=>onSelect(p.id)} aria-label={p.name+'，'+(amount?'成交金额':'成交项目数')+'，查看明细'}><span>{p.name}{!p.active?'（已停用）':''}</span><div className="performance-bar-track"><div className={'performance-bar '+(amount?'blue':'green')} style={{width:value(p)/max*100+'%'}}/></div><strong>{amount?(p.won[currency]==null&&p.unpriced?'待核实':(value(p)/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})):value(p)+' 个'}{amount&&p.unpriced>0&&<small>{p.unpriced} 单待核实</small>}</strong></button>)}</div>{!rows.length&&<p className="empty">当前范围暂无业务员。</p>}{amount&&rows.some(p=>p.unpriced>0)&&<p className="small muted">排行按已登记且币种一致的成交金额计算，缺失金额不作推算。</p>}</section>;
 }

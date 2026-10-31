@@ -1,3 +1,4 @@
+export const validReportDate=(day:string)=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&day>='2000-01-01'&&day<='9998-12-31'&&Number.isFinite(Date.parse(day+'T00:00:00Z'))&&new Date(day+'T00:00:00Z').toISOString().slice(0,10)===day;
 export type ReportPeriodKind='month'|'quarter'|'year'|'custom';
 export function reportPeriod(params:URLSearchParams,defaultMonth:string){
  const kind=params.get('period')||'month';
@@ -9,8 +10,8 @@ export function reportPeriod(params:URLSearchParams,defaultMonth:string){
  let start:string,end:string,label:string;
  if(kind==='custom'){
   start=params.get('start')||'';const last=params.get('end')||'';
-  const valid=(day:string)=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&day>='2000-01-01'&&day<='9998-12-31'&&Number.isFinite(Date.parse(day+'T00:00:00Z'))&&new Date(day+'T00:00:00Z').toISOString().slice(0,10)===day;
-  if(!valid(start)||!valid(last))throw new Error('请选择有效的开始和结束日期');
+
+  if(!validReportDate(start)||!validReportDate(last))throw new Error('请选择有效的开始和结束日期');
   if(start>last)throw new Error('结束日期不能早于开始日期');
   end=new Date(Date.parse(last+'T00:00:00Z')+86400000).toISOString().slice(0,10);label=start+' 至 '+last;
  }else if(kind==='month'){

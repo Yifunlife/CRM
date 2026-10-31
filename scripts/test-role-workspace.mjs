@@ -50,17 +50,18 @@ sqlite.exec("DELETE FROM crm_customer_pool WHERE id='period-inquiry'; UPDATE crm
 assert.equal(snapshot(),before,'period reports retain original customer/history/order data');
 // Period-scoped customer metrics and explicit company ownership.
 const previous=await get(ceo,'2026-09');assert.equal(previous.summary.customers,0);assert.equal(previous.summary.grades.A,0);assert.deepEqual(previous.summary.quoted,{});
-assert.equal(company.summary.daily_new.length,31);assert.equal(company.summary.daily_new[0].count,1);assert.equal(company.summary.daily_new.reduce((n,d)=>n+d.count,0),company.summary.customers);
+assert.equal(company.customers.length,company.summary.customers);
 sqlite.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._sales_company','澳洲分公司') WHERE id='foreign'").run();
 const branchGet=(branch,u=ceo)=>call(db,u,u,'role-workspace/report','GET',{},new URL('http://test/?month=2026-10&market='+encodeURIComponent('外贸')+'&branch='+encodeURIComponent(branch)));
 assert.equal((await branchGet('澳洲分公司')).summary.customers,1);assert.equal((await branchGet('北美分公司')).summary.customers,0);assert.equal((await branchGet('澳洲分公司',sales)).summary.customers,0);assert.deepEqual((await branchGet('澳洲分公司')).summary.won,{USD:200000});await assert.rejects(()=>branchGet('其他'),/分公司/);
 sqlite.prepare("UPDATE crm_leads SET detail=json_remove(detail,'$._sales_company') WHERE id='foreign'").run();assert.equal(snapshot(),before);
 assert.equal(company.customers.length,company.summary.customers);assert.equal(company.customers.filter(l=>l.grade==='A').length,company.summary.grades.A);assert.ok(company.customers.every(l=>!('lead_detail' in l)&&!('detail' in l)));assert.equal((await get(sales)).customers.every(l=>l.owner_id==='sales'),true);assert.equal((await get(ceo,'2026-09')).customers.length,0);assert.equal((await get(ceo,'2026-09')).quotes.length,0);
 sqlite.exec("UPDATE crm_sales_projects SET stage='quoted',stage_at='2026-10-15' WHERE project_id='p'");const quotingDetails=await get(sales);assert.equal(quotingDetails.quoting_projects.length,quotingDetails.summary.quoting_count);assert.equal(quotingDetails.summary.quoting_count,1);assert.equal((await get(other)).quoting_projects.length,0);sqlite.exec("UPDATE crm_sales_projects SET stage='won',stage_at='2026-10-01' WHERE project_id='p'");
+const allPerformance=await get(ceo);assert.equal(allPerformance.people.reduce((n,p)=>n+p.deal_count,0),allPerformance.summary.deal_count);assert.equal(allPerformance.people.reduce((n,p)=>n+(p.won.CNY||0),0),allPerformance.summary.won.CNY||0);const foreignPerformance=await get(ceo,'2026-10','外贸');assert.equal(foreignPerformance.people.reduce((n,p)=>n+(p.won.USD||0),0),foreignPerformance.summary.won.USD||0);assert.equal(allPerformance.deals.length,allPerformance.summary.deal_count);
 // Inclusive custom dates, cross-month boundaries and server-side rejection.
 assert.equal((await rangeGet(ceo,'period=custom&start=2026-10-01&end=2026-10-01')).summary.customers,1);
 assert.equal((await rangeGet(ceo,'period=custom&start=2026-10-20&end=2026-10-20')).summary.deal_count,2);
-assert.equal((await rangeGet(ceo,'period=custom&start=2026-09-30&end=2026-10-01')).summary.daily_new.length,2);
+assert.deepEqual((await rangeGet(ceo,'period=custom&start=2026-09-30&end=2026-10-01')).period,{kind:'custom',start:'2026-09-30',end:'2026-10-02',label:'2026-09-30 至 2026-10-01'});
 assert.equal((await rangeGet(ceo,'period=custom&start=2026-10-21&end=2026-11-01')).summary.deal_count,0);
 for(const query of ['start=2026-10-02&end=2026-10-01','start=2026-02-30&end=2026-03-01','start=&end=2026-10-01'])await assert.rejects(()=>rangeGet(ceo,'period=custom&'+query),/日期/);
 console.log('PASS: month, quarter and year boundary inclusion, invalid selections, currencies and sales isolation.');
