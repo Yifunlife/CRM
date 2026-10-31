@@ -23,6 +23,10 @@ try{
   const response=await handlers[method](new Request(origin+'/api/'+path,{method,headers:{origin,cookie:'crm_session=test-'+role,'Content-Type':'application/json','X-CRM-View':view},...(body===undefined?{}:{body:JSON.stringify(body)})}));
   const data=await response.json();assert.equal(response.status,expected,path+' '+JSON.stringify(data));return {data,response};
  }
+ await request('users',{id:'sales',name:'sales',username:'sales',email:'',trade_scopes:['foreign']},'admin',200,'PATCH');
+ assert.equal(sql.prepare("SELECT email FROM crm_users WHERE id='sales'").get().email,'');
+ sql.exec("UPDATE crm_users SET trade_scopes='[]' WHERE id='sales'");
+ await request('profile',{email:''},'sales');
  for(const role of ['admin','ceo','management','sales','followup','operations']){
   await request('profile',{email:'  '+role.toUpperCase()+'@Example.Test  '},role);
   assert.equal((await request('me',undefined,role)).data.email,role+'@example.test');
@@ -30,14 +34,14 @@ try{
    const {response}=await request('login',{username:identifier,password},role);assert.match(response.headers.get('set-cookie'),/HttpOnly/);
   }
  }
- for(const email of ['',null,'bad','a@b','a@b@c.test','a b@example.test'])await request('profile',{email},'sales',400);
+ for(const email of [null,'bad','a@b','a@b@c.test','a b@example.test'])await request('profile',{email},'sales',400);
  await request('profile',{email:'CEO@EXAMPLE.TEST'},'sales',400);
  await request('profile',{email:'other@example.test',id:'ceo'},'sales',400);
  await request('profile',{email:'other@example.test',role:'admin'},'sales',400);
  sql.exec("UPDATE crm_users SET username='winnie' WHERE id='sales'");
  await request('profile',{email:'other@example.test'},'admin',403,'POST','winnie');
  sql.exec("UPDATE crm_users SET username='sales' WHERE id='sales'");
- await request('users',{id:'sales',name:'sales',username:'sales'},'admin',400,'PATCH');
+ await request('users',{id:'sales',name:'sales',username:'sales'},'admin',200,'PATCH');
  await request('users',{id:'sales',name:'sales',username:'sales',email:'new-sales@example.test'},'admin',200,'PATCH');
  await request('login',{username:'sales@example.test',password},'sales',401);
  await request('login',{username:'NEW-SALES@EXAMPLE.TEST',password},'sales');
@@ -54,5 +58,5 @@ try{
  sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created,email) VALUES(?,?,?,?,?,?,?)').run('employee','yw123','employee','sales',await passwordHash('YW123'),'2026-10-31','employee@example.test');
  await request('login',{username:'employee@example.test',password:'YW123'});
  assert.equal(sql.prepare("SELECT must_change_password FROM crm_users WHERE id='employee'").get().must_change_password,1);
- console.log('PASS: username/email login, case and whitespace normalization, required/unique email, own-profile isolation across all roles, administrator editing, inactive accounts, shared alias rate limit, unchanged passwords/roles/scopes/customer ownership.');
+ console.log('PASS: username/email login, case and whitespace normalization, optional/unique email, own-profile isolation across all roles, administrator editing, inactive accounts, shared alias rate limit, unchanged passwords/roles/scopes/customer ownership.');
 }finally{rmSync(tmp,{recursive:true,force:true});}
