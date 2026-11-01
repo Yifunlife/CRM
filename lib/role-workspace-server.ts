@@ -1,4 +1,4 @@
-import {accountSalesCompany} from './account-classification';
+import {accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
 import {reportPeriod,inReportPeriod} from './report-period';
 import {can,authorizedLead,id,now,GRADES} from './crm';
 import {PROCESS_STATUSES,FOLLOWUP_NODES} from './followup-board';
@@ -20,7 +20,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   if(!personal&&!all)fail('没有销售看板权限',403);
   const month=url.searchParams.get('month')||suiteDay().slice(0,7);let period:ReturnType<typeof reportPeriod>;try{period=reportPeriod(url.searchParams,suiteDay().slice(0,7));}catch(e){return fail((e as Error).message);}
   const market=url.searchParams.get('market')||'内贸';if(!['内贸','外贸','全部','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
-  const branch=url.searchParams.get('branch')||'';if(!['','澳洲分公司','北美分公司'].includes(branch)||branch&&market!=='外贸')fail('分公司选择无效');
+  const branch=salesCompanyName(url.searchParams.get('branch'));if(!['',...SALES_COMPANIES].some(c=>c===branch)||branch&&market!=='外贸')fail('分公司选择无效');
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
    list(db,`SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.created,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_leads l WHERE ${where}`,args),
@@ -33,7 +33,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    list(db,`SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE r.cancelled=0 AND d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args)
   ]);
   const activeOnly=url.searchParams.get('active')==='1',activeOwners=new Set(people.filter(p=>p.active).map(p=>p.id));
-  const companyFor=(row:any)=>accountSalesCompany({id:row.owner_id||row.commercial_id||''})||parse(row.lead_detail)._sales_company||'';
+  const companyFor=(row:any)=>salesCompanyName(accountSalesCompany({id:row.owner_id||row.commercial_id||''})||parse(row.lead_detail)._sales_company);
   const classify=(row:any)=>companyFor(row)?'外贸':customerMarket({...row,business_scope:row.business_scope||row.lead_scope});
   const pick=(rows:any[])=>rows.filter(r=>(!activeOnly||activeOwners.has(r.owner_id||r.commercial_id))&&(market==='全部'||classify(r)===market)&&(!branch||companyFor(r)===branch));
   const leads=pick(rawLeads).filter(l=>inReportPeriod(l.created,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
@@ -61,7 +61,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   if(!Array.isArray(body.contacts)||body.contacts.length>30)fail('联系人最多30位');
   const contacts=body.contacts.map((c:any)=>({name:text(c.name,200),role:text(c.role||'',200),phone:text(c.phone||'',100),email:text(c.email||'',200)}));if(contacts.some((c:any)=>!c.name))fail('请填写联系人姓名');
   const country=text(body.country,100),method=text(body.method,100),sourceNote=text(body.source_note||'',1000);
-  const company=body.company??before._sales_company??'';if(!['','澳洲分公司','北美分公司'].includes(company))fail('分公司选择无效');
+  const company=salesCompanyName(body.company??before._sales_company);if(!['',...SALES_COMPANIES].some(c=>c===company))fail('分公司选择无效');
   const after={...before,_sales_company:company,_profile_revision:(before._profile_revision||0)+1,_contacts:contacts,'偏好联系方式':method,'客户来源说明':sourceNote};
   const results=await db.batch([db.prepare('UPDATE crm_leads SET country=?,detail=? WHERE id=? AND detail=? AND owner_id IS ?').bind(country,JSON.stringify(after),lead.id,lead.detail,lead.owner_id),db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),'更新客户档案',lead.id,JSON.stringify({before:{company:before._sales_company||'',country:lead.country,contacts:before._contacts,method:before['偏好联系方式'],source_note:before['客户来源说明']},after:{company,country,contacts,method,source_note:sourceNote}}),now(),actor.id)]);
   if(!results[0].meta.changes)fail('客户资料或归属已变化，请刷新',409);return {ok:true};
