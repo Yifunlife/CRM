@@ -30,3 +30,5 @@
 
 .role-dashboard .sales-chart-row{grid-template-columns:repeat(3,minmax(0,1fr))}.role-dashboard-personal .sales-chart-row{grid-template-columns:1fr}.role-dashboard .sales-chart-row .performance-ranking{gap:20px}.role-dashboard .sales-chart-row .performance-rank{grid-template-columns:94px minmax(0,1fr) 88px;gap:10px;font-size:13px}@media(max-width:1200px){.role-dashboard .sales-chart-row{grid-template-columns:1fr}.role-dashboard .sales-chart-row .performance-rank{grid-template-columns:110px minmax(0,1fr) 100px}}@media(max-width:600px){.role-dashboard .sales-chart-row .performance-rank{grid-template-columns:88px minmax(0,1fr) 86px;gap:8px;font-size:12px}}
 .role-dashboard .performance-overview table{min-width:0;width:100%}@media(max-width:600px){.role-dashboard .performance-overview th,.role-dashboard .performance-overview td{padding:12px 8px;font-size:13px}.role-dashboard .performance-overview td button{white-space:normal;overflow-wrap:anywhere;text-align:left}.role-dashboard .performance-overview table th:last-child{min-width:108px}}
+
+.customer-management .customer-origin{white-space:nowrap}.customer-management .table-wrap table{min-width:1080px}

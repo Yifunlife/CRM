@@ -5,7 +5,7 @@ export function customerSource(lead:any):string{
  const source=String(lead?.source||'').trim(),group=source.toLowerCase();
  if(!['meta',...facebook,...instagram].includes(group))return source||'来源待确认';
  let detail=lead?.detail||{};if(typeof detail==='string'){try{detail=JSON.parse(detail);}catch{detail={};}}
- const evidence=[source,lead?.channel,detail.platform,detail['来源渠道'],detail['来源平台']].map(v=>String(v||'').trim().toLowerCase());
+ const evidence=[source,lead?.channel,lead?.origin_platform,detail.platform,detail['来源渠道'],detail['来源平台']].map(v=>String(v||'').trim().toLowerCase());
  const fb=evidence.some(v=>facebook.includes(v)),ig=evidence.some(v=>instagram.includes(v));
  return fb&&!ig?'Facebook':ig&&!fb?'Instagram':PLATFORM_PENDING;
 }
