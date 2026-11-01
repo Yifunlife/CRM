@@ -1,5 +1,5 @@
-export const SALES_COMPANIES=['澳洲分公司','加拿大分公司'] as const;
-export const salesCompanyName=(value:string|undefined|null)=>value==='北美分公司'?'加拿大分公司':value||'';
+export const SALES_COMPANIES=['澳洲分公司','北美分公司'] as const;
+export const salesCompanyName=(value:string|undefined|null)=>value==='加拿大分公司'?'北美分公司':value||'';
 export const ACCOUNT_ROLES:Record<string,string>={admin:'管理员',ceo:'CEO',management:'管理层',sales:'业务员',followup:'跟单员',operations:'运营（原有角色）'};
 export const TRADE_SCOPES={domestic:'内贸',foreign:'外贸'} as const;
 // Confirmed sales attribution; customer ownership and source records stay unchanged.

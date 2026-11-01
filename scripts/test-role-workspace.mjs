@@ -149,10 +149,10 @@ if(process.env.ROLE_WORKSPACE_FIXTURE){
  const sql=['PRAGMA foreign_keys=OFF;'];for(const {name}of sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'crm_%'").all()){for(const row of sqlite.prepare('SELECT * FROM '+name).all()){sql.push('INSERT INTO '+name+' ('+Object.keys(row).map(k=>'"'+k+'"').join(',')+') VALUES ('+Object.values(row).map(quote).join(',')+');');}}
  sql.push('PRAGMA foreign_keys=ON;');writeFileSync(process.env.ROLE_WORKSPACE_FIXTURE,sql.join('\n'),{mode:0o600});writeFileSync(process.env.ROLE_WORKSPACE_FIXTURE+'.sessions.json',JSON.stringify(cookies),{mode:0o600});
 }
-// The former North American company name remains a read-time alias for Canada.
+// Both company names resolve to the confirmed North American display name.
 const canadaBefore=snapshot(),savedForeign=sqlite.prepare("SELECT detail FROM crm_leads WHERE id='foreign'").get().detail;
 sqlite.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._sales_company',?) WHERE id='foreign'").run('北美分公司');
 const canadaSource=snapshot(),canada=await branchGet('加拿大分公司'),legacyCanada=await branchGet('北美分公司');
-assert.equal(canada.branch,'加拿大分公司');assert.equal(canada.summary.customers,1);assert.deepEqual(canada.summary,legacyCanada.summary);assert(canada.deals.every(d=>d.company==='加拿大分公司'));assert.equal(snapshot(),canadaSource,'renaming the displayed company never rewrites historical data');
+assert.equal(canada.branch,'北美分公司');assert.equal(canada.summary.customers,1);assert.deepEqual(canada.summary,legacyCanada.summary);assert(canada.deals.every(d=>d.company==='北美分公司'));assert.equal(snapshot(),canadaSource,'renaming the displayed company never rewrites historical data');
 sqlite.prepare("UPDATE crm_leads SET detail=? WHERE id='foreign'").run(savedForeign);assert.equal(snapshot(),canadaBefore);
-console.log('PASS: Canada canonical display, legacy North American filter compatibility, identical totals and no source mutations.');
+console.log('PASS: North American display, Canada alias compatibility, identical totals and no source mutations.');
