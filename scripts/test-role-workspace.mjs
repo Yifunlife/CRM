@@ -125,6 +125,23 @@ const archived=sqlite.prepare("SELECT * FROM crm_followup_orders WHERE id='order
 await assert.rejects(()=>post(follow,'followup/orders/order/business-process',processBody()),/已归档/);
 console.log('PASS: one-table archive checks all workflow cells and actual net receipts, rejects unsettled/mixed currency, retains legacy records, and makes archived orders read-only.');
 
+// Company attribution follows the confirmed original salesperson, even after a customer changes owner.
+const branchBefore=await branchGet('澳洲分公司');const branchBaseline=branchBefore.summary.won.USD||0;
+for(const [i,userId] of ['b7e34925-ec83-4f4e-ad42-04be344dc82b','33e3947e-976c-4521-8128-7a18e60ed462'].entries()){
+ sqlite.prepare("INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,'sales','unused','2026-01-01')").run(userId,'branch-'+i,'branch-'+i);
+ sqlite.prepare("INSERT INTO crm_leads(id,name,source,country,owner_id,fingerprint,detail,created) VALUES(?,?,'Meta','澳大利亚',?,?,'{}','2026-10-01')").run('branch-lead-'+i,'branch-lead-'+i,userId,'branch-lead-'+i);
+ sqlite.prepare("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES(?,?,?,?,'meta-full','2026-10-20','2026-10-20','admin')").run('branch-deal-'+i,'branch-deal-'+i,'branch-lead-'+i,userId);
+ sqlite.prepare("INSERT INTO crm_workflow_contracts(deal_id,currency,total_minor,schedule,updated,updated_by) VALUES(?,'USD',?,'[]','2026-10-20','admin')").run('branch-deal-'+i,(i+1)*10000);
+}
+sqlite.exec("UPDATE crm_leads SET owner_id='other' WHERE id='branch-lead-0'");
+const branchSnapshot=snapshot(),australia=await branchGet('澳洲分公司');
+assert.equal(australia.summary.won.USD,branchBaseline+30000);
+assert.equal(australia.deals.filter(d=>d.id.startsWith('branch-deal-')).length,2);
+assert(australia.deals.filter(d=>d.id.startsWith('branch-deal-')).every(d=>d.company==='澳洲分公司'));
+assert.equal((await get(ceo,'2026-10','全部')).deals.filter(d=>d.id.startsWith('branch-deal-')).length,2,'company attribution never duplicates deals');
+assert.equal(snapshot(),branchSnapshot,'company reports cannot rewrite customers or source orders');
+console.log('PASS Australian company attribution for Winnie and Polly, reassigned customers, no duplicate sales and no source mutations.');
+
 if(process.env.ROLE_WORKSPACE_FIXTURE){
  const {randomBytes,createHash}=await import('node:crypto');const {writeFileSync}=await import('node:fs');const cookies={};
  for(const user of [admin,sales,other,follow,ceo]){const token=randomBytes(32).toString('hex');cookies[user.id]=token;sqlite.prepare('INSERT INTO crm_sessions(token,user_id,expires) VALUES(?,?,?)').run(createHash('sha256').update(token).digest('hex'),user.id,new Date(Date.now()+86400000).toISOString());}

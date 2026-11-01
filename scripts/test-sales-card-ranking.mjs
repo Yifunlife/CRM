@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {moduleURL} from './test-form-intake.mjs';
+const {rankSalesCards}=await import(moduleURL('lib/sales-card-ranking.ts'));
+const row=(id,total_minor,unverified=0)=>({id,name:id,total_minor,unverified});
+const source=[row('C',100),row('A',300),row('B',200),row('zero',0),row('unknown',900,1)];
+const before=JSON.stringify(source),ranked=rankSalesCards(source);
+assert.deepEqual(ranked.map(r=>[r.id,r.rank]),[['A',1],['B',2],['C',3],['zero',null],['unknown',null]]);
+assert.equal(JSON.stringify(source),before,'ranking cannot change source rows');
+assert.deepEqual(rankSalesCards([row('A',100),row('B',100),row('C',50)]).map(r=>r.rank),[1,1,3]);
+assert.deepEqual(rankSalesCards([row('A',0),row('B',0)]).map(r=>r.rank),[null,null]);
+assert.deepEqual(rankSalesCards([]),[]);
+console.log('PASS card ranking: descending amounts, top three, ties, zero, unverified and immutable source.');
