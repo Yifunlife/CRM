@@ -39,7 +39,8 @@ await post('plan',{id:'mine',revision:'',plan});await assert.rejects(post('plan'
 await assert.rejects(post('plan',{id:'foreign',revision:'',plan}),e=>e.status===404);
 await post('priority',{id:'mine',entity:'sales:p',marked:true});assert.deepEqual((await get('report')).priorities,['sales:p']);await post('priority',{id:'mine',entity:'sales:p',marked:false});assert.deepEqual((await get('report')).priorities,[]);
 const before=JSON.stringify(sql.prepare('SELECT * FROM crm_sales_events ORDER BY rowid').all());await get('report');await get('customer?id=mine');assert.equal(JSON.stringify(sql.prepare('SELECT * FROM crm_sales_events ORDER BY rowid').all()),before,'reads do not create notices or modify history');
-assert.ok(!(await get('report',other)).reminders.length);assert.equal(sql.prepare("SELECT count(*) n FROM crm_notes WHERE id='old'").get().n,1);
+assert.ok(!(await get('report',other)).reminders.length);
+const noProject=await get('customer?id=foreign',other);assert.equal(noProject.choices[0].key,'customer:foreign');await post('plan',{id:'foreign',revision:'',plan:{...plan,entity:'customer:foreign'}},other);assert.equal((await get('customer?id=foreign',other)).plans.length,1,'opening date can be entered in a customer archive before project creation');assert.equal(sql.prepare("SELECT count(*) n FROM crm_notes WHERE id='old'").get().n,1);
 const schedule=openingSchedule(plan,today);assert.equal(schedule.latest.at(-1).finish,addDays(plan.opening,-7));assert.equal(schedule.latest[1].finish,addDays(plan.opening,-59));
 assert.deepEqual(projectFinancials({deal_id:'d'},[{id:'d',total_minor:1200000,currency:'USD'}],[{deal_id:'d',amount_minor:800000,refunded_minor:10000,currency:'USD'}]),{currency:'USD',amount:1200000,received:790000,outstanding:410000});
 assert.equal(projectFinancials({deal_id:'d'},[{id:'d',total_minor:1200000,currency:'USD'}],[{deal_id:'d',amount_minor:1,refunded_minor:0,currency:'CNY'}]).received,null);

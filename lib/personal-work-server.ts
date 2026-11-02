@@ -32,6 +32,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const type=url.searchParams.get('type')||'',q=(url.searchParams.get('q')||'').toLowerCase(),matched=notes.filter(n=>(!type||n.type===type)&&(!q||[n.content,n.method,n.next_step,n.created,n.author].join(' ').toLowerCase().includes(q))),pages=Math.max(1,Math.ceil(matched.length/5)),page=Math.min(pages,Math.max(1,Number(url.searchParams.get('page'))||1));
   const plans=new Map<string,any>();for(const e of events.filter(e=>e.kind==='业务员开业计划'))if(!plans.has(e.payload.entity))plans.set(e.payload.entity,{...e.payload,revision:e.id});
   const choices=[...(await list(db,'SELECT project_id AS id,name FROM crm_sales_projects WHERE lead_id=?',[lead.id])).map(p=>({key:'sales:'+p.id,name:p.name})),...(await list(db,`SELECT id,project AS name FROM crm_followup_orders WHERE lead_id=?${u.role==='sales'?' AND commercial_id=?':''}`,[lead.id,...(u.role==='sales'?[u.id]:[])])).map(p=>({key:'order:'+p.id,name:p.name}))];
+  if(!choices.length)choices.push({key:'customer:'+lead.id,name:'客户整体开业计划'});
   return {rows:matched.slice((page-1)*5,page*5),total:notes.length,matched:matched.length,pages,page,types:[...new Set(notes.map(n=>n.type))],plans:[...plans.values()],choices,proposal_date:designDeadline(events.filter(e=>e.kind==='业务员跟进记录'))};
  }
  if(path==='personal-work/record'&&method==='POST'){
@@ -62,8 +63,8 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
  if(path==='personal-work/plan'&&method==='POST'){
   const lead=await customer(db,u,body.id),p=body.plan as OpeningPlan;
   if(!p||!validDate(p.opening)||!Number.isInteger(p.phase)||p.phase<0||p.phase>4||!Array.isArray(p.days)||p.days.length!==5||[...p.days,p.remaining,p.buffer,p.remind].some(n=>!Number.isInteger(n)||n<0||n>365))fail('请填写有效开业日期与各环节周期');
-  const [kind,key]=String(p.entity).split(':');if(!['sales','order'].includes(kind))fail('请选择关联项目');
-  const row=await db.prepare(kind==='sales'?'SELECT lead_id FROM crm_sales_projects WHERE project_id=?':'SELECT lead_id,commercial_id FROM crm_followup_orders WHERE id=?').bind(key).first<any>();if(!row||row.lead_id!==lead.id||kind==='order'&&u.role==='sales'&&row.commercial_id!==u.id)fail('项目不存在或无权维护',404);
+  const [kind,key]=String(p.entity).split(':');if(!['sales','order','customer'].includes(kind)||kind==='customer'&&key!==lead.id)fail('请选择关联项目');
+  const row=kind==='customer'?{lead_id:lead.id}:await db.prepare(kind==='sales'?'SELECT lead_id FROM crm_sales_projects WHERE project_id=?':'SELECT lead_id,commercial_id FROM crm_followup_orders WHERE id=?').bind(key).first<any>();if(!row||row.lead_id!==lead.id||kind==='order'&&u.role==='sales'&&row.commercial_id!==u.id)fail('项目不存在或无权维护',404);
   const latest=await db.prepare("SELECT id FROM crm_sales_events WHERE lead_id=? AND kind='业务员开业计划' AND json_extract(payload,'$.entity')=? ORDER BY created DESC,rowid DESC LIMIT 1").bind(lead.id,p.entity).first<any>();if((latest?.id||'')!==(body.revision||''))fail('计划已更新，请刷新后重试',409);
   const saved=await event(db,actor,lead,'业务员开业计划',p,body.revision||'').run();if(!saved.meta.changes)fail('计划或归属已变化，请刷新',409);return {ok:true};
  }
