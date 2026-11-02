@@ -1,5 +1,8 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {createConnectionSettings}=require('./desktop-sync/connection-settings.cjs');
+const {patchConnectionMain}=require('./desktop-sync/patch-app.cjs');
+const patched=patchConnectionMain('');assert.ok(patched.includes("require('./crm-connection-settings.cjs')"));assert.equal(patchConnectionMain(patched),patched);
+assert.ok(patchConnectionMain("require('./crm-connection-settings')").includes("require('./crm-connection-settings.cjs')"));
 (async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'crm-address-code-')),config=path.join(dir,'user-data/crm-bridge.json'),workspace=path.join(dir,'original'),journal=path.join(workspace,'.workbench/crm-account-sync.json');fs.mkdirSync(path.dirname(journal),{recursive:true});const file=path.join(workspace,'.workbench/crm.json');fs.writeFileSync(file,JSON.stringify({clients:[{id:'original',owner:'Mark',name:'Keep me',notes:'Keep original notes'}]}));const before=fs.readFileSync(file);let responseOwner='owner-a',writable=true,requests=0,paused=0,started=0,owners=['Mark'];
  const controls=createConnectionSettings({configFile:config,root:()=>workspace,clients:()=>owners.map((owner,index)=>({id:'original-'+index,owner})),pause:async()=>{paused++;},start:()=>{started++;},request:async(url,init)=>{requests++;assert.equal(url,'https://yifun-crm.yifunlife.workers.dev/api/bridge/connect');assert.equal(init.method,'POST');assert.match(init.headers.Authorization,/^Bearer [a-f0-9]{96}$/);return {ok:true,json:async()=>({owner_id:responseOwner,username:'yw001',name:'Mark Fang',protocol:2,can_import:writable})};}});

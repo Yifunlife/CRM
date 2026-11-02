@@ -3724,9 +3724,10 @@ function startCrmAccountSync(){let snapshot,byClient;
         source = source.replace(part, part.replace("owner:'Winnie'", "owner:crmBridgeOwner()"));
       }
       source = source.replace("owner:'Winnie',lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'", "owner:crmBridgeOwner(),lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'");
-      if (source.includes("require('./crm-connection-settings')")) return source;
+      source = source.replace("require('./crm-connection-settings')", "require('./crm-connection-settings.cjs')");
+      if (source.includes("require('./crm-connection-settings.cjs')")) return source;
       return source + `
-const crmConnectionSettings=require('./crm-connection-settings').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+const crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
 ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
 ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
 ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));

@@ -40,8 +40,9 @@ function patchConnectionMain(source){
  const create=source.indexOf("ipcMain.handle('clients:create'");
  if(create>=0){const end=source.indexOf('\n',create),part=source.slice(create,end<0?source.length:end);source=source.replace(part,part.replace("owner:'Winnie'","owner:crmBridgeOwner()"));}
  source=source.replace("owner:'Winnie',lostReason:'',notes:'国家、项目及客户等级请人工确认。'","owner:crmBridgeOwner(),lostReason:'',notes:'国家、项目及客户等级请人工确认。'");
- if(source.includes("require('./crm-connection-settings')"))return source;
- return source+`\nconst crmConnectionSettings=require('./crm-connection-settings').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+ source=source.replace("require('./crm-connection-settings')","require('./crm-connection-settings.cjs')");
+ if(source.includes("require('./crm-connection-settings.cjs')"))return source;
+ return source+`\nconst crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
 ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
 ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
 ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));\n`;
