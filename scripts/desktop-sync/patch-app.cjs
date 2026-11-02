@@ -29,8 +29,21 @@ function patchManagement(source){
 function patchBridge(source){if(source.includes("u.origin!=='https://yifun-crm.yifunlife.workers.dev'"))return source;return source.replace("u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&","u.origin!=='https://yifun-crm.yifunlife.workers.dev'&&u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&");}
 function patchRenderer(source){
  const prior="const grades=['VIP','A','B','C','D','Yifun Staff'];",next="const grades=['VIP','A','B','C','D','Yifun Staff','未分类'];";
- if(source.includes(next))return source;
- if(!source.includes(prior)||!source.includes('list.filter(c=>c.grade===grade)'))throw Error('客户分组组件版本不兼容');
- return source.replace(prior,next).replace('list.filter(c=>c.grade===grade)',"list.filter(c=>(c.grade||'未分类')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])","new Set(['VIP','A','B','C','whatsapp-groups','未分类'])");
+ if(!source.includes(next)){
+  if(!source.includes(prior)||!source.includes('list.filter(c=>c.grade===grade)'))throw Error('客户分组组件版本不兼容');
+  source=source.replace(prior,next).replace('list.filter(c=>c.grade===grade)',"list.filter(c=>(c.grade||'未分类')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])","new Set(['VIP','A','B','C','whatsapp-groups','未分类'])");
+ }
+ return source.includes('crm-connection-renderer.js')?source:source+"\n(()=>{const script=document.createElement('script');script.src='../crm-connection-renderer.js';document.head.appendChild(script)})();\n";
 }
-module.exports={patchMain,patchManagement,patchBridge,patchRenderer};
+function patchConnectionPreload(source){return source.includes("exposeInMainWorld('crmConnection'")?source:source+"\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";}
+function patchConnectionMain(source){
+ const create=source.indexOf("ipcMain.handle('clients:create'");
+ if(create>=0){const end=source.indexOf('\n',create),part=source.slice(create,end<0?source.length:end);source=source.replace(part,part.replace("owner:'Winnie'","owner:crmBridgeOwner()"));}
+ source=source.replace("owner:'Winnie',lostReason:'',notes:'国家、项目及客户等级请人工确认。'","owner:crmBridgeOwner(),lostReason:'',notes:'国家、项目及客户等级请人工确认。'");
+ if(source.includes("require('./crm-connection-settings')"))return source;
+ return source+`\nconst crmConnectionSettings=require('./crm-connection-settings').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
+ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
+ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));\n`;
+}
+module.exports={patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionPreload,patchConnectionMain};

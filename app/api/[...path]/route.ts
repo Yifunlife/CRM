@@ -26,12 +26,13 @@ async function execute(req: Request,trace:RequestTrace) {
   const db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
   if(path==="cloud/webhook")return await cloudWebhook(db,env as any,req);
-  if (write && path!=="bridge/poll" && path!=="linked/worker" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
+  if (write && path!=="bridge/poll" && path!=="bridge/connect" && path!=="linked/worker" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
   if (write && !path.startsWith("workbench/files") && !path.startsWith("followup/files") && !path.startsWith("contract-files")) { const raw = await req.text(); if (raw.length > 5_000_000) throw new Problem("内容过大，请分批导入"); try { body = JSON.parse(raw || "{}"); } catch { throw new Problem("请求格式不正确"); } }
   trace.identify(body);
   if(path==="linked/worker"&&req.method==="POST")return json(await linkedWorker(db,req,body));
   if(path==="bridge/poll"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,body));
+  if(path==="bridge/connect"&&req.method==="POST")return json(await bridgeDeviceEndpoint(db,req,{connect:true}));
   if (path === "google/callback" && !write) {
    let result="connected";
    try { await finishGoogle(req,db,env); } catch { result="error"; }
