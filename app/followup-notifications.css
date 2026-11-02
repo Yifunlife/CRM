@@ -23,4 +23,7 @@
 .notification-dialog .notification-detail p{white-space:pre-wrap;margin:8px 0}
 .notification-dialog .notification-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .notification-dialog .notification-caption{margin:14px 0 0}
+.notification-dialog .notification-important{border-left:1px solid #6d28d9;padding-left:10px}
+.notification-dialog .notification-important-label{color:#6d28d9;font-size:12px;font-weight:600}
+.notification-dialog .notification-important .notification-title-line>strong,.notification-dialog .notification-important .notification-detail>strong{color:#6d28d9}
 @media(max-width:420px){.notification-dialog .notification-item>summary{grid-template-columns:20px minmax(0,1fr) 14px;gap:8px}.notification-dialog .notification-title-line{gap:8px}.notification-dialog .notification-detail{padding-left:28px}}

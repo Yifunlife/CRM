@@ -4,6 +4,7 @@ import {AllocationError,allocationWeights,distribute} from './allocation-server'
 import {BUSINESS_SCOPES} from './allocation';
 import {enquiryNotification} from './lead-notifications';
 import {fullLeadSQL} from './allocation-priority';
+import {handoffFollowupEnquiry} from './repeat-enquiry-handoff';
 
 const time=(value:any)=>Number.isFinite(Date.parse(value))?Date.parse(value):Infinity;
 const keys=(row:any)=>[phoneKey(row.phone).length>=7?'p:'+phoneKey(row.phone):'',emailKey(row.email)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey(row.email))?'e:'+emailKey(row.email):''].filter(Boolean);
@@ -42,7 +43,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
  let pending:D1PreparedStatement[]=[];
  const flush=async()=>{if(pending.length&&!options.preview){await db.batch([guard(),...pending]);pending=[];}};
  const commit=async(statements:D1PreparedStatement[])=>{if(options.preview)return;if(pending.length+statements.length>80)await flush();pending.push(...statements);};
- const result={inserted:0,repeated:0,skipped:0,reviewed:0,unmatched:0,autoAssigned:0,allocationWarning:'',groups:[] as any[]};
+ const result={inserted:0,repeated:0,skipped:0,reviewed:0,unmatched:0,autoAssigned:0,reassigned:0,allocationWarning:'',groups:[] as any[]};
  try{
   const leads=(await db.prepare('SELECT l.*,u.active AS owner_active FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id').all<any>()).results;
   const submissions=(await db.prepare('SELECT id,lead_id,phone,email,kind FROM crm_form_submissions').all<any>()).results;
@@ -101,13 +102,22 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
   }
   if(!options.preview){
    await flush();
-   if(!options.manualOnly&&options.allocate!==false&&allocate.size){
+   if(!options.manualOnly&&options.allocate!==false){
+    const handoffs=(await db.prepare("SELECT s.lead_id,MIN(s.id) submission_id FROM crm_form_submissions s JOIN crm_leads l ON l.id=s.lead_id JOIN crm_users u ON u.id=l.owner_id WHERE s.id IN (SELECT value FROM json_each(?)) AND s.kind='repeat' AND u.role='followup' AND u.active=1 AND l.review=0 GROUP BY s.lead_id").bind(JSON.stringify(rows.map(r=>r.id))).all<{lead_id:string;submission_id:string}>()).results;
+    if(allocate.size||handoffs.length){
     const {config,weights}=await allocationWeights(db);
-    if(config.rule.automatic&&weights.length){const ids=(await db.prepare(`SELECT id FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) ORDER BY ${fullLeadSQL('crm_leads')} DESC,entered,id`).bind(JSON.stringify([...allocate])).all<{id:string}>()).results.map(r=>r.id);for(let i=0;i<ids.length;i+=40){await db.batch([guard()]);result.autoAssigned+=await distribute(db,ids.slice(i,i+40),'all',actor);}}
+    if(config.rule.automatic&&weights.length){
+     const ids=(await db.prepare(`SELECT id FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) ORDER BY ${fullLeadSQL('crm_leads')} DESC,entered,id`).bind(JSON.stringify([...new Set([...allocate,...handoffs.map(h=>h.lead_id)])])).all<{id:string}>()).results.map(r=>r.id);
+     let pendingIds:string[]=[];
+     const assignPending=async()=>{if(pendingIds.length){await db.batch([guard()]);result.autoAssigned+=await distribute(db,pendingIds,'all',actor);pendingIds=[];}};
+     for(const leadId of ids){const handoff=handoffs.find(h=>h.lead_id===leadId);if(handoff){await assignPending();await db.batch([guard()]);result.reassigned+=await handoffFollowupEnquiry(db,handoff.submission_id,actor);}else{pendingIds.push(leadId);if(pendingIds.length===40)await assignPending();}}
+     await assignPending();
+    }
     else result.allocationWarning='客资已去重入库，自动分配未开启或没有可接收人员';
+    }
    }
    const undelivered=(await db.prepare(`SELECT s.* FROM crm_form_submissions s JOIN crm_leads l ON l.id=s.lead_id JOIN crm_users u ON u.id=l.owner_id
-    WHERE s.kind='repeat' AND u.active=1 AND NOT EXISTS(SELECT 1 FROM crm_lead_notifications n WHERE n.dedupe_key='form:'||s.id)`).all<any>()).results;
+    WHERE s.kind='repeat' AND u.active=1 AND NOT EXISTS(SELECT 1 FROM crm_lead_notifications n WHERE n.dedupe_key='form:'||s.id OR n.dedupe_key='handoff:form:'||s.id)`).all<any>()).results;
    for(const s of undelivered){const r=formRow(JSON.parse(s.raw)),submitted=new Intl.DateTimeFormat('zh-CN',{timeZone:'Australia/Sydney',dateStyle:'short',timeStyle:'short',hour12:false}).format(new Date(s.occurred));await commit([enquiryNotification(db,'form:'+s.id,s.lead_id,`客户再次提交了咨询，请跟进。\n提交时间（悉尼）：${submitted}\n需求：${r.requirement}`,at)]);}
    await flush();
   }

@@ -10,7 +10,7 @@ import {contractTemplateEndpoint} from '../contract-templates-server';
 import {customerServiceEndpoint} from '../customer-service';
 import {roleWorkspaceEndpoint} from '../role-workspaces';
 import { advertisingEndpoint } from '../advertising-server';
-import { allocationEndpoint } from '../allocation-server';
+import { allocationEndpoint,AllocationError } from '../allocation-server';
 import { json } from '../api/http';
 import { attributionEndpoint } from '../attribution-server';
 import { cloudEndpoint,allocationWhatsAppStatus } from '../cloud-communication';
@@ -33,8 +33,10 @@ import { workbenchEndpoint } from '../workbench-server';
 import { workflowEndpoint } from '../workflow-server';
 import type { ApiContext } from './context';
 import { notifications } from './notifications';
+import {dailyFirstContact} from '../daily-first-contact';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ if(path==='role-workspace/daily-first-contact'){if(req.method!=='GET')throw new AllocationError('首联完成看板仅支持读取',405);return json(await dailyFirstContact(db,user,url));}
  if(path==='allocation/management/intake-status'&&req.method==='GET')return json(await allocationWhatsAppStatus(db,env as any,user));
  const personal=await personalWorkEndpoint(db,user,actor,path,req.method,body,url);if(personal!==undefined)return json(personal);
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);

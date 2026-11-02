@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {database,moduleURL} from './test-form-intake.mjs';
+const {importForms}=await import(moduleURL('lib/form-intake.ts'));
+const {handoffFollowupEnquiry}=await import(moduleURL('lib/repeat-enquiry-handoff.ts'));
+const {notificationEndpoint}=await import(moduleURL('lib/followup-notifications.ts'));
+const {cumulativeAllocationCounts}=await import(moduleURL('lib/allocation-priority.ts'));
+const {customerEntryMonitor}=await import(moduleURL('lib/customer-entry-monitor.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql);for(const [id,name,role] of [['admin','管理员','admin'],['f','原跟单','followup'],['a','业务员A','sales'],['b','业务员B','sales'],['leave','请假业务员','sales']])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,name,role,'unused','2026-01-01');
+sql.prepare("INSERT INTO crm_allocation_configs VALUES('all',?,'now','admin')").run(JSON.stringify({members:[{user_id:'a',state:'参与'},{user_id:'b',state:'参与'},{user_id:'leave',state:'请假'}],rule:{automatic:true}}));
+function lead(id,owner,full=false,old=false){sql.prepare("INSERT INTO crm_leads(id,name,email,source,business_scope,owner_id,original_owner,entered,detail,fingerprint,created) VALUES(?,?,?,'Meta',?,?,?,?,?,?,?)").run(id,id,id+'@test.invalid',full?'meta-full':'meta-product',owner,old?'原跟单':'',old?'2025-01-01':'2026-11-01',JSON.stringify({保留资料:'原始内容'}),id,'2026-11-01');}
+for(const owner of ['a','b'])for(let i=0;i<10;i++){const id=owner+i;lead(id,owner,i<(owner==='a'?6:5));sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,allocation_month,policy) VALUES(?,?,'admin',?,'2026-10-31T01:00:00Z','2026-10','full-first-v1')").run(id,id,owner);}
+lead('old','f',false,true);lead('untouched','f',false,true);lead('business-owned','b');
+sql.exec("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('legacy','old','admin','f','2026-10-01','historical-sheet-v1');INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('old-note','old','f','此前跟单对接内容','电话','原下一步','2026-10-01')");
+const before=sql.prepare("SELECT * FROM crm_leads WHERE id='old'").get(),legacy=sql.prepare("SELECT * FROM crm_assignments WHERE id='legacy'").get();
+const row=(id,email,full=false,at='2026-11-03T01:00:00Z')=>({id,form_id:'f:test',form_name:full?'全案':'玩具号',created_time:at,full_name:id,work_email:email,work_phone_number:''});
+const rows=[row('repeat','old@test.invalid'),row('full-new','full-new@test.invalid',true,'2026-11-03T02:00:00Z'),row('business-repeat','business-owned@test.invalid')];
+const preview=await importForms(db,rows,'admin',{preview:true});assert.equal(preview.inserted,1);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='old'").get().owner_id,'f');
+const result=await importForms(db,rows,'admin');assert.equal(result.inserted,1);assert.equal(result.autoAssigned,1);assert.equal(result.reassigned,1);
+assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE email='full-new@test.invalid'").get().owner_id,'b','New full project must precede the earlier repeat toy handoff');
+assert.deepEqual({...sql.prepare("SELECT * FROM crm_leads WHERE id='old'").get()},{...before,owner_id:'a'});assert.deepEqual(sql.prepare("SELECT * FROM crm_assignments WHERE id='legacy'").get(),legacy);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='untouched'").get().owner_id,'f');
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_notes WHERE id='old-note'").get().n,1);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_workflow_audit WHERE kind='跟单客资转交'").get().n,1);
+const audit=JSON.parse(sql.prepare("SELECT payload FROM crm_workflow_audit WHERE kind='跟单客资转交'").get().payload);assert.equal(audit.from_owner_name,'原跟单');assert.equal(audit.to_owner_name,'业务员A');
+const inbox=await notificationEndpoint(db,{id:'a',role:'sales'},{id:'a',role:'sales'},'followup-notifications','GET',{}),notice=inbox.notifications.find(n=>n.dedupe_key==='handoff:form:repeat');assert.equal(notice.important_change,1);assert(notice.content.includes('此前由跟单 原跟单 对接过'));assert(notice.content.includes('新业务员：业务员A'));assert.equal(notice.read_at,'');assert.equal(inbox.assignments.find(l=>l.id==='old').assignment_category,'new');
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_lead_notifications WHERE lead_id='old'").get().n,1);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='business-owned'").get().owner_id,'b');
+assert.equal(await handoffFollowupEnquiry(db,'repeat','admin'),0);assert.equal((await importForms(db,rows,'admin')).reassigned,0);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_assignments WHERE policy='followup-handoff-v1'").get().n,1);
+const counts=await cumulativeAllocationCounts(db);assert.equal(counts.find(c=>c.owner_id==='a').total,11);assert.equal(counts.find(c=>c.owner_id==='b').total,11);assert(counts.filter(c=>['a','b'].includes(c.owner_id)).every(c=>c.full_count===6));
+lead('rollback','f',false,true);await importForms(db,[row('rollback-repeat','rollback@test.invalid')],'admin',{allocate:false});
+const broken={...db,batch:statements=>db.batch([...statements,db.prepare("SELECT json('force rollback')")])};await assert.rejects(handoffFollowupEnquiry(broken,'rollback-repeat','admin'));assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='rollback'").get().owner_id,'f');assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_workflow_audit WHERE entity_id='rollback'").get().n,0);
+const monitor=await customerEntryMonitor(db,{id:'admin',role:'admin'},{rule:2,page:1});assert(!monitor.rows.some(l=>l.id==='old'),'Recorded handoff must not be flagged as missing ownership evidence');
+assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: repeat-only followup handoff; full-first ordering shared with new leads; cumulative counters; preserved historical source and contact records; named provenance and purple-flag notification; original business owner retained; replay is idempotent.');

@@ -25,7 +25,7 @@ export async function customerEntryMonitor(db:D1Database,user:any,options?:{rule
  const [leads,pool,reviews,accounts]=await Promise.all([
   list(db,`SELECT l.id,l.name,l.country,l.phone,l.email,l.source,l.channel,l.business_scope,l.entered,l.created,l.cohort,l.owner_id,l.original_owner,l.review,u.id AS existing_owner,u.name AS owner_name,u.active AS owner_active,u.role AS owner_role,s.subject_id,
    json_object('_sales_company',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$._sales_company'),'公司名称',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.公司名称'),'platform',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.platform'),'来源渠道',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源渠道'),'来源平台',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源平台')) AS detail,
-   a.source_kind,a.campaign_id,c.id AS existing_campaign
+   a.source_kind,a.campaign_id,c.id AS existing_campaign,EXISTS(SELECT 1 FROM crm_workflow_audit h JOIN crm_assignments ha ON ha.id=h.id AND ha.lead_id=l.id AND ha.owner_id=l.owner_id AND ha.policy='followup-handoff-v1' WHERE h.entity_id=l.id AND h.kind='跟单客资转交' AND json_extract(h.payload,'$.from_original_owner')=l.original_owner AND json_extract(h.payload,'$.to_owner_id')=l.owner_id) AS recorded_followup_handoff
    FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id LEFT JOIN crm_customer_subject_links s ON s.lead_id=l.id LEFT JOIN crm_attribution_leads a ON a.lead_id=l.id LEFT JOIN crm_attribution_campaigns c ON c.id=a.campaign_id WHERE `+where+' ORDER BY l.id',args),
   list(db,"SELECT p.id,p.source,p.payload,p.raw,p.created,p.created_by,p.state,p.last_error FROM crm_customer_pool p LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) WHERE p.state<>'已入CRM' AND l.id IS NULL"+(all?'':' AND p.created_by=?')+' ORDER BY p.id',args),
   list(db,"SELECT r.id,r.lead_id,r.other_lead_id,r.state,r.updated FROM crm_customer_identity_reviews r JOIN crm_leads l ON l.id=r.lead_id JOIN crm_leads other ON other.id=r.other_lead_id WHERE r.other_lead_id IS NOT NULL AND "+where+(all?'':' AND other.owner_id=?')+' ORDER BY r.updated,r.rowid',all?[]:[user.id,user.id]),
@@ -71,8 +71,8 @@ export async function customerEntryMonitor(db:D1Database,user:any,options?:{rule
   if(l.cohort==='historical'){
    const issues:string[]=[];
    if(!l.owner_id)issues.push('历史客资尚未关联原负责人');
-   if(l.original_owner){const matches=accounts.filter(a=>a.name.trim()===l.original_owner.trim());if(!matches.length)issues.push('原负责人尚未匹配到有效业务账号');else if(matches.length>1)issues.push('原负责人名称对应多个有效账号，需人工确认具体人员');}
-   if(l.original_owner&&l.owner_name&&l.original_owner.trim()!==l.owner_name.trim())issues.push('原负责人为'+l.original_owner+'，现有负责人为'+l.owner_name+'，需核对是否有正式转交依据');
+   if(l.original_owner&&!l.recorded_followup_handoff){const matches=accounts.filter(a=>a.name.trim()===l.original_owner.trim());if(!matches.length)issues.push('原负责人尚未匹配到有效业务账号');else if(matches.length>1)issues.push('原负责人名称对应多个有效账号，需人工确认具体人员');}
+   if(l.original_owner&&!l.recorded_followup_handoff&&l.owner_name&&l.original_owner.trim()!==l.owner_name.trim())issues.push('原负责人为'+l.original_owner+'，现有负责人为'+l.owner_name+'，需核对是否有正式转交依据');
    if(l.review)issues.push('历史记录存在待核查标记');
    add(2,l,issues,'管理员从旧数据库核对原归属及转交依据；历史对齐不计新增分配或首次联系逾期。','历史对齐');
   }
