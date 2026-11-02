@@ -7,7 +7,7 @@ const at='2026-10-29T02:00:00.000Z',pure=module('lib/sales-pipeline.ts'),calenda
 const home=module('lib/sales-home.ts',{"'./sales-pipeline'":pure,"'./china-workdays'":calendar});
 const {homeCustomer}=await import(home);
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const {salesHomeEndpoint}=await import(module('lib/sales-home-server.ts',{"'./crm'":'data:text/javascript,export const now=()=>'+JSON.stringify(at),"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./sales-home'":home,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
+const {salesHomeEndpoint}=await import(module('lib/sales-home-server.ts',{"'./crm'":'data:text/javascript,export const now=()=>'+JSON.stringify(at),"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./sales-home'":home,"'./assignment-categories'":module('lib/assignment-categories.ts'),"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}}
 const db={prepare:sql=>new Statement(sql)};

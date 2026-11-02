@@ -13,7 +13,7 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
  const all=can(u,'customers_all'),orderAll=all&&can(u,'followup_all'),scope=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
  const orderScope=orderAll?'1=1':'o.commercial_id=?',orderArgs=orderAll?[]:[u.id];
  const [people,projects,quotes,confirmations,orders,requests,salesNotices,orderNotices,devices,run,customerChecks]=await Promise.all([
-  list(db,'SELECT id,name FROM crm_users WHERE active=1 AND '+(all?"role IN ('sales','ceo')":'id=?')+' ORDER BY name',args),
+  list(db,'SELECT id,name FROM crm_users WHERE active=1 AND '+(all?"role IN ('sales','ceo','management')":'id=?')+' ORDER BY name',args),
   list(db,'SELECT p.project_id,p.lead_id,p.stage,p.next_action,p.name,l.owner_id,u.name AS owner_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_users u ON u.id=l.owner_id WHERE '+scope,args),
   list(db,'SELECT q.id,q.quote_id,q.project_id,q.sync_error,q.summary,p.lead_id,l.owner_id,u.name AS owner_name FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_users u ON u.id=l.owner_id WHERE '+scope,args),
   list(db,'SELECT c.project_id,c.order_id,o.id AS existing_order FROM crm_contract_confirmations c JOIN crm_sales_projects p ON p.project_id=c.project_id JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_followup_orders o ON o.id=c.order_id WHERE '+scope,args),
