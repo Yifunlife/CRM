@@ -19,7 +19,7 @@
 .office-app .workspace .content { padding:var(--crm-space-page); max-width:none; }
 .office-app .workspace > header { height:50px; padding:0 var(--crm-space-page); gap:12px; }
 .office-app .workspace .page-heading { margin-bottom:var(--crm-space-section); gap:12px; align-items:center; }
-.office-app .workspace h1 { font-size:22px; line-height:1.3; margin:0; }
+.office-app .workspace h1 { font-size:var(--crm-page-title-size,22px); line-height:1.3; margin:0; }
 .office-app .workspace h2 { font-size:15px; line-height:1.4; margin-bottom:8px; }
 .office-app .workspace .page-heading p { margin:4px 0 0; line-height:1.45; }
 .office-app .workspace .panel { padding:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
@@ -98,7 +98,7 @@
  .office-app { --crm-space-page:12px; --crm-control-height:44px; }
  .office-app .workspace > header { height:auto; min-height:50px; padding:6px 12px; }
  .office-app .workspace .page-heading { align-items:stretch; gap:8px; }
- .office-app .workspace h1 { font-size:20px; }
+ .office-app .workspace h1 { font-size:var(--crm-page-title-size,20px); }
  .office-app .workspace .role-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .office-app .workspace .role-metric { padding:10px; min-height:76px; }
  .office-app .workspace .role-metric strong { font-size:20px; }
@@ -126,7 +126,7 @@
 :root .office-app .workspace .management-workspace > .page-heading,
 :root .office-app .workspace .management-workspace .sales-management .page-heading { margin-bottom:12px; gap:12px; align-items:center; }
 :root .office-app .workspace .management-workspace h1,
-:root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:22px; margin:0; }
+:root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:var(--crm-page-title-size,22px); margin:0; }
 :root .office-app .workspace .management-workspace .panel,
 :root .office-app .workspace .management-workspace .sales-management .sm-report { padding:12px; margin-bottom:12px; }
 :root .office-app .workspace .management-workspace .section-heading { margin-bottom:8px; gap:12px; }
@@ -165,7 +165,7 @@
 }
 @media(max-width:720px) {
  :root .office-app .workspace .management-workspace h1,
- :root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:20px; }
+ :root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:var(--crm-page-title-size,20px); }
  :root .office-app .workspace .management-workspace > .page-heading,
  :root .office-app .workspace .management-workspace .sales-management .page-heading { align-items:stretch; }
 }
@@ -261,7 +261,7 @@
 /* Keep lazy-loaded workspaces on the shared compact spacing scale. */
 .office-app .workspace .management-workspace { max-width:none; margin:0; }
 .office-app .workspace .management-workspace > .page-heading { margin-bottom:var(--crm-space-section); gap:var(--crm-space-section); }
-.office-app .workspace .management-workspace h1 { font-size:22px; margin-bottom:0; }
+.office-app .workspace .management-workspace h1 { font-size:var(--crm-page-title-size,22px); margin-bottom:0; }
 .office-app .workspace .management-workspace .panel { padding:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
 .office-app .workspace .management-workspace .panel h2 { font-size:15px; }
 .office-app .workspace .management-workspace .section-heading { margin-bottom:var(--crm-space-control); }
@@ -304,7 +304,7 @@
 .office-app .workspace .personal-metrics { gap:var(--crm-space-control); }
 .office-app .workspace .personal-metrics > div { padding:10px var(--crm-space-section); }
 @media(max-width:720px) {
- .office-app .workspace .management-workspace h1 { font-size:20px; }
+ .office-app .workspace .management-workspace h1 { font-size:var(--crm-page-title-size,20px); }
  .office-app .workspace .management-workspace .mw-filterbar > label.checkbox { flex-basis:100%; }
  .office-app .workspace .management-workspace .mw-focus-grid { grid-template-columns:1fr; gap:var(--crm-space-control); }
  .office-app .workspace .management-workspace .mw-focus { padding:10px var(--crm-space-section); }
