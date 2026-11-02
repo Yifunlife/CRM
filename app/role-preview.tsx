@@ -1,0 +1,20 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {Eye,ArrowLeft,ChevronDown} from 'lucide-react';
+import {boardMarkets} from '../lib/crm';
+const roles:Record<string,string>={ceo:'CEO',management:'管理层',sales:'业务员',followup:'跟单员',operations:'运营',admin:'管理员'};
+export default function RolePreview({user,api}:{user:any;api:(path:string,body?:any)=>Promise<any>}){
+ const preview=user.role_preview,[open,O]=useState(!!user.preview_blocked),[data,D]=useState<any>(null),[selected,S]=useState(''),[busy,B]=useState(false),[error,E]=useState('');
+ useEffect(()=>{if(!open||!user.can_role_preview)return;let active=true;B(true);api('role-preview').then(result=>{if(active){D(result);S(result.people.some((p:any)=>p.id===preview?.target.id)?preview.target.id:'');}}).catch(e=>{if(active)E(e.message);}).finally(()=>{if(active)B(false);});return()=>{active=false;};},[open,user.can_role_preview]);
+ useEffect(()=>{if(!preview||preview.status!=='active')return;const timer=setTimeout(()=>window.location.reload(),Math.max(0,preview.expires_at-Date.now())+1000);return()=>clearTimeout(timer);},[preview?.context_id,preview?.status]);
+ if(!user.can_role_preview&&!preview)return null;
+ function reload(){try{window.localStorage.setItem('crm-role-preview-change',crypto.randomUUID());}catch{/* A blocked storage area must not prevent leaving the old view. */}window.location.replace('/');}
+ async function change(exit=false){B(true);E('');try{await api(exit?'role-preview/end':'role-preview',exit?{}:{target_id:selected});reload();}catch(e:any){E(e.message);B(false);}}
+ const people=(data?.people||[]).filter((p:any)=>p.id!==(preview?.actor.id||user.id)),person=people.find((p:any)=>p.id===selected);
+ return <section className={'role-preview'+(preview?' role-preview-active':'')} aria-label="管理员全角色验收">
+ {preview?<div className="role-preview-summary"><div><strong><Eye size={17} aria-hidden="true"/>只读验收 · {preview.target.name} · {roles[preview.target.role]||preview.target.role}</strong><p>实际登录：{preview.actor.name} · 页面与数据按所选人员的真实权限读取。保存、发送和审批不可执行。</p>{preview.reason&&<p role="alert">{preview.reason}</p>}</div><div className="role-preview-actions">{user.can_role_preview&&<button aria-expanded={open} aria-controls="role-preview-panel" disabled={busy} onClick={()=>O(!open)}>切换人员<ChevronDown size={16}/></button>}<button disabled={busy} onClick={()=>void change(true)}><ArrowLeft size={16}/>退出验收，返回本人</button></div></div>:<button aria-expanded={open} aria-controls="role-preview-panel" onClick={()=>O(!open)}><Eye size={17}/>全角色验收<ChevronDown size={16}/></button>}
+ {open&&user.can_role_preview&&<div className="role-preview-panel" id="role-preview-panel"><h2>按人员验收</h2><p>选择具体人员，核对该账号的菜单、权限和数据范围。每次验收有效30分钟。</p><form onSubmit={e=>{e.preventDefault();void change();}}><label htmlFor="role-preview-person">验收人员<select id="role-preview-person" value={selected} disabled={busy} onChange={e=>S(e.target.value)}><option value="">请选择人员</option>{Object.entries(roles).map(([role,label])=>people.some((p:any)=>p.role===role)&&<optgroup key={role} label={label}>{people.filter((p:any)=>p.role===role).map((p:any)=><option key={p.id} value={p.id}>{p.name}（{p.username}）{p.must_change_password?' · 待设置密码':''}</option>)}</optgroup>)}</select></label><button className="primary" disabled={busy||!selected}>{busy?'正在处理…':'进入只读验收'}</button></form>{person&&<p className="role-preview-scope">{roles[person.role]} · {['ceo','management','sales','admin'].includes(person.role)?'业务范围：'+(boardMarkets(person).join('、')||'尚未设置'):'数据范围按该人员的真实职责及授权读取'}{person.must_change_password?'；账号尚未完成初始密码设置，仅可核对账号状态。':''}</p>}
+ {data&&!people.length&&<p>暂无其他启用人员可供验收。</p>}{data?.history?.length>0&&<details><summary>最近验收记录</summary><ul>{data.history.map((r:any,i:number)=><li key={i}><span>{r.target_name} · {roles[r.target_role]}</span><span>{new Date(r.created).toLocaleString('zh-CN',{hour12:false})} · {r.closed?'已退出':r.expires_at<=Date.now()?'已到期':'验收中'}</span></li>)}</ul></details>}</div>}
+ {error&&<p className="role-preview-error" role="alert">{error}</p>}
+ </section>;
+}

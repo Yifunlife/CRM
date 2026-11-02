@@ -16,7 +16,7 @@ export const MODULES={
  notifications:{name:'站内通知',entry:'lib/api/notifications.ts',tests:['followup-phase1-scheduled','workflow-confirmations']},
  monitor:{name:'销售智能监控',entry:'lib/sales-monitor.ts',tests:['sales-monitor','customer-entry-monitor','sales-monitor-groups']},
  reports:{name:'销售与运营统计',entry:'lib/sales-home-server.ts',tests:['sales-home','sales-pipeline','operations-report','operations-dashboard','crm-monthly-cohort','team-followup','attribution']},
- accounts:{name:'账号与权限',entry:'lib/api/accounts.ts',tests:['permissions','sales-access']},
+ accounts:{name:'账号与权限',entry:'lib/api/accounts.ts',tests:['permissions','sales-access','role-preview']},
  google:{name:'Google来源连接',entry:'lib/api/google.ts',tests:['form-intake']},
  workflow:{name:'原业务核查与交接',entry:'lib/workflow-server.ts',tests:['workflow']},
  backup:{name:'备份',entry:'lib/database-backup.ts',tests:['database-backup']},
@@ -30,7 +30,7 @@ export function identifyOperation(path:string,method:string,body?:any):Operation
  if(path==='followup')return {module:method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project')?'customers':'orders',operation:method==='POST'&&typeof body?.id==='string'&&!Object.hasOwn(body,'project')?'customers/followup':'followup'};
  const execution=/^followup\/orders\/[^/]+\/execution(?:\/(configure|source|stage|quote))?$/.exec(path);
  if(execution)return {module:'execution',operation:'followup/orders/:id/execution'+(execution[1]?'/'+execution[1]:'')};
- for(const [prefix,module] of [['historical-alignment','history'],['allocation','allocation'],['customer-pool','intake'],['customer-identity','customers'],['leads','customers'],['linked','communication'],['cloud','communication'],['bridge','communication'],['workbench','communication'],['sales-suite','projects'],['followup-notifications','notifications'],['contract-files','documents'],['followup/files','documents'],['followup-phase1','orders'],['followup','orders'],['sales-home','reports'],['sales-pipeline','reports'],['team-followup','reports'],['operations','reports'],['attribution','reports'],['users','accounts'],['google','google'],['workflow','workflow']] as [string,ModuleId][]){
+ for(const [prefix,module] of [['role-preview','accounts'],['historical-alignment','history'],['allocation','allocation'],['customer-pool','intake'],['customer-identity','customers'],['leads','customers'],['linked','communication'],['cloud','communication'],['bridge','communication'],['workbench','communication'],['sales-suite','projects'],['followup-notifications','notifications'],['contract-files','documents'],['followup/files','documents'],['followup-phase1','orders'],['followup','orders'],['sales-home','reports'],['sales-pipeline','reports'],['team-followup','reports'],['operations','reports'],['attribution','reports'],['users','accounts'],['google','google'],['workflow','workflow']] as [string,ModuleId][]){
   if(path===prefix||path.startsWith(prefix+'/'))return {module,operation:prefix};
  }
  return {module:'unknown',operation:'unknown'};

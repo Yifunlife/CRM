@@ -21,11 +21,13 @@ import { linkedWorker } from '../../../lib/linked-whatsapp';
 import { followupFiles } from '../../../lib/order-followup-files';
 import { bridgeDeviceEndpoint } from '../../../lib/workbench-bridge';
 import { viewUser } from '../../../lib/workbench-server';
+import {canRolePreview,rolePreviewToken,rolePreviewCookie,rolePreviewEndpoint,resolveRolePreview,guardRolePreview,previewDatabase,rolePreviewInfo,previewResponse} from '../../../lib/role-preview';
 export const dynamic = "force-dynamic";
 async function execute(req: Request,trace:RequestTrace) {
  try {
-  const db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
+  let db = env.DB; if (!db) throw new Problem("数据库尚未连接，请联系管理员", 503);
   const url = new URL(req.url), path = url.pathname.slice(5), write = req.method !== "GET";
+  if(rolePreviewToken(req)&&['cloud/webhook','google/callback','linked/worker','bridge/poll','bridge/connect','login'].includes(path))throw new Problem('只读验收不能操作连接、授权或登录入口',403);
   if(path==="cloud/webhook")return await cloudWebhook(db,env as any,req);
   if (write && path!=="bridge/poll" && path!=="bridge/connect" && path!=="linked/worker" && req.headers.get("origin") !== url.origin) throw new Problem("请求来源无效，请刷新页面重试", 403);
   let body: any = {};
@@ -59,10 +61,19 @@ async function execute(req: Request,trace:RequestTrace) {
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.trade_scopes,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
-  if (!actor) throw new Problem("请先登录", 401);
+  let actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.trade_scopes,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  if (!actor) {if(rolePreviewToken(req))return json({error:"请先登录"},401,{"Set-Cookie":rolePreviewCookie(req)});throw new Problem("请先登录", 401);}
   trace.actor(actor.id);
+  const authenticatedActor=actor;
+  const control=await rolePreviewEndpoint(db,actor,token,req,path,body);if(control)return control;
+  if(path==='logout'&&req.method==='POST'&&rolePreviewToken(req)){
+   await rolePreviewEndpoint(db,actor,token,req,'role-preview/end',{});
+   const result=(await accountRecords({db,env,req,url,path,write,body,user:actor,actor,token}))!;result.headers.append('Set-Cookie',rolePreviewCookie(req));return result;
+  }
   if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
+  const preview=await resolveRolePreview(db,actor,token,req);
+  if(preview?.status==='blocked'&&path==='me'&&!write)return json({...actor,must_change_password:false,can_switch:false,can_role_preview:canRolePreview(actor),role_preview:rolePreviewInfo(preview),preview_blocked:true});
+  if(preview){await guardRolePreview(db,preview,req,path);actor=preview.target;db=previewDatabase(db);if(!['boss','personal'].includes(req.headers.get('x-crm-view')||'boss'))throw new Problem('验收中请使用所选人员的公司或本人业务视角',403);}
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
   const domesticImport=path==='import'&&domesticAllocationImport(user,actor,body);
@@ -81,8 +92,9 @@ async function execute(req: Request,trace:RequestTrace) {
   if(path==='contract-files'||path.startsWith('contract-files/'))return await contractFiles(req,db,env.BUCKET,user,actor);
   if(path==='workbench/files'||path.startsWith('workbench/files/'))return await customerFiles(req,db,user,actor);
   if(path==='followup/files'||path.startsWith('followup/files/'))return await followupFiles(req,db,user,actor);
-  const businessResult=await businessModules({db,env,req,url,path,write,body,user,actor,token});if(businessResult!==undefined)return businessResult;
-  const accountRecordsResult=await accountRecords({db,env,req,url,path,write,body,user,actor,token});if(accountRecordsResult!==undefined)return accountRecordsResult;
+  const businessEnv=preview?{...env,DB:db,QUOTE_DB:env.QUOTE_DB?previewDatabase(env.QUOTE_DB):undefined} as Cloudflare.Env:env;
+  const businessResult=await businessModules({db,env:businessEnv,req,url,path,write,body,user,actor,token});if(businessResult!==undefined)return businessResult;
+  const accountRecordsResult=await accountRecords({db,env,req,url,path,write,body,user,actor,token,preview,authenticatedActor});if(accountRecordsResult!==undefined)return accountRecordsResult;
   const googleConnectionResult=await googleConnection({db,env,req,url,path,write,body,user,actor,token});if(googleConnectionResult!==undefined)return googleConnectionResult;
   const customerRecordsResult=await customerRecords({db,env,req,url,path,write,body,user,actor,token});if(customerRecordsResult!==undefined)return customerRecordsResult;
   if (user.role === 'sales'&&!can(user,'customers_all')) throw new Problem('此操作需要对应功能权限',403);
@@ -91,5 +103,5 @@ async function execute(req: Request,trace:RequestTrace) {
   throw new Problem("操作不存在",404);
  } catch(e:any) { trace.failure(e); if(e instanceof Problem||e instanceof AllocationError)return json({error:e.message},e.status); const guardMessages=['成交与对应跟单须关联同一项目','接收账号已停用','接收人不再是业务员','接收人已无后勤维护权限','任务或订单已结束','订单已归档','标记已成交前需管理员确认有效成交单','退款金额超过可退金额或收款已撤销','已有退款的收款不能撤销','存在有效收款或跟单，不能直接撤销成交','请先由管理员核实应收并确认发货放行；收款变化后须重新确认'];const guard=guardMessages.find(m=>String(e?.message).includes(m)||String(e?.cause?.message).includes(m));if(guard)return json({error:guard},409);console.error("CRM operation failed",e?.name);return json({error:"保存失败，请刷新后重试；导入中断后重新导入会跳过相同记录"},500); }
 }
-const handle=(req:Request)=>tracedRequest(req,execute);
+const handle=(req:Request)=>tracedRequest(req,async(request,trace)=>previewResponse(request,await execute(request,trace)));
 export const GET=handle,POST=handle,PATCH=handle,PUT=handle;
