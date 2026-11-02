@@ -3734,13 +3734,14 @@ ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(pay
 `;
     }
     function patchFirstContactMain2(source) {
+      source = source.replace("material:()=>reception.approvedFile(receptionConfig(),'company'),guard:", "material:()=>{const value=receptionConfig(root);return reception.approvedFile({...value,files:{...value.files,company:'(Compressed)Yifunlife Company Profile.pdf'}},'company')},guard:");
       if (source.includes("require('./crm-first-contact')")) return source;
       const anchor = " const management=require('./crm-client-management');";
       if (!source.includes(anchor)) throw Error("\u6B64\u5DE5\u4F5C\u53F0\u7248\u672C\u4E0D\u652F\u6301\u81EA\u52A8\u9996\u8054\uFF0C\u672A\u4FEE\u6539");
       source = source.replace(anchor, anchor + `
  if(p.auto_first_contact){
   const config=readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{});
-  const mailSender=createOutlookOutreach({read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),write:(name,value)=>writeJson(path.join(root,'.workbench',name),value),token:()=>backgroundOutlookToken(true),fetch:(...args)=>net.fetch(...args),material:()=>reception.approvedFile(receptionConfig(),'company'),guard:()=>root===workspaceRoot&&!app.isQuitting});
+  const mailSender=createOutlookOutreach({read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),write:(name,value)=>writeJson(path.join(root,'.workbench',name),value),token:()=>backgroundOutlookToken(true),fetch:(...args)=>net.fetch(...args),material:()=>{const value=receptionConfig(root);return reception.approvedFile({...value,files:{...value.files,company:'(Compressed)Yifunlife Company Profile.pdf'}},'company')},guard:()=>root===workspaceRoot&&!app.isQuitting});
   return require('./crm-first-contact').firstContact({phonePolicy:require('./outreach-policy'),command,config,getClient,clients:()=>bootstrapClients().clients,read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),draft:loadDraft,archive:client=>saveCustomerArchive(client).messages,active:()=>root===workspaceRoot&&!app.isQuitting,
    whatsappHistory:async phone=>{const jid=phone+'@s.whatsapp.net',names=whatsappContactNames(),aliases=[jid,...(names.aliases.get(jid)||[])].filter(value=>/^\\d+@(s\\.whatsapp\\.net|lid)$/.test(value));return (await readWhatsAppDatabase("SELECT id FROM messages WHERE is_from_me=1 AND chat_jid IN ("+aliases.map(value=>"'"+value+"'").join(',')+") LIMIT 1")).length>0;},
    normalizePhone:(clientId,phone)=>{const state=bootstrapClients(),client=state.clients.find(c=>c.id===clientId);client.whatsapp=phone;saveClients(state);},

@@ -7,6 +7,8 @@ const run=async(overrides={})=>{
  const result=await firstContact(args);return{result,sent,mail,client};
 };
 (async()=>{
+ const {patchFirstContactMain}=require('./desktop-sync/patch-app.cjs');const sample=" const management=require('./crm-client-management');\nreception:receptionConfig().enabled,error:crmAccountSync?.error()";const patched=patchFirstContactMain(sample);assert(patched.includes("company:'(Compressed)Yifunlife Company Profile.pdf'"));assert.equal(patchFirstContactMain(patched),patched);
+
  let r=await run();assert.equal(r.sent,1);assert.equal(r.result.messageId,'receipt-wa');
  r=await run({payload:{channel:'email',recipient_key:'customer@example.invalid'}});assert.equal(r.mail,1);assert.equal(r.result.text,'Existing approved mail template');
  r=await run({client:{country:'SA',whatsapp:'0592525928'},payload:{country:'SA',recipient_key:'0592525928'}});assert.equal(r.client.whatsapp,'+966592525928');assert.equal(r.sent,1);

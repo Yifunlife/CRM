@@ -105,6 +105,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE owner_id=? AND state='queued' AND COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 AND created<?").bind(JSON.stringify({error:'操作等待超时，未执行，请重新确认'}),timestamp,device.owner_id,timestamp-60000).run();
  // Running work is never automatically reclaimed: a lost receipt must not cause a duplicate send.
  await db.prepare("UPDATE crm_workbench_commands SET state='uncertain',result=?,updated=? WHERE owner_id=? AND state='running' AND updated<?").bind(JSON.stringify({error:'执行结果待核实，不会自动重发'}),timestamp,device.owner_id,timestamp-300000).run();
+ if(body.heartbeat&&body.status?.autoFirstContact)await queueFirstContacts(db,device.owner_id);
  if(body.heartbeat||body.result)return {ok:true};
  const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 1").bind(device.owner_id).first();
  if(!next)return {command:null};

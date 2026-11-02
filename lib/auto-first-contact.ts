@@ -33,7 +33,9 @@ export async function queueFirstContacts(db:D1Database,owner:string){
   if(queued>=20)break;
   const channel=preferredContact(lead.detail);if(!channel||!status[channel])continue;
   const recipient=channel==='email'?emailKey(lead.email):phoneKey(lead.phone);if(!recipient)continue;
-  const commandId='first-'+await digest(owner+':'+lead.id);
+  const prior=(await db.prepare("SELECT state,result FROM crm_workbench_commands WHERE owner_id=? AND json_extract(payload,'$.auto_first_contact')=1 AND json_extract(payload,'$.crm_lead_id')=?").bind(owner,lead.id).all<any>()).results;
+  if(prior.some(job=>{if(job.state!=='failed')return true;try{return !['号码位数异常或与表单国家冲突','请配置已批准的压缩公司介绍PDF'].includes(JSON.parse(job.result).error);}catch{return true;}}))continue;
+  const commandId='first-'+channel+'-'+await digest(owner+':'+lead.id+':'+lead.country+':'+recipient);
   if(await db.prepare('SELECT id FROM crm_workbench_commands WHERE id=?').bind(commandId).first())continue;
   if(await db.prepare("SELECT id FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind IN ('send','material') AND state IN ('queued','running','uncertain')").bind(owner,lead.desktop_id).first())continue;
   const option=channel==='whatsapp'?slots.findIndex((n:number)=>n<5):-1;if(channel==='whatsapp'&&option<0)continue;
