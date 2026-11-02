@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-02T09:17:15.819893+00:00",
+  "generatedAt": "2026-11-02T09:27:11.057366+00:00",
   "title": "Design System: 亦玩客资管理 · Microsoft 365",
   "extensions": {
     "colorMeta": {
@@ -279,7 +279,18 @@
         "name": "compact-desktop-max",
         "value": "1100px"
       }
-    ]
+    ],
+    "dataColorRoles": {
+      "customer": "#dcecff",
+      "priority": "#ebe2fa",
+      "quote": "#ffecd4",
+      "deal": "#dbf1e6",
+      "pending": "#e9edf3",
+      "active": "#d8eaff",
+      "done": "#d9f0e1",
+      "wait": "#ffedc4",
+      "error": "#ffe0e2"
+    }
   },
   "components": [
     {
@@ -310,7 +321,7 @@
       "kind": "nav",
       "description": "浅色导航通过文字、面色和蓝轨表达当前位置。",
       "html": "<nav class=\"ds-nav\" aria-label=\"功能导航\"><button class=\"ds-nav-item ds-nav-active\" aria-current=\"page\">客户管理</button><button class=\"ds-nav-item\">项目管理</button></nav>",
-      "css": ".ds-nav{display:grid;gap:4px;background:var(--canvas,#f5f5f5);padding:12px;}.ds-nav-item{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;position:relative;min-height:38px;padding:8px 12px;border:0;border-radius:4px;text-align:left;color:#424242;background:transparent;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-nav-item:hover{background:#ebebeb;color:var(--ink,#242424);}.ds-nav-active{background:#e1ecf7;color:#0f548c;box-shadow:inset 2px 0 #0f6cbd;font-weight:600;}.ds-nav-item:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}",
+      "css": ".ds-nav{display:grid;gap:4px;background:#f5f8ff;padding:12px;}.ds-nav-item{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;position:relative;min-height:38px;padding:8px 12px;border:0;border-radius:4px;text-align:left;color:#424242;background:transparent;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-nav-item:hover{background:#ebebeb;color:var(--ink,#242424);}.ds-nav-active{background:#e1ecf7;color:#0f548c;box-shadow:inset 2px 0 #0f6cbd;font-weight:600;}.ds-nav-item:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}",
       "refersTo": "navigation-active"
     },
     {
@@ -326,7 +337,7 @@
       "kind": "card",
       "description": "平放的白色工作容器，不添加装饰性阴影。",
       "html": "<section class=\"ds-panel\"><h2 class=\"ds-title\">客户资料</h2><p class=\"ds-copy\">客户与下一步跟进信息</p></section>",
-      "css": ".ds-panel{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;padding:16px;border:1px solid var(--line,#e0e0e0);border-radius:8px;background:var(--white,#fff);color:var(--ink,#242424);}.ds-title{font-size:16px;line-height:22px;font-weight:600;margin:0 0 12px;}.ds-copy{margin:0;color:var(--muted,#616161);}",
+      "css": ".ds-panel{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;padding:16px;border:1px solid var(--line,#e0e0e0);border-radius:12px;background:var(--white,#fff);color:var(--ink,#242424);}.ds-title{font-size:16px;line-height:22px;font-weight:600;margin:0 0 12px;}.ds-copy{margin:0;color:var(--muted,#616161);}",
       "refersTo": "panel"
     },
     {

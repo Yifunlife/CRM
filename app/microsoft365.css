@@ -1,6 +1,7 @@
 /* Microsoft 365 / Fluent web direction for the existing CRM.
    FIRST VIEWPORT: full-width white masthead, pale navigation, blue active rail,
-   quiet gray canvas and white work surfaces. Preserve all business content.
+   pale blue canvas, colored metric groups and white reading surfaces.
+   Preserve all business content; status colors always retain their labels.
    INTERACTION: navigation and tabs use the same blue selection; hover is a
    120ms surface change, with visible keyboard focus and reduced-motion support.
    FINISH: verify desktop/mobile, record review findings and the built system.
@@ -26,8 +27,18 @@
   --muted: #616161;
   --green: #0f6cbd;
   --line: #e0e0e0;
-  --canvas: #f5f5f5;
+  --canvas: #edf5fc;
   --white: #fff;
+  --crm-status-done-bg: #d9f0e1;
+  --crm-status-done-ink: #185a36;
+  --crm-status-pending-bg: #e9edf3;
+  --crm-status-pending-ink: #46556b;
+  --crm-status-active-bg: #d8eaff;
+  --crm-status-active-ink: #144f96;
+  --crm-status-wait-bg: #ffedc4;
+  --crm-status-wait-ink: #754600;
+  --crm-status-error-bg: #ffe0e2;
+  --crm-status-error-ink: #9c2638;
   --crm-font: "Segoe UI Web", "Segoe UI", -apple-system, BlinkMacSystemFont, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 body,
@@ -47,7 +58,7 @@ body,
   top: 56px;
   width: 224px;
   padding: 20px 12px 16px;
-  background: #f5f5f5;
+  background: #f5f8ff;
   border-right: 1px solid var(--line);
   color: var(--ink);
   z-index: 30;
@@ -209,4 +220,77 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .office-app button,
   .login button { transition: none; }
+}
+
+/* Category colors support reading; process colors describe actual state. */
+.office-app .workspace > header { border-bottom-color: #cbdcf1; }
+.office-app .workspace .page-heading {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #dceeff, #eae5fc 72%, #e1f5f4);
+}
+.office-app .workspace .page-heading h1 { color: #102f57; }
+.office-app .workspace .page-heading p { color: #435775; }
+.office-app .workspace .panel { border-color: #d5e1ef; border-radius: 12px; }
+.office-app .workspace th { background: #edf4fc; color: #314c70; }
+.office-app .workspace tr:hover td { background: #f0f6ff; }
+.office-app > aside > nav .lucide-layout-dashboard { color: #1269c2; }
+.office-app > aside > nav .lucide-chart-no-axes-combined { color: #6c46a8; }
+.office-app > aside > nav .lucide-users { color: #126b83; }
+.office-app > aside > nav .lucide-folder-kanban { color: #a45b0a; }
+.office-app > aside > nav .lucide-clipboard-list { color: #4269a5; }
+.office-app > aside > nav .lucide-file-text { color: #7c4d9f; }
+.office-app > aside > nav .lucide-activity { color: #1d7858; }
+.office-app .workspace .so-blue { --metric-bg: #dcecff; --metric-ink: #145397; --metric-line: #b9d6f5; }
+.office-app .workspace .so-purple { --metric-bg: #ebe2fa; --metric-ink: #684098; --metric-line: #d6c4ee; }
+.office-app .workspace .so-orange { --metric-bg: #ffecd4; --metric-ink: #8b4d08; --metric-line: #efd0a8; }
+.office-app .workspace .so-green { --metric-bg: #dbf1e6; --metric-ink: #1c684b; --metric-line: #b7dfcb; }
+.office-app .workspace .sales-overview .so-metric {
+  background: var(--metric-bg);
+  color: var(--metric-ink);
+  border-color: var(--metric-line);
+}
+.office-app .workspace .sales-overview .so-metric > span,
+.office-app .workspace .sales-overview .so-metric > small { color: var(--metric-ink); }
+.office-app .workspace .sales-overview .so-metric[aria-pressed=true] {
+  background: var(--metric-bg);
+  box-shadow: inset 0 0 0 2px var(--metric-ink);
+}
+.office-app .workspace .sales-overview .so-metric:hover { filter: brightness(.97); }
+.office-app .workspace .so-person { background: #f7faff; }
+.office-app .workspace .so-person .so-person-name > strong { color: #174e84; }
+.office-app .workspace .so-person .so-rank { background: #e7ddf7; color: #5e388e; }
+.office-app .workspace .so-person[aria-pressed=true] { background: #e5eefb; border-color: #386faa; }
+.office-app .workspace .so-goal .mw-progress > span { background: #12846b; }
+.office-app .workspace .so-goal:last-child .mw-progress > span { background: #6a4cb2; }
+.office-app .workspace .personal-metrics > [data-metric] { background: #e4effd; color: #174f8b; border-color: #c5daf2; }
+.office-app .workspace .personal-metrics > :is([data-metric='成交订单'],[data-metric='成交金额'],[data-metric='已收金额'],[data-metric='到期待办完成度']) { background: #ddf2e7; color: #1c6548; border-color: #bfdccb; }
+.office-app .workspace .personal-metrics > :is([data-metric='报价金额'],[data-metric='报价项目'],[data-metric='未收金额']) { background: #ffedd5; color: #824806; border-color: #efd2ac; }
+.office-app .workspace .personal-metrics > :is([data-metric='业绩目标'],[data-metric='业绩完成率']) { background: #ece3fa; color: #643e95; border-color: #d9c9ec; }
+.office-app .workspace .personal-metrics > [data-metric] > span { color: inherit; }
+.office-app .workspace .crm-status { padding: 4px 8px; border-radius: 5px; font-weight: 600; }
+.office-app .workspace .crm-status-design { background: #eadcfa; color: #66368f; }
+.office-app .workspace .crm-status-quote { background: #ffead0; color: #824604; }
+.office-app .workspace .crm-status-project-order { background: #dce7ff; color: #254d95; }
+.office-app .workspace .crm-status-toy-order { background: #d4f0f1; color: #0d646e; }
+.office-app .workspace .crm-status-production { background: #ffe8c5; color: #864703; }
+.office-app .workspace .crm-status-shipping { background: #d9ecff; color: #165c92; }
+.office-app .workspace .crm-status-installation { background: #f9dfea; color: #8b345e; }
+.office-app .workspace .crm-progress-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.office-app .workspace :is(.fb-tone-active,.fb-tone-done,.fb-tone-pending,.fb-tone-wait,.fb-tone-error) { --fb-muted: var(--fb-ink); --fb-badge: var(--fb-bg); }
+.office-app .workspace .fb-tone-active { --fb-bg: var(--crm-status-active-bg); --fb-ink: var(--crm-status-active-ink); }
+.office-app .workspace .fb-tone-done { --fb-bg: var(--crm-status-done-bg); --fb-ink: var(--crm-status-done-ink); }
+.office-app .workspace .fb-tone-pending { --fb-bg: var(--crm-status-pending-bg); --fb-ink: var(--crm-status-pending-ink); }
+.office-app .workspace .fb-tone-wait { --fb-bg: var(--crm-status-wait-bg); --fb-ink: var(--crm-status-wait-ink); }
+.office-app .workspace .fb-tone-error { --fb-bg: var(--crm-status-error-bg); --fb-ink: var(--crm-status-error-ink); }
+.office-app .workspace .ft-tone-active { --ft-tone: var(--crm-status-active-ink); }
+.office-app .workspace .ft-tone-done { --ft-tone: var(--crm-status-done-ink); }
+.office-app .workspace .ft-tone-pending { --ft-tone: var(--crm-status-pending-ink); }
+.office-app .workspace .ft-tone-wait { --ft-tone: var(--crm-status-wait-ink); }
+.office-app .workspace .ft-tone-error { --ft-tone: var(--crm-status-error-ink); }
+@media (max-width: 720px) {
+  .office-app .workspace .page-heading { padding: 14px 12px; }
+  .office-app .workspace .sales-overview .so-statistics { border-color: #ccdaec; }
+  .office-app .workspace .sales-overview .so-metric { box-shadow: 1px 0 #fff, 0 1px #fff; }
+  .office-app .workspace .customer-management .ui-customer-status .crm-status { padding: 3px 7px; }
 }
