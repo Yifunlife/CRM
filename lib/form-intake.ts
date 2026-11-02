@@ -3,6 +3,7 @@ import {can,clean,digest,emailKey,id,now,phoneKey} from './crm';
 import {AllocationError,allocationWeights,distribute} from './allocation-server';
 import {BUSINESS_SCOPES} from './allocation';
 import {enquiryNotification} from './lead-notifications';
+import {fullLeadSQL} from './allocation-priority';
 
 const time=(value:any)=>Number.isFinite(Date.parse(value))?Date.parse(value):Infinity;
 const keys=(row:any)=>[phoneKey(row.phone).length>=7?'p:'+phoneKey(row.phone):'',emailKey(row.email)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey(row.email))?'e:'+emailKey(row.email):''].filter(Boolean);
@@ -60,6 +61,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    const assigned=existing.filter(l=>l.owner_id);
    let lead=assigned[0]||existing[0];
    const first=group[0],fresh=group.filter(r=>!known.has(r.id)&&!byFingerprint.has(r.fingerprint));
+   const businessScope=group.some(r=>r.business_scope==='meta-full')?'meta-full':first.business_scope;
    result.skipped+=group.length-fresh.length;
    // Only resume assignment for leads created by this form pipeline, never sweep historical waiting leads.
    for(const r of group){const s=submissions.find(s=>s.id===r.id&&s.kind==='new');if(s?.lead_id)allocate.add(s.lead_id);}
@@ -77,7 +79,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    }
    const isNew=!lead;
    if(isNew){
-    lead={id:'form-'+await digest(first.id),name:first.name,phone:first.phone,email:first.email,country:first.country,owner_id:null,entered:first.occurred,created:at,review:0,business_scope:first.business_scope};
+    lead={id:'form-'+await digest(first.id),name:first.name,phone:first.phone,email:first.email,country:first.country,owner_id:null,entered:first.occurred,created:at,review:0,business_scope:businessScope};
     leadById.set(lead.id,lead);result.inserted++;
    }
    const statements:D1PreparedStatement[]=[];
@@ -101,7 +103,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    await flush();
    if(!options.manualOnly&&options.allocate!==false&&allocate.size){
     const {config,weights}=await allocationWeights(db);
-    if(config.rule.automatic&&weights.length){const ids=[...allocate];for(let i=0;i<ids.length;i+=40){await db.batch([guard()]);result.autoAssigned+=await distribute(db,ids.slice(i,i+40),'all',actor);}}
+    if(config.rule.automatic&&weights.length){const ids=(await db.prepare(`SELECT id FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) ORDER BY ${fullLeadSQL('crm_leads')} DESC,entered,id`).bind(JSON.stringify([...allocate])).all<{id:string}>()).results.map(r=>r.id);for(let i=0;i<ids.length;i+=40){await db.batch([guard()]);result.autoAssigned+=await distribute(db,ids.slice(i,i+40),'all',actor);}}
     else result.allocationWarning='客资已去重入库，自动分配未开启或没有可接收人员';
    }
    const undelivered=(await db.prepare(`SELECT s.* FROM crm_form_submissions s JOIN crm_leads l ON l.id=s.lead_id JOIN crm_users u ON u.id=l.owner_id

@@ -28,10 +28,13 @@ export async function syncGoogleForms(db:D1Database,options:{at?:string;manual?:
  const actor=options.actor||config?.actor_id;if(!actor)throw new Error('尚未设置表单同步执行账号');
  try{
   const all=options.rows||await readPublicForms();
-  // Re-scan all history every morning; persisted source IDs catch late arrivals without reprocessing old submissions.
-  const rows=all.filter(r=>Date.parse(formRow(r).occurred)<Date.parse(cutoff));
+  // Only the preceding 24 hours are eligible, including after a pause or a DST change.
+  const start=new Date(Date.parse(cutoff)-86400000).toISOString();
+  const timed=all.map(row=>({row,at:Date.parse(formRow(row).occurred)}));
+  const rows=timed.filter(r=>r.at>=Date.parse(start)&&r.at<Date.parse(cutoff)).map(r=>r.row);
   const result=await importForms(db,rows,actor,{preview:options.preview,filename:'Google表单｜截止 '+cutoff});
+  if(!options.preview&&result.allocationWarning)throw new Error(result.allocationWarning);
   if(!options.preview)await db.prepare("UPDATE crm_google_form_sync SET last_cutoff=?,finished=?,last_error='',result=? WHERE id='main'").bind(cutoff,at,JSON.stringify({...result,groups:undefined}),).run();
-  return {...result,cutoff,total:all.length,eligible:rows.length,deferred:all.length-rows.length};
+  return {...result,start,cutoff,total:all.length,eligible:rows.length,deferred:timed.filter(r=>r.at>=Date.parse(cutoff)).length,ignoredBeforeStart:timed.filter(r=>r.at<Date.parse(start)).length};
  }catch(error:any){if(!options.preview)await db.prepare("UPDATE crm_google_form_sync SET last_error=? WHERE id='main'").bind(String(error.message).slice(0,300)).run();throw error;}
 }
