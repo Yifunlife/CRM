@@ -4,6 +4,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {moduleURL,database} from './test-form-intake.mjs';
 const {customerInquiry,originalTimeLabel}=await import(moduleURL('lib/customer-inquiry.ts'));
 assert.equal(originalTimeLabel('2026-07-12'),'2026-07-12（仅记录日期）');
+assert.match(originalTimeLabel('2026-07-12 06:08:00'),/06:08:00（原表时区未注明）/);
+assert.equal(originalTimeLabel('2026-07-12 25:00:00'),'');
 assert.equal(originalTimeLabel('2026-02-30'),'');assert.equal(originalTimeLabel(''),'');
 assert.match(originalTimeLabel('2026-12-31T16:30:00Z'),/^2027\/1\/1 00:30:00/);
 const pending={entered:'2026-11-02',created:'2026-11-02T00:00:00Z',source:'Meta',intake:{created:'2026-11-02T00:00:00Z',payload:{name:'pending'},raw:'原始客户留言'}};

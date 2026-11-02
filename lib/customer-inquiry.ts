@@ -2,6 +2,8 @@ import {customerOrigin,sourceRecord} from './customer-origin';
 import {reportAcquiredDay} from './report-acquired-day';
 export function originalTimeLabel(input:any){
  const raw=typeof input==='string'?input.trim():'';
+ const local=raw.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+ if(local&&reportAcquiredDay(local[1])&&Number(local[2])<24&&Number(local[3])<60&&Number(local[4]||0)<60)return reportAcquiredDay(local[1])+' '+local[2]+':'+local[3]+(local[4]?':'+local[4]:'')+'（原表时区未注明）';
  const day=reportAcquiredDay(raw);
  if(!day)return '';
  if(/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(raw))return day+'（仅记录日期）';
