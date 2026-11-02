@@ -122,6 +122,41 @@ async function recordOnlineContact(db:D1Database,owner:string,desktop:string,eve
 }
 
 const fields={name:'name',country:'country',whatsapp:'phone',email:'email',grade:'grade',nextContact:'next_date'} as const;
+async function uploadNewWorkbenchClients(db:D1Database,owner:string,clients:any[],ids:unknown,catalogOnly:boolean){
+ const uploaded:any[]=[],conflicts:any[]=[];
+ if(ids===undefined)return {uploaded,conflicts};
+ if(!Array.isArray(ids)||ids.length>20||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!clients.some(c=>c.id===id)))throw new AllocationError('新增客资同步批次无效');
+ if(!ids.length)return {uploaded,conflicts};
+ if(catalogOnly)throw new AllocationError('此连接未开放新增客资写入',403);
+ const contacts=(await db.prepare('SELECT id,owner_id,phone,email,fingerprint FROM crm_leads').all<any>()).results;
+ const links=(await db.prepare('SELECT lead_id,owner_id,desktop_id FROM crm_workbench_links').all<any>()).results;
+ const person:any=await db.prepare('SELECT name FROM crm_users WHERE id=? AND active=1').bind(owner).first();
+ for(const desktop of ids){
+  const c=clients.find(c=>c.id===desktop),p=phoneKey(c.whatsapp),e=emailKey(c.email),reject=(reason:string)=>conflicts.push({desktop_id:desktop,reason});
+  if(desktop.startsWith('crm-')||!c.name||c.grade&&!['VIP','A','B','C','D'].includes(c.grade)){reject('本地客户资料需核对，未新建');continue;}
+  if(p&&!/^\d{8,15}$/.test(p)||e&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){reject('本地联系方式需核对，未新建');continue;}
+  const expected='wb-'+await digest(owner+':'+desktop),priorLink=links.find(l=>l.owner_id===owner&&l.desktop_id===desktop);
+  const exact=contacts.find(l=>l.id===expected),matches=contacts.filter(l=>p&&phoneKey(l.phone)===p||e&&emailKey(l.email)===e);
+  if(priorLink&&contacts.find(l=>l.id===priorLink.lead_id)?.owner_id!==owner||exact&&exact.owner_id!==owner||matches.some(l=>l.owner_id!==owner)){reject('该联系方式已有客资，需核对归属，未新建');continue;}
+  if(clients.some(other=>other.id!==desktop&&(p&&phoneKey(other.whatsapp)===p||e&&emailKey(other.email)===e))||matches.length>1){reject('电话或邮箱对应多个客户，请核对后关联');continue;}
+  let lead=exact||matches[0];
+  if(priorLink&&(!lead||lead.id!==priorLink.lead_id)||lead&&links.some(l=>l.lead_id===lead.id&&(l.owner_id!==owner||l.desktop_id!==desktop))){reject('已有客户会话关联需要核对，未改动');continue;}
+  if(!lead){
+   const stamp=now(),date=/^\d{4}-\d{2}-\d{2}$/.test(c.createdAt)?new Date(c.createdAt+'T00:00:00+08:00'):null,created=date&&Number.isFinite(date.getTime())&&date.getTime()<=Date.now()?date.toISOString():stamp;
+   const detail=JSON.stringify({项目:c.project,客户类型:c.customerType,下一步:c.nextAction,备注:c.notes,本地阶段:c.stage,本地项目状态:c.projectStatus,_workbench:{...c,messages:undefined,owner_id:owner,desktop_id:desktop,synced_at:stamp}}),fingerprint='workbench:'+await digest(p?'phone:'+p:e?'email:'+e:'client:'+owner+':'+desktop);
+   // Check again inside the write so concurrent uploads cannot claim the same contact.
+   await db.batch([db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,entered,owner_id,original_owner,grade,next_date,detail,fingerprint,review,created) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM crm_leads WHERE (?<>'' AND replace(replace(replace(replace(replace(replace(phone,'+',''),' ',''),'-',''),'(',''),')',''),'.','')=?) OR (?<>'' AND lower(trim(email))=?))").bind(expected,c.name,c.whatsapp,c.email,c.country,c.source||'本地工作台',c.createdAt,owner,person?.name||'',c.grade,/^\d{4}-\d{2}-\d{2}$/.test(c.nextContact)?c.nextContact:'',detail,fingerprint,p||e?0:1,created,p,p,e,e),db.prepare('INSERT OR IGNORE INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) SELECT id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?').bind(desktop,stamp,owner,expected,owner)]);
+   lead=await db.prepare('SELECT id,owner_id,phone,email,fingerprint FROM crm_leads WHERE id=? AND owner_id=?').bind(expected,owner).first();
+   if(!lead){reject('联系方式刚被其他客资使用，请核对后再同步');continue;}
+   contacts.push(lead);
+  }else await db.prepare('INSERT OR IGNORE INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) SELECT id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?').bind(desktop,now(),owner,lead.id,owner).run();
+  const confirmed:any=await db.prepare('SELECT w.lead_id,l.owner_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND w.desktop_id=?').bind(owner,desktop).first();
+  if(!confirmed||confirmed.lead_id!==lead.id||confirmed.owner_id!==owner){reject('客资归属或关联已变化，未继续同步');continue;}
+  uploaded.push({desktop_id:desktop,lead_id:lead.id,created:lead.id===expected&&lead.fingerprint.startsWith('workbench:')});
+  if(!links.some(l=>l.lead_id===lead.id))links.push({lead_id:lead.id,owner_id:owner,desktop_id:desktop});
+ }
+ return {uploaded,conflicts};
+}
 async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
  if(!input||!Array.isArray(input.clients)||input.clients.length>5000||!Array.isArray(input.bindings)||input.bindings.length>5000||JSON.stringify(input).length>1400000)throw new AllocationError('本地同步资料过大或格式无效');
  const seen=new Set<string>(),clients=input.clients.map((c:any)=>{
@@ -130,9 +165,10 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
   for(const key of ['name','country','whatsapp','email','grade','project','stage','projectStatus','source','customerType','nextAction','nextContact','followStatus','closeDate','amount','lostReason','notes','revision','createdAt','lastContact'])out[key]=clean(c[key],['notes','nextAction','lostReason'].includes(key)?6000:500);
   out.stage=Number(out.stage)||1;out.phone=out.whatsapp;return out;
  });
+ const imported=await uploadNewWorkbenchClients(db,owner,clients,input.new_clients,input.catalog_only===true);
  const rows=input.catalog_only===true?[]:(await db.prepare('SELECT * FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
  const allLinks=(await db.prepare('SELECT w.*,l.owner_id AS current_owner FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? OR l.owner_id=?').bind(owner,owner).all<any>()).results;
- const conflicts:any[]=[],updates:any[]=[],bindings:any[]=[],blocked=new Set(allLinks.filter(l=>l.current_owner!==owner||l.owner_id!==owner).map(l=>l.desktop_id));
+ const conflicts:any[]=[...imported.conflicts],updates:any[]=[],bindings:any[]=[],blocked=new Set(allLinks.filter(l=>l.current_owner!==owner||l.owner_id!==owner).map(l=>l.desktop_id));
  const used=new Set<string>();
  for(const lead of rows){
   const existing=allLinks.find(l=>l.lead_id===lead.id);
@@ -158,7 +194,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
     if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'两端均已修改，请核对'});continue;}
     if(local!==base[key]&&remote===base[key]){
      if(key==='name'&&!local||key==='grade'&&local&&!['VIP','A','B','C','D'].includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
-     if(['whatsapp','email'].includes(key)&&local&&rows.some((r:any)=>r.id!==lead.id&&(key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local)))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
+     if(['whatsapp','email'].includes(key)&&local&&(await db.prepare('SELECT id,phone,email FROM crm_leads WHERE id<>?').bind(lead.id).all<any>()).results.some(r=>key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
      const changed:any=await db.prepare(`UPDATE crm_leads SET ${column}=? WHERE id=? AND owner_id=? AND ${column}=? RETURNING id`).bind(local,lead.id,owner,remote).first();
      if(changed){values[key]=local;lead[column]=local;}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});
     }
@@ -180,7 +216,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
  snapshot.clients=snapshot.clients.filter((c:any)=>!blocked.has(c.id));snapshot.captured_at=now();
  snapshot.scenes=(input.scenes||[]).slice(0,300).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,2000)}));
  if(!previous||before!==JSON.stringify({...snapshot,captured_at:undefined}))await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner,await storeJson(snapshot,`snapshots/${owner}`,true),now(),owner).run();
- return {owner_id:owner,updates:updates.filter(u=>allowed.has(u.lead_id)),bindings:bindings.filter(b=>allowed.has(b.lead_id)),blocked:[...blocked],conflicts};
+ return {owner_id:owner,updates:updates.filter(u=>allowed.has(u.lead_id)),bindings:bindings.filter(b=>allowed.has(b.lead_id)),uploaded:imported.uploaded.filter(u=>allowed.has(u.lead_id)),blocked:[...blocked],conflicts};
 }
 
 async function synchronizeHistory(db:D1Database,owner:string,input:any){
