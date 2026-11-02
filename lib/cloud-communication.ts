@@ -40,6 +40,13 @@ export async function cloudWebhook(db:D1Database,env:Runtime,req:Request){
  }
  return new Response('OK');
 }
+export async function allocationWhatsAppStatus(db:D1Database,env:Runtime,user:any){
+ if(!can(user,'customers_all')||!can(user,'performance_view'))fail('没有查看分配接入的权限',403);
+ const cfg=await config(db,env);
+ const connections=(await db.prepare('SELECT display_phone,active,sync_status FROM crm_cloud_connections').all<any>()).results;
+ const connection=connections.find(c=>phoneKey(c.display_phone)==='61452608111');
+ return {tail:'8111',officialReady:!!(cfg.metaAppId&&cfg.metaConfigId&&cfg.metaSecret),connected:!!connection?.active,syncStatus:connection?.sync_status||'',intakeReady:false};
+}
 export async function cloudEndpoint(db:D1Database,env:Runtime,user:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('cloud/'))return undefined;
  if(user.role==='ceo'&&!(method==='GET'&&['cloud/settings','cloud/status'].includes(path)))fail('CEO仅可查看公司平台设置',403);
