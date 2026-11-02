@@ -17,17 +17,18 @@ async function prepare(app,output){
  asar.extractAll(archive,folder);run('/usr/bin/ditto',[app,candidate]);
  for(const [name,patch] of [['main.js',patchMain],['crm-client-management.js',patchManagement],['crm-bridge.js',patchBridge]]){const file=path.join(folder,name);fs.writeFileSync(file,patch(fs.readFileSync(file,'utf8')));}
  fs.copyFileSync(path.join(__dirname,'crm-account-sync.cjs'),path.join(folder,'crm-account-sync.js'));
- for(const name of ['main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js']){const script=fs.readFileSync(path.join(folder,name),'utf8');new (require('node:vm').Script)(script,{filename:name});}
+ fs.copyFileSync(path.join(__dirname,'crm-history-sync.cjs'),path.join(folder,'crm-history-sync.cjs'));
+ for(const name of ['main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs']){const script=fs.readFileSync(path.join(folder,name),'utf8');new (require('node:vm').Script)(script,{filename:name});}
  const files=entries(before.tree),unpacked=files.filter(f=>f.unpacked).map(f=>path.join(folder,f.name));
  await asar.createPackageWithOptions(folder,candidate+'/Contents/Resources/app.asar',unpacked.length?{unpack:unpacked.length===1?unpacked[0]:'{'+unpacked.join(',')+'}'}:{});
- const next=candidate+'/Contents/Resources/app.asar',after=header(next),allowed=['main.js','crm-client-management.js','crm-bridge.js'];
+ const next=candidate+'/Contents/Resources/app.asar',after=header(next),allowed=['main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs'];
  for(const file of files){if(file.link)continue;const original=asar.extractFile(archive,file.name),updated=asar.extractFile(next,file.name);if(!allowed.includes(file.name)&&digest(original)!==digest(updated))throw Error('无关应用文件发生变化，未安装：'+file.name);}
- for(const file of entries(after.tree)){if(!files.some(f=>f.name===file.name)&&file.name!=='crm-account-sync.js')throw Error('更新包含未知文件，未安装');}
+ for(const file of entries(after.tree)){if(!files.some(f=>f.name===file.name)&&!['crm-account-sync.js','crm-history-sync.cjs'].includes(file.name))throw Error('更新包含未知文件，未安装');}
  run('/usr/libexec/PlistBuddy',['-c','Set :ElectronAsarIntegrity:Resources/app.asar:hash '+after.hash,candidate+'/Contents/Info.plist']);
  const ent=run('/usr/bin/codesign',['-d','--entitlements',':-',app]);if(!ent.includes('<plist'))throw Error('无法核对原应用权限，未安装');
  const entitlement=path.join(output,'entitlements.plist');fs.writeFileSync(entitlement,ent);
  run('/usr/bin/codesign',['--force','--sign','-','--options','runtime','--entitlements',entitlement,candidate]);run('/usr/bin/codesign',['--verify','--deep','--strict',candidate]);
- return {candidate,verifiedFiles:files.length,changedSource:[...allowed,'crm-account-sync.js'],originalHash:before.hash,updatedHash:after.hash};
+ return {candidate,verifiedFiles:files.length,changedSource:allowed,originalHash:before.hash,updatedHash:after.hash};
 }
 async function install(){
  const test=process.argv.indexOf('--verify-app');
@@ -51,10 +52,10 @@ async function install(){
  const result=await prepare(app,output);closed(app);
  if(digest(fs.readFileSync(crm))!==digest(original))throw Error('安装期间客户资料发生变化，未覆盖应用，请重新安装');
  const backup=path.join(before,'previous-installed.app');fs.renameSync(app,backup);
- try{fs.renameSync(result.candidate,app);run('/usr/bin/codesign',['--verify','--deep','--strict',app]);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(configFile,JSON.stringify({...config,enabled:true,accountSync:true,workspace,localOwner},null,2),{mode:0o600});fs.chmodSync(configFile,0o600);fs.writeFileSync(settingsFile,JSON.stringify({...settings,workspace},null,2),{mode:0o600});}catch(e){if(fs.existsSync(app))fs.renameSync(app,path.join(output,'failed.app'));fs.renameSync(backup,app);if(fs.existsSync(path.join(before,'crm-bridge.json')))fs.copyFileSync(path.join(before,'crm-bridge.json'),configFile);else if(fs.existsSync(configFile))fs.unlinkSync(configFile);if(fs.existsSync(path.join(before,'settings.json')))fs.copyFileSync(path.join(before,'settings.json'),settingsFile);else if(fs.existsSync(settingsFile))fs.unlinkSync(settingsFile);throw e;}
+ try{fs.renameSync(result.candidate,app);run('/usr/bin/codesign',['--verify','--deep','--strict',app]);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(configFile,JSON.stringify({...config,enabled:true,accountSync:true,fullHistory:true,workspace,localOwner},null,2),{mode:0o600});fs.chmodSync(configFile,0o600);fs.writeFileSync(settingsFile,JSON.stringify({...settings,workspace},null,2),{mode:0o600});}catch(e){if(fs.existsSync(app))fs.renameSync(app,path.join(output,'failed.app'));fs.renameSync(backup,app);if(fs.existsSync(path.join(before,'crm-bridge.json')))fs.copyFileSync(path.join(before,'crm-bridge.json'),configFile);else if(fs.existsSync(configFile))fs.unlinkSync(configFile);if(fs.existsSync(path.join(before,'settings.json')))fs.copyFileSync(path.join(before,'settings.json'),settingsFile);else if(fs.existsSync(settingsFile))fs.unlinkSync(settingsFile);throw e;}
  fs.writeFileSync(path.join(before,'verification.json'),JSON.stringify({...result,workspace,owner_id:config.owner_id,customerFileUnchanged:digest(fs.readFileSync(crm))===digest(original)},null,2),{mode:0o600});
  run('/usr/bin/open',[app]);
- dialog('display dialog "安装完成。请保持工作台打开和联网，约30秒后在CRM切换到我的业务 → 客户沟通。两端同时修改的字段会保留并提示核对。旧应用和资料已备份到 Documents。" buttons {"完成"} default button "完成"');
+ dialog('display dialog "安装完成。请保持工作台打开和联网，在CRM切换到我的业务 → 客户沟通。首次全文导入按记录量分批进行，可在客户档案查看同步进度；未完成前请保持工作台运行。两端同时修改的字段会保留并提示核对。旧应用和资料已备份到 Documents。" buttons {"完成"} default button "完成"');
  console.log('Mark 本地工作台连接已安装。备份：'+before);
 }
 install().catch(error=>{console.error(error.message);process.exitCode=1;});

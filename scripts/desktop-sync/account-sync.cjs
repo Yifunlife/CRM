@@ -13,10 +13,11 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    const workspace=root(),file=path.join(workspace,'.workbench','crm-account-sync.json'),journal=read(file)||{owner_id:config.owner_id,bindings:[],blocked:[]};
    if(journal.owner_id!==config.owner_id)throw Error('此工作台已绑定另一账号，未同步');
    const local=state(),clients=local.clients.filter(c=>!c.deleted&&!c.group&&String(c.owner||'').toLowerCase()===String(config.localOwner).toLowerCase()&&!journal.blocked.includes(c.id));
-   const snapshot=clients.map(c=>({...profile(c),messages:(archive(c)||[]).slice(-10).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
+   const archives=new Map(),readArchive=c=>{if(!archives.has(c.id))archives.set(c.id,archive(c)||[]);return archives.get(c.id);};
+   const snapshot=clients.map(c=>({...profile(c),messages:readArchive(c).slice(-10).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
    let bytes=Buffer.byteLength(JSON.stringify(snapshot.map(c=>({...c,messages:[]}))));
    for(const client of snapshot){const size=Buffer.byteLength(JSON.stringify(client.messages));if(bytes+size>1100000)client.messages=[];else bytes+=size;}
-   const response=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({sync:{clients:snapshot,bindings:journal.bindings,scenes:scenes()}}),signal:AbortSignal.timeout(30000)});
+   const response=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({sync:{clients:snapshot,bindings:journal.bindings,scenes:scenes(),full_history:config.fullHistory===true,catalog_only:config.historyOnly===true}}),signal:AbortSignal.timeout(30000)});
    if(!response.ok){let error;try{error=(await response.json()).error;}catch{}throw Error(error||'CRM同步失败（'+response.status+'）');}
    const result=await response.json();
    if(root()!==workspace||result.owner_id!==config.owner_id)throw Error('工作区或账号发生变化，未写入本地');
@@ -40,9 +41,12 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
     bindings.push({lead_id:update.lead_id,desktop_id:c.id,base});
    }
    if(modified)save(current);
-   write(file,{owner_id:config.owner_id,bindings,blocked:[...new Set(result.blocked||[])],conflicts,updated_at:new Date().toISOString()});
+   const checkpoint={...journal,owner_id:config.owner_id,bindings,blocked:[...new Set(result.blocked||[])],conflicts,updated_at:new Date().toISOString()};write(file,checkpoint);
+   const responseHistory=async history=>{const r=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({history}),signal:AbortSignal.timeout(30000)});const value=await r.json();if(!r.ok){const e=Error(value.error||'全文同步失败');e.status=r.status;throw e;}return value;};
+   if(config.fullHistory)await require('./crm-history-sync.cjs').synchronizeHistory({clients:clients.filter(c=>!checkpoint.blocked.includes(c.id)),archive:readArchive,journal:checkpoint,post:responseHistory,checkpoint:()=>write(file,checkpoint),active:()=>!stopped&&root()===workspace});
+   const pending=Object.values(checkpoint.history||{}).filter(h=>!h.complete).length;
    const first=conflicts[0],name=first?current.clients.find(c=>c.id===first.desktop_id)?.name||result.updates.find(u=>u.lead_id===first.lead_id)?.values.name||'客户':'';
-   lastError=first?'同步有 '+conflicts.length+' 项待核对：'+name+' · '+first.reason+'。已保留两端内容，请核对后统一。':'';changed?.({customers:snapshot.length,conflicts:conflicts.length,error:lastError});
+   lastError=first?'同步有 '+conflicts.length+' 项待核对：'+name+' · '+first.reason+'。已保留两端内容，请核对后统一。':pending?'文字聊天正在完整同步，尚有 '+pending+' 位客户待完成':'';changed?.({customers:snapshot.length,conflicts:conflicts.length,error:lastError});
   }catch(e){lastError=e.message;}finally{busy=false;}
  }
  function start(){stopped=false;void tick();timer=setInterval(tick,30000);}

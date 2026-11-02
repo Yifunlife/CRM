@@ -11,7 +11,17 @@ export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:
  }
  if(path==='workbench/live'&&method==='GET'){
   const row:any=await db.prepare('SELECT seen,status FROM crm_workbench_bridge WHERE owner_id=?').bind(owner.id).first();
-  return {online:!!row&&Date.now()-row.seen<30000,seen:row?.seen||0,status:row?JSON.parse(row.status):{}};
+  const history:any=await db.prepare('SELECT COUNT(*) customers,COALESCE(SUM(complete),0) completed FROM crm_workbench_history_progress WHERE owner_id=?').bind(owner.id).first();
+  const messages:any=await db.prepare('SELECT COUNT(*) messages FROM crm_workbench_history WHERE owner_id=?').bind(owner.id).first();
+  return {online:!!row&&Date.now()-row.seen<30000,seen:row?.seen||0,status:row?JSON.parse(row.status):{},history:{...history,...messages}};
+ }
+ const historyPage=/^workbench\/history\/([-a-zA-Z0-9_:]+)\/(\d+)$/.exec(path);
+ if(historyPage&&method==='GET'){
+  const desktop=historyPage[1],offset=Number(historyPage[2]);await ownedDesktop(db,owner.id,desktop);
+  const total:any=await db.prepare('SELECT COUNT(*) n FROM crm_workbench_history WHERE owner_id=? AND desktop_id=?').bind(owner.id,desktop).first();
+  const rows=(await db.prepare('SELECT payload FROM crm_workbench_history WHERE owner_id=? AND desktop_id=? ORDER BY sort_time,message_key LIMIT 100 OFFSET ?').bind(owner.id,desktop,offset).all<any>()).results;
+  const progress=await db.prepare('SELECT total,received,complete,updated FROM crm_workbench_history_progress WHERE owner_id=? AND desktop_id=?').bind(owner.id,desktop).first();
+  return {total:total.n,messages:await Promise.all(rows.map(row=>readJson(row.payload))),progress};
  }
  if(path.startsWith('workbench/command/')&&method==='GET'){
   const row:any=await db.prepare('SELECT id,state,result,desktop_id FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(path.slice('workbench/command/'.length),owner.id).first();
@@ -53,6 +63,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const bearer=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';
  const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
  if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
+ if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
  if(body.sync)return synchronizeWorkbench(db,device.owner_id,body.sync);
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
@@ -119,7 +130,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
   for(const key of ['name','country','whatsapp','email','grade','project','stage','projectStatus','source','customerType','nextAction','nextContact','followStatus','closeDate','amount','lostReason','notes','revision','createdAt','lastContact'])out[key]=clean(c[key],['notes','nextAction','lostReason'].includes(key)?6000:500);
   out.stage=Number(out.stage)||1;out.phone=out.whatsapp;return out;
  });
- const rows=(await db.prepare('SELECT * FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
+ const rows=input.catalog_only===true?[]:(await db.prepare('SELECT * FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
  const allLinks=(await db.prepare('SELECT w.*,l.owner_id AS current_owner FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? OR l.owner_id=?').bind(owner,owner).all<any>()).results;
  const conflicts:any[]=[],updates:any[]=[],bindings:any[]=[],blocked=new Set(allLinks.filter(l=>l.current_owner!==owner||l.owner_id!==owner).map(l=>l.desktop_id));
  const used=new Set<string>();
@@ -164,9 +175,44 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
  const previous:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner).first();
  const snapshot=previous?await readJson(previous.payload):{format:'yifun-workbench-v1',clients:[],scenes:[]};
  const before=JSON.stringify({...snapshot,captured_at:undefined});
+ if(input.full_history===true)await db.prepare("INSERT OR IGNORE INTO crm_workbench_history_progress(owner_id,desktop_id,revision,total,received,complete,updated) SELECT ?,value,'',0,0,0,? FROM json_each(?)").bind(owner,now(),JSON.stringify(clients.filter((c:any)=>!blocked.has(c.id)).map((c:any)=>c.id))).run();
  for(const client of clients.filter((c:any)=>!blocked.has(c.id))){const prior=snapshot.clients.find((c:any)=>c.id===client.id);if(prior){const messages=new Map();for(const m of [...(prior.messages||[]),...client.messages])messages.set(m.key||JSON.stringify([m.channel,m.timestamp,m.speaker,m.text]),m);Object.assign(prior,client,{messages:[...messages.values()].slice(-80)});}else snapshot.clients.push(client);}
  snapshot.clients=snapshot.clients.filter((c:any)=>!blocked.has(c.id));snapshot.captured_at=now();
  snapshot.scenes=(input.scenes||[]).slice(0,300).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,2000)}));
  if(!previous||before!==JSON.stringify({...snapshot,captured_at:undefined}))await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner,await storeJson(snapshot,`snapshots/${owner}`,true),now(),owner).run();
  return {owner_id:owner,updates:updates.filter(u=>allowed.has(u.lead_id)),bindings:bindings.filter(b=>allowed.has(b.lead_id)),blocked:[...blocked],conflicts};
+}
+
+async function synchronizeHistory(db:D1Database,owner:string,input:any){
+ const {desktop_id:desktop,revision,total,offset,messages}=input||{};
+ if(typeof desktop!=='string'||!/^[-a-zA-Z0-9_:]{1,150}$/.test(desktop)||!/^\w{64}$/.test(revision||'')||!Number.isSafeInteger(total)||total<0||!Number.isSafeInteger(offset)||offset<0||!Array.isArray(messages)||messages.length>50||offset+messages.length>total||JSON.stringify(input).length>4500000)throw new AllocationError('聊天同步批次格式无效');
+ await ownedDesktop(db,owner,desktop);
+ const progress:any=await db.prepare('SELECT * FROM crm_workbench_history_progress WHERE owner_id=? AND desktop_id=?').bind(owner,desktop).first();
+ if(offset&&(!progress||progress.revision!==revision||offset>progress.received))throw new AllocationError('聊天同步进度已变化，请从头核对；已保存的记录保留',409);
+ const keys=new Set<string>(),entries:any[]=[],plans:any[]=[];
+ for(let i=0;i<messages.length;i++){
+  const entry=messages[i],m=entry?.value;
+  if(!m||typeof m!=='object'||Array.isArray(m)||Object.hasOwn(m,'$r2')||typeof m.key!=='string'||!m.key||typeof m.text!=='string'||typeof m.channel!=='string'||typeof m.timestamp!=='string'||!Number.isFinite(entry.sort_time))throw new AllocationError('聊天记录缺少稳定编号、时间或全文');
+  const key=await digest(m.key),hash=await digest(JSON.stringify(m));if(keys.has(key))throw new AllocationError('批次含重复消息编号');keys.add(key);
+  entries.push({m,key,hash,sort_time:entry.sort_time,index:offset+i});
+ }
+ const previous=entries.length?(await db.prepare(`SELECT message_key,content_hash,payload FROM crm_workbench_history WHERE owner_id=? AND desktop_id=? AND message_key IN (${entries.map(()=>'?').join(',')})`).bind(owner,desktop,...entries.map(e=>e.key)).all<any>()).results:[];
+ const existing=new Map(previous.map(row=>[row.message_key,row]));
+ for(const {m,key,hash,sort_time,index} of entries){
+  const prior=existing.get(key),payload=prior?.content_hash===hash?prior.payload:await storeJson(m,`history/${owner}/${desktop}`);
+  plans.push(db.prepare('INSERT INTO crm_workbench_history(owner_id,desktop_id,message_key,content_hash,channel,sort_time,source_index,revision,payload,updated) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,desktop_id,message_key) DO UPDATE SET content_hash=excluded.content_hash,channel=excluded.channel,sort_time=excluded.sort_time,source_index=excluded.source_index,revision=excluded.revision,payload=excluded.payload,updated=excluded.updated').bind(owner,desktop,key,hash,clean(m.channel,30),sort_time,index,revision,payload,now()));
+ }
+ // Check the customer again after object uploads and before publishing their messages.
+ await ownedDesktop(db,owner,desktop);
+ if(plans.length)await db.batch(plans);
+ const received=Math.max(progress?.revision===revision?progress.received:0,offset+messages.length);
+ await db.prepare('INSERT INTO crm_workbench_history_progress(owner_id,desktop_id,revision,total,received,complete,updated) VALUES(?,?,?,?,?,0,?) ON CONFLICT(owner_id,desktop_id) DO UPDATE SET revision=excluded.revision,total=excluded.total,received=excluded.received,complete=0,updated=excluded.updated').bind(owner,desktop,revision,total,received,now()).run();
+ let complete=false;
+ if(received===total){
+  const manifest=(await db.prepare('SELECT message_key,content_hash FROM crm_workbench_history WHERE owner_id=? AND desktop_id=? AND revision=? ORDER BY source_index').bind(owner,desktop,revision).all<any>()).results;
+  complete=manifest.length===total&&await digest(JSON.stringify(manifest.map(m=>[m.message_key,m.content_hash])))===revision;
+  if(!complete)throw new AllocationError('聊天数量或校验不一致，已保存部分可继续核对，不会标为完整',409);
+ }
+ if(complete)await db.prepare('UPDATE crm_workbench_history_progress SET complete=1 WHERE owner_id=? AND desktop_id=? AND revision=?').bind(owner,desktop,revision).run();
+ return {owner_id:owner,desktop_id:desktop,revision,received,total,complete};
 }
