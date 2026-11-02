@@ -1,10 +1,15 @@
 function patchMain(source){
- if(source.includes('createAccountSync'))return source;
+
  const anchor='function startCrmBridge(){';if(!source.includes(anchor))throw Error('此工作台版本不支持现有CRM连接，请先提供版本号');
  const helper=`let crmAccountSync;
 function crmBridgeOwner(){const c=readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{});if(c.accountSync&&(!c.workspace||path.resolve(c.workspace)!==path.resolve(workspaceRoot)))throw Error('工作区与CRM账号绑定不匹配');return c.accountSync?c.localOwner:'Winnie';}
-function startCrmAccountSync(){crmAccountSync=require('./crm-account-sync').createAccountSync({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),request:(...a)=>net.fetch(...a),root:()=>workspaceRoot,state:()=>bootstrapClients(),save:saveClients,profile:require('./crm-client-management').profile,archive:c=>saveCustomerArchive(c).messages,scenes:()=>receptionConfig().scenes,changed:value=>sendWhatsAppEvent('crm:synced',value)});crmAccountSync.start();}
+function startCrmAccountSync(){let snapshot,byClient;
+ const state=()=>{const data=bootstrapClients(),clients=data.clients,links=readJson(path.join(workbenchDir(),'customer-email-links.json'),{}),mailView=outlookService().view(),owners=new Map();byClient=new Map();
+ for(const row of mailView.messages){const ids=new Set();for(const email of row.folder==='inbox'?[row.from]:row.to||[]){const key=customerArchive.normalizeEmail(email);if(!owners.has(key))owners.set(key,customerArchive.emailOwner(key,clients,links));const client=owners.get(key);if(client)ids.add(client.id);}for(const id of ids){if(!byClient.has(id))byClient.set(id,[]);byClient.get(id).push(row);}}
+ snapshot={clients,links,mailView};return data;};
+ crmAccountSync=require('./crm-account-sync').createAccountSync({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),request:(...a)=>net.fetch(...a),root:()=>workspaceRoot,state,save:saveClients,profile:require('./crm-client-management').profile,archive:c=>saveCustomerArchive(c,true,{...snapshot,mailRows:byClient.get(c.id)||[]}).messages,scenes:()=>receptionConfig().scenes,changed:value=>sendWhatsAppEvent('crm:synced',value)});crmAccountSync.start();}
 `;
+ if(source.includes('createAccountSync')){const begin=source.indexOf('function startCrmAccountSync(){'),end=source.indexOf('\nfunction startCrmBridge()',begin);if(begin<0||end<0)throw Error('已有同步组件无法安全更新');const replacement=helper.slice(helper.indexOf('function startCrmAccountSync(){'));return source.slice(0,begin)+replacement+source.slice(end+1);}
  source=source.replace(anchor,helper+anchor);
  source=source.replaceAll("owner: 'Winnie'","owner: crmBridgeOwner()").replaceAll("owner:'Winnie'","owner:crmBridgeOwner()");
  const start=source.indexOf('let crmBridge,crmLastMailSync=0;'),end=source.indexOf("app.on('before-quit'",start);

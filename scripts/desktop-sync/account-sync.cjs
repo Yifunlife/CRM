@@ -14,7 +14,7 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    if(journal.owner_id!==config.owner_id)throw Error('此工作台已绑定另一账号，未同步');
    const local=state(),clients=local.clients.filter(c=>!c.deleted&&!c.group&&String(c.owner||'').toLowerCase()===String(config.localOwner).toLowerCase()&&!journal.blocked.includes(c.id));
    const archives=new Map(),readArchive=c=>{if(!archives.has(c.id))archives.set(c.id,archive(c)||[]);return archives.get(c.id);};
-   const snapshot=clients.map(c=>({...profile(c),messages:readArchive(c).slice(-10).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
+   const snapshot=clients.map(c=>({...profile(c),messages:(config.fullHistory?[]:readArchive(c).slice(-10)).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
    let bytes=Buffer.byteLength(JSON.stringify(snapshot.map(c=>({...c,messages:[]}))));
    for(const client of snapshot){const size=Buffer.byteLength(JSON.stringify(client.messages));if(bytes+size>1100000)client.messages=[];else bytes+=size;}
    const response=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({sync:{clients:snapshot,bindings:journal.bindings,scenes:scenes(),full_history:config.fullHistory===true,catalog_only:config.historyOnly===true}}),signal:AbortSignal.timeout(30000)});
