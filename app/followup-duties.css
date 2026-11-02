@@ -9,3 +9,4 @@
 
 .fb-editor .fd-multi-options input[type=checkbox]{min-height:16px;min-width:16px}.fb-editor .fd-multi-options label{font-weight:400}
 @media(max-width:720px){.followup-my-work .fm-work-table{min-width:0}.fm-work-table thead{display:none}.fm-work-table,.fm-work-table tbody,.fm-work-table tr{display:block}.fm-work-table tr{padding:4px 0}.fm-work-table td{display:grid;grid-template-columns:88px minmax(0,1fr);gap:8px;border:0;padding:5px 0;white-space:normal;overflow-wrap:anywhere}.fm-work-table td:before{content:attr(data-label);color:var(--muted,#616161);font-size:12px}.fm-work-table td:first-child{display:block}.fm-work-table td:first-child:before{display:none}.fm-work-table td:last-child{display:block}.fm-work-table td:last-child:before{display:none}.fm-work-table td:last-child button{width:100%;min-height:44px}}
+.office-app .workspace .fb-editor .fd-multi-options label{margin:0;font-weight:400}
