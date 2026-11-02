@@ -1,5 +1,5 @@
 import {AllocationError} from './allocation-server';
-import {clean,digest,emailKey,now,phoneKey} from './crm';
+import {ceoRequestAllowed,clean,digest,emailKey,now,phoneKey} from './crm';
 import {distributeServiceLead} from './service-allocation';
 import {enquiryNotification} from './lead-notifications';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
@@ -39,7 +39,7 @@ export async function serviceWorker(db:D1Database,owner:string,body:any,connecte
 }
 export async function customerServiceEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('service/'))return undefined;
- if(user.role==='ceo'&&!(path==='service/inbox'&&method==='GET'||path==='service/conversation'&&method==='POST'))fail('CEO仅可查看客服记录',403);
+ if(!ceoRequestAllowed(user,path,method)||!ceoRequestAllowed(actor,path,method))fail('系统功能配置仅限管理员修改',403);
  if(!['admin','ceo'].includes(user.role)||actor.id!==user.id)fail('客服对接仅供管理员本人使用',403);
  if(path==='service/inbox'&&method==='GET'){
   const settings=await db.prepare('SELECT enabled,reply,updated FROM crm_service_settings WHERE owner_id=?').bind(user.id).first();

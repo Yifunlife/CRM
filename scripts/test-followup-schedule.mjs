@@ -18,7 +18,7 @@ const original=()=>JSON.stringify({leads:sqlite.prepare('SELECT * FROM crm_leads
 const originalBusiness=original();
 const nodes=FOLLOWUP_NODES.map((n,i)=>({page:n.page,start:i===1?'2026-10-01':'',due:i===1?'2026-11-30':'',owner_id:'follow'}));
 const post=(action,body,user=follow)=>followupScheduleEndpoint(db,user,user,'followup/orders/order/'+action,'POST',{version:row().version,...body});
-await assert.rejects(()=>post('schedule',{nodes},sales),e=>e.status===403);await assert.rejects(()=>post('schedule',{nodes},other),e=>e.status===404);await assert.rejects(()=>post('schedule',{nodes},ceo),e=>e.status===403);
+await assert.rejects(()=>post('schedule',{nodes},sales),e=>e.status===403);await assert.rejects(()=>post('schedule',{nodes},other),e=>e.status===404);await post('schedule',{nodes},ceo);
 const ownerList=await followupScheduleEndpoint(db,admin,admin,'followup/orders/order/schedule','GET',{});assert.ok(ownerList.owners.some(p=>p.id==='sales'));assert.ok(!ownerList.owners.some(p=>['other','outsider'].includes(p.id)));
 await assert.rejects(()=>post('schedule',{nodes:nodes.map(n=>({...n,owner_id:'outsider'}))},admin),e=>e.status===403);
 await assert.rejects(()=>post('schedule',{nodes:nodes.slice(1)}),/七个/);await assert.rejects(()=>post('schedule',{nodes:nodes.map((n,i)=>i===1?{...n,due:'2026-02-30'}:n)}),/有效日期/);

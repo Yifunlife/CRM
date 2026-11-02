@@ -13,7 +13,7 @@ export default function Operations({users,userId,ads,onAccountsChange,children,r
  async function save(e:React.FormEvent<HTMLFormElement>,kind:string){e.preventDefault();const values=Object.fromEntries(new FormData(e.currentTarget));B(true);ERR('');M('');try{await request(kind,{...values,...(kind==='accounts'?{platform}:{account_id:accountId,date}),...(edit?{id:edit.id,version:edit.version}:{})},edit?'PATCH':'POST');await load();if(kind==='daily'){MO(String(values.date).slice(0,7));F(accountId);}reset();M('记录已保存，汇总已更新');}catch(e:any){ERR(e.message);}finally{B(false);}}
  const selected=accounts.find(a=>a.id===accountId),currency=selected?.currency||'—',rows=daily.filter(d=>d.date.startsWith(month)&&(!filter||d.account_id===filter));
  const candidate=deriveFollowerChanges([...daily.filter(r=>!(r.account_id===accountId&&r.date===date)),{id:'preview',account_id:accountId,date,followers_total:Number(total),status:'有效'}]).find(r=>r.id==='preview'),spend=advertisingSpend(ads,accountId,date),existingDay=daily.find(r=>r.account_id===accountId&&r.date===date),dailyAd=spend.amount;
- const owners=users.filter(u=>u.active&&['admin','operations'].includes(u.role)||u.id===edit?.owner_id);
+ const owners=users.filter(u=>u.active&&['admin','ceo','operations'].includes(u.role)||u.id===edit?.owner_id);
  return <><div className="tabs" aria-label="广告投放录入切换">{[['广告明细','广告投放明细'],['每日记录','账号每日资料'],['运营账号','管理运营账号']].map(([t,label])=><button key={t} className={tab===t?'selected':''} aria-pressed={tab===t} disabled={busy} onClick={()=>reset(t)}>{label}</button>)}</div>
  {error&&<p role="alert" className="notice error">{error}</p>}{message&&<p role="status" className="notice success">{message}</p>}
  <div hidden={tab!=='广告明细'}>{children}</div>

@@ -41,3 +41,6 @@
 前版本地 `work/five-modules/browser-verification.json` 的 errors 为空且仅用测试数据；其检查不能作为本次修正版整体验收。新版证据为同目录 `v2-dashboard-desktop.png`、`v2-dashboard-first-screen.png`、`v2-dashboard-mobile.png`、`v2-customer-desktop.png`、`v2-customer-mobile.png`、`v2-mobile-navigation.png`、`v2-project-list.png`、`v2-project-detail.png`、`v2-followup.png`、`v2-sales-management.png`。本次文档步骤读取源码，未重跑测试或自授截图批准。
 
 **Reviewer disposition: ship — fix scope only.** 新一轮完整审阅覆盖桌面层级及提供的客户／看板移动证据，唯一发现为手机宽表操作不易发现；四个看板表格上方补充左右滑动提示后，reviewer 的修复复核判定该项 resolved，给出 ship。此修复结论仅覆盖该发现，不扩大为所有移动页面的视觉认证；其他移动模块尚未逐页视觉验收。前版 ship 及部署不覆盖用户拒绝后的修正，修正版的发布与验证证据由主任务保存在 CRM/outputs/five-modules-correction-20261101；真实账号逐页生产验收尚未进行。本地截图及测试不等于已登录生产验收。根 PRODUCT.md、DESIGN.md 保持原有产品与视觉权威。
+
+
+2026-11-02 客户推进「当前阶段」改用共享 StatusBadge：待首次联系灰、已联系待回复橙、正在沟通蓝、暂停跟进／暂停推进紫、已成交绿、已结束／未成交灰；有项目时继续显示原项目阶段及既有阶段色。保留文字，不更改客户状态或项目资料。

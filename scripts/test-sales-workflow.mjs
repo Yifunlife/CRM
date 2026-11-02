@@ -22,7 +22,7 @@ await assert.rejects(call('meeting',{lead_id:'other-lead',type:'线上会议',da
 const c=await get('customers',sales);assert.equal(c.rows.length,1);assert.equal(c.meetings.length,1);assert.equal(c.rows[0].first_contact,'2026-10-02');assert.equal((await get('customers',other)).meetings.length,0);
 const plan={entity:'sales:project',revision:'',rows:[{stage:'技术',node:'图纸确认',owner:'设计',start:'2026-11-01',due:'2026-11-03',actual:'',progress:'待客户确认',files:'沿用原图纸',status:'进行中',commercial:'确认客户尺寸'}]};
 await call('plan',plan,sales);assert.equal((await get('plan?entity=sales:project',sales)).rows[0].commercial,'确认客户尺寸');
-await assert.rejects(call('plan',plan,sales),e=>e.status===409);await assert.rejects(get('plan?entity=sales:project',other),e=>e.status===404);await assert.rejects(call('plan',plan,ceo),e=>e.status===403);
+await assert.rejects(call('plan',plan,sales),e=>e.status===409);await assert.rejects(get('plan?entity=sales:project',other),e=>e.status===404);await assert.rejects(call('plan',plan,ceo),e=>e.status===409);
 await call('plan',{...plan,entity:'order:order'},sales);assert.equal((await get('plan?entity=order:order',sales)).rows.length,1);
 await assert.rejects(get('plan?entity=order:order:bad',sales),e=>e.status===400);
 sql.exec("UPDATE crm_followup_orders SET commercial_id='other' WHERE id='order'");await assert.rejects(get('plan?entity=order:order',sales),e=>e.status===404);sql.exec("UPDATE crm_followup_orders SET commercial_id='sales' WHERE id='order'");

@@ -1,7 +1,7 @@
 import {salesHomeEndpoint} from './sales-home-server';
 import {assignmentReminders,teamAssignmentSummary} from './assignment-reminders';
 import {AllocationError} from './allocation-server';
-import {can,authorizedLead,id,now} from './crm';
+import {can,authorizedLead,id,now,hasAdminPermissions} from './crm';
 import {PROJECT_STAGES,FORECASTS,TASK_KINDS,QUALIFICATION_FIELDS,CLOSED_STAGES,dormantReason,suiteDay,suiteForecast} from './sales-suite';
 import {quoteCatalogue,quoteSnapshot,quoteLeadership,quoteAccount} from './sales-quote-source';
 const fail=(s:string,status=400):never=>{throw new AllocationError(s,status);};
@@ -43,7 +43,7 @@ async function report(db:D1Database,u:any,assigned?:Promise<any[]>){
  ]);
  const projects=rawProjects.map(p=>({...p,details:parse(p.details)}));
  const month=suiteDay().slice(0,7),manages=leader(u);
- return {assigned_leads:await (assigned||assignmentReminders(db,u)),ownershipReviews:ownershipReviews.map(r=>({...r,payload:parse(r.payload)})),projects,tasks:tasks.map(t=>({...t,details:parse(t.details),can_manage:editor(u)&&(all||leads.some(l=>l.id===t.lead_id)),can_update:u.role!=='ceo'&&(t.owner_id===u.id||editor(u)&&(all||leads.some(l=>l.id===t.lead_id)))})),leads:leads.map(l=>({...l,dormant_reason:dormantReason(l)})),people,existing,orders,notifications,can_edit:editor(u),can_manage:manages,can_admin:u.role==='admin',can_view_admin:['admin','ceo'].includes(u.role),forecast:manages?suiteForecast(projects,month):[],month,timezone:'Asia/Shanghai',at:now()};
+ return {assigned_leads:await (assigned||assignmentReminders(db,u)),ownershipReviews:ownershipReviews.map(r=>({...r,payload:parse(r.payload)})),projects,tasks:tasks.map(t=>({...t,details:parse(t.details),can_manage:editor(u)&&(all||leads.some(l=>l.id===t.lead_id)),can_update:(t.owner_id===u.id||editor(u)&&(all||leads.some(l=>l.id===t.lead_id)))})),leads:leads.map(l=>({...l,dormant_reason:dormantReason(l)})),people,existing,orders,notifications,can_edit:editor(u),can_manage:manages,can_admin:hasAdminPermissions(u),can_view_admin:['admin','ceo'].includes(u.role),forecast:manages?suiteForecast(projects,month):[],month,timezone:'Asia/Shanghai',at:now()};
 }
 export async function salesSuiteEndpoint(db:D1Database,source:D1Database|undefined,u:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('sales-suite/'))return undefined;
@@ -76,7 +76,7 @@ export async function salesSuiteEndpoint(db:D1Database,source:D1Database|undefin
  if(method!=='POST')fail('操作不存在',404);
  if(!body||typeof body!=='object'||Array.isArray(body))fail('请求格式无效');
  if(path==='sales-suite/quote-accounts'){
-  if(u.role!=='admin'||actor.role!=='admin')fail('只有管理员可确认报价账号身份',403);
+  if(!hasAdminPermissions(u)||!hasAdminPermissions(actor))fail('只有管理员可确认报价账号身份',403);
   if(!source)fail('报价读取连接尚未配置',503);const target:any=await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role<>'followup'").bind(body.user_id).first(),account:any=await source!.prepare("SELECT email FROM app_users WHERE email=? AND status='active'").bind(required(body.quote_email,'报价账号邮箱',200)).first();if(!target||!account)fail('请选择有效CRM账号和报价账号');const reason=required(body.reason,'身份核实依据');
   const old=await db.prepare('SELECT * FROM crm_sales_account_links WHERE user_id=?').bind(target.id).first();
   await db.batch([db.prepare('INSERT INTO crm_sales_account_links(user_id,quote_email,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET quote_email=excluded.quote_email,version=crm_sales_account_links.version+1,updated=excluded.updated,updated_by=excluded.updated_by').bind(target.id,account.email,now(),actor.id),audit(db,actor,'核实报价账号身份',null,{user_id:target.id,before:old,quote_email:account.email,reason})]);return {ok:true};

@@ -1,9 +1,10 @@
 'use client';
+import {hasAdminPermissions} from '../lib/crm';
 import {useEffect,useState} from 'react';
 const values=(form:HTMLFormElement)=>Object.fromEntries(new FormData(form));
 export default function CustomerIdentities({api,user,openLead,leadId}:{leadId?:string;api:(path:string,body?:any,method?:string)=>Promise<any>;user:any;openLead:(id:string)=>void}){
  const [data,D]=useState<any>(null),[tab,T]=useState(leadId?'咨询与待核查':'客户主体'),[selected,S]=useState(''),[inquiry,I]=useState(leadId||''),[query,Q]=useState(''),[page,P]=useState(1),[candidates,C]=useState<any[]|null>(null),[busy,B]=useState(false),[error,E]=useState(''),[message,M]=useState('');
- const admin=user.role==='admin',editable=admin||user.capabilities?.customers_edit;
+ const admin=hasAdminPermissions(user),editable=admin||user.capabilities?.customers_edit;
  const load=async()=>D(await api('identity/report'));
  useEffect(()=>{let active=true;api('identity/report').then(d=>{if(active){D(d);const linked=d.leads.find((l:any)=>l.id===leadId)?.subject_id;if(linked){S(linked);T('客户主体');}}}).catch(e=>{if(active)E(e.message);});return()=>{active=false;};},[]);
  const run=async(fn:()=>Promise<any>,success='已保存，原咨询来源与归属保持不变')=>{B(true);E('');M('');try{await fn();await load();C(null);M(success);}catch(e:any){E(e.message);}finally{B(false);}};

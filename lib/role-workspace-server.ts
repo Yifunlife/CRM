@@ -61,7 +61,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   return {market,branch,currency,month,period,at:now(),personal,summary:summary(personal?u.id:undefined),followup_people:people.filter(p=>p.role==='followup'&&(!activeOnly||p.active)&&pick(rawLeads).some(l=>l.owner_id===p.id)).map(p=>({id:p.id,name:p.name,total_customers:pick(rawLeads).filter(l=>l.owner_id===p.id).length})),people:people.filter(p=>isSalesPerson(p)&&(!activeOnly||p.active)&&(canViewAllMarkets(u)||accountTradeScopes(p).some(v=>allowedMarkets.includes(v==='domestic'?'内贸':'外贸'))||pick(rawLeads).some(l=>l.owner_id===p.id))).map(p=>({...p,company:accountSalesCompany(p),...summary(p.id)})),all_customers:pick(rawLeads).map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),customers:leads.map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),quoting_projects:ps.filter(p=>['design','quoted','negotiation'].includes(p.stage)&&inReportPeriod(p.stage_at,period)),projects:ps,orders:os,deals:monthly,quotes:qrows.map(q=>({id:q.id,project_id:q.project_id,owner_id:q.owner_id,lead_id:q.lead_id,summary:q.summary,sync_error:q.sync_error})),forecast};
  }
  if(path==='role-workspace/customer'&&method==='POST'){
-  if(!can(u,'customers_edit')||u.role==='ceo')fail('没有客户维护权限',403);
+  if(!can(u,'customers_edit'))fail('没有客户维护权限',403);
   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(body.id).first();if(!lead||!authorizedLead(u,lead))fail('客户不存在或无权维护',404);
   const before=parse(lead.detail);if(body.revision!==(before._profile_revision||0))fail('客户资料已变化，请刷新',409);
   if(!Array.isArray(body.contacts)||body.contacts.length>30)fail('联系人最多30位');
@@ -74,7 +74,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
  }
  const match=path.match(/^followup\/orders\/([^/]+)\/business-process$/);
  if(match&&method==='POST'){
-  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.role==='ceo'||u.id!==actor.id)fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
+  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.id!==actor.id)fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
   const fields=PROCESS_FIELDS[body.page];if(!fields)fail('流程节点无效');const values:Record<string,string>={};for(const key of fields)values[key]=text(body.values?.[key]||'');
   const next=text(body.next);if(!next)fail('请填写下一步与处理安排');if(!['project','toy'].includes(body.purchase_kind))fail('请选择项目下单或玩具下单');
   const businessStage=body.business_stage||row.details.business_stage||deliveryStage(row);if(!DELIVERY_STAGES.includes(businessStage)||businessStage==='已完成'&&deliveryStage(row)!=='已完成')fail('完成状态由交付及归档流程确认');

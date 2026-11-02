@@ -27,7 +27,7 @@ try {
  assert.equal((await request('leads')).length,2);
  for(const p of ['users','google/status','service/inbox','workflow/report','role-home','sales-suite/report','followup'])await request(p);
  const before=sql.prepare('SELECT total_changes() n').get().n;
- for(const p of ['grade','assign','users/permissions','service/register','service/settings','cloud/settings','confirmations/release/decision','sales-suite/project/create','followup/order/priority'])await request(p,{},'boss','ceo',403);
+ for(const p of ['google/config','service/settings','cloud/settings','workbench/bridge','linked/connect'])await request(p,{},'boss','ceo',403);
  assert.equal(sql.prepare('SELECT total_changes() n').get().n,before,'denied writes must not mutate the database');
  const personal=await request('me',undefined,'personal');assert.equal(personal.role,'sales');assert.equal(personal.id,'ceo');
  assert.deepEqual((await request('leads',undefined,'personal')).map(l=>l.id),['ceo-lead']);
@@ -42,5 +42,5 @@ try {
  await request('me',undefined,'boss','admin');await request('me',undefined,'boss','sales');await request('me',undefined,'boss','followup');
  assert.equal((await request('leads')).length,2);
  assert.equal(sql.prepare("SELECT role FROM crm_users WHERE id='ceo'").get().role,'ceo');
- console.log('PASS: actual HTTP route enforces CEO all-company read-only, own-client sales writes, server-side view validation, and unchanged admin/sales/followup access.');
+ console.log('PASS: actual HTTP route enforces CEO company business access and protected configuration, own-client sales writes, server-side view validation, and unchanged admin/sales/followup access.');
 } finally {rmSync(tmp,{recursive:true,force:true});}

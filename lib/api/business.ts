@@ -13,7 +13,7 @@ import { advertisingEndpoint } from '../advertising-server';
 import { allocationEndpoint } from '../allocation-server';
 import { json } from '../api/http';
 import { attributionEndpoint } from '../attribution-server';
-import { cloudEndpoint } from '../cloud-communication';
+import { cloudEndpoint,allocationWhatsAppStatus } from '../cloud-communication';
 import { confirmedWorkflow } from '../confirmed-workflow';
 import { customerIdentityEndpoint } from '../customer-identity-server';
 import { customerPoolEndpoint } from '../customer-pool';
@@ -35,6 +35,7 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ if(path==='allocation/management/intake-status'&&req.method==='GET')return json(await allocationWhatsAppStatus(db,env as any,user));
  const personal=await personalWorkEndpoint(db,user,actor,path,req.method,body,url);if(personal!==undefined)return json(personal);
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);
  const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);

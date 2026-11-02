@@ -25,7 +25,7 @@ assert.equal((await viewUser(db,ceo,'boss')).role,'ceo');
 await assert.rejects(viewUser(db,ceo,'winnie'),e=>e.status===403);
 await assert.rejects(viewUser(db,other,'personal'),e=>e.status===403);
 assert.equal((await workbenchEndpoint(db,personal,ceo,'workbench/snapshot','GET',{})).snapshot,null);
-console.log('PASS: CEO personal view retains identity, uses own-customer sales permissions, cannot impersonate Winnie, and returns to read-only management.');
+console.log('PASS: CEO personal view retains identity, uses own-customer sales permissions, cannot impersonate Winnie, and returns to company management.');
 
 const {moduleURL}=await import('./test-form-intake.mjs');
 const {salesSuiteEndpoint}=await import(moduleURL('lib/sales-suite-server.ts'));

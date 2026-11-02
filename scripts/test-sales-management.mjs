@@ -20,7 +20,7 @@ const save=(items,u=targetEditor,owner_id='sales',currency='CNY')=>call(db,u,u,'
 let data=await get(),row=data.rows.find(r=>r.id==='sales'&&r.currency==='CNY');
 assert.equal(row.won_new_customers,1);assert.equal(row.won_old_customers,2);assert.equal(row.new_customers,1);assert.equal(row.effective_customers,2);assert.equal(row.old_customers,1);assert.equal(row.new_minor,30000);assert.equal(row.old_minor,25000);assert.equal(row.deals,3);assert.equal(row.received_minor,10000);assert.equal(row.outstanding_minor,45000);assert.equal(row.target_minor,null);assert.equal(row.completion,null);
 assert.equal(data.rows.find(r=>r.id==='foreign').total_minor,10000);assert.equal(data.details.find(d=>d.id==='second').customer_type,'老客户');assert.equal(data.details.length,4);
-await assert.rejects(()=>get('',sales),e=>e.status===403);await assert.rejects(()=>save([],ceo),e=>e.status===403);assert.equal((await get('',ceo)).can_edit,false);
+await assert.rejects(()=>get('',sales),e=>e.status===403);await assert.rejects(()=>save([],ceo),e=>e.status===400);assert.equal((await get('',ceo)).can_edit,true);
 const target=(period,start,amount,version=0)=>({period,period_start:start,amount,version});
 await save([target('month','2026-10-01','1000'),target('quarter','2026-10-01','5000'),target('year','2026-01-01','10000')]);
 assert.equal((await get()).rows.find(r=>r.id==='sales').completion,0.55);assert.equal((await get('period=quarter&year=2026&quarter=4')).rows.find(r=>r.id==='sales').target_minor,500000);assert.equal((await get('period=year&year=2026')).rows.find(r=>r.id==='sales').target_minor,1000000);
