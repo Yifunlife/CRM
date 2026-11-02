@@ -41,7 +41,7 @@ export async function notificationEndpoint(db:D1Database,user:any,actor:any,path
  if(!path.startsWith('followup-notifications'))return undefined;
  if(path==='followup-notifications'&&method==='GET'){
   const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE n.recipient_id=?'+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=n.order_id AND o.logistics_id=n.recipient_id)':'')+' ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
-  const enquiries=user.role==='followup'?[]:(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200").bind(user.id,user.id).all<any>()).results;
+  const enquiries=(await db.prepare("SELECT n.*,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200").bind(user.id,user.id).all<any>()).results.map(n=>user.role==='followup'?{...n,lead_id:null}:n);
   return {assignments:await assignmentReminders(db,user),notifications:[...rows,...enquiries].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first(),channel:'站内通知',email:'未启用'};
  }
  if(path==='followup-notifications/audit'&&method==='GET'){
@@ -58,8 +58,8 @@ export async function notificationEndpoint(db:D1Database,user:any,actor:any,path
  if(path==='followup-notifications/read-all'&&method==='POST'){
   if(user.id!==actor.id)throw new AllocationError('请切回本人视角标记已读',403);
   const at=now(),statements=[db.prepare("UPDATE crm_followup_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=?"+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=order_id AND o.logistics_id=recipient_id)':'')).bind(at,user.id,at)];
+  statements.push(db.prepare("UPDATE crm_lead_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(at,user.id,at,user.id));
   if(user.role!=='followup'){
-   statements.push(db.prepare("UPDATE crm_lead_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(at,user.id,at,user.id));
    statements.push(db.prepare("UPDATE crm_sales_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+'))').bind(at,user.id,at,user.id,user.id));
   }
   const results=await db.batch(statements);return {ok:true,updated:results.reduce((count,result)=>count+Number(result.meta.changes||0),0),read_at:at};
