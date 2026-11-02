@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {moduleURL,database} from './test-form-intake.mjs';
-import {qrMatrix,parseEnvelope} from './linked-whatsapp/runtime.mjs';
+import {qrMatrix,parseEnvelope,messageBatches} from './linked-whatsapp/runtime.mjs';
 const {linkedEndpoint,linkedWorker}=await import(moduleURL('lib/linked-whatsapp.ts')),{digest}=await import(moduleURL('lib/crm.ts'));
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 const db=database(sql),a={id:'a',role:'sales'},b={id:'b',role:'sales'},admin={id:'admin',role:'admin'};
@@ -14,6 +14,8 @@ await assert.rejects(worker({},a,'invalid'),e=>e.status===401);await assert.reje
 await call('connect',{});assert.equal((await worker({state:'awaiting_scan',qr:Array(21).fill('0'.repeat(21)),qr_expires:Date.now()-1})).desired,'connect');assert.equal((await call('status')).qr.length,0);
 await worker({state:'connected',phone:'61411111111'});assert.equal((await call('status')).active,true);await assert.rejects(worker({state:'connected',phone:'61411111111'},b),e=>e.status===409);
 const history={id:'history',owner_id:'b',lead_id:'b',peer:'61400000001',direction:'in',content:'historical',created:'2026-10-01T00:00:00Z',history:true};await worker({messages:[history]});await worker({messages:[history]});assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_cloud_messages').get().n,1);assert.equal(sql.prepare('SELECT lead_id FROM crm_cloud_messages').get().lead_id,'a');assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_notes').get().n,0);
+const long='完整文字🙂'.repeat(10000);await worker({messages:[{...history,id:'long',content:long}]});assert.equal(sql.prepare("SELECT content FROM crm_cloud_messages WHERE provider_id=?").get('linked:a:long').content,long);
+const large=Array.from({length:100},(_,id)=>({id,content:long})),batches=messageBatches(large);assert.ok(batches.length>1);assert.deepEqual(batches.flat(),large);assert.ok(batches.every(batch=>Buffer.byteLength(JSON.stringify({messages:batch}))<710000));
 await worker({messages:[{...history,id:'not-bobs',history:false}]},b);assert.equal(sql.prepare("SELECT lead_id FROM crm_cloud_messages WHERE owner_id='b'").get().lead_id,null);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='a'").get().n,0);
 const live={...history,id:'live',history:false,created:new Date().toISOString()};await worker({messages:[live]});await worker({messages:[live]});assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='a'").get().n,1);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='b'").get().n,0);
 const send={lead_id:'a',request_id:'isolated-send-0001',text:'Test explicit send'};await assert.rejects(call('send',{...send,lead_id:'b'}),e=>e.status===404);assert.equal((await call('send',send)).status,'queued');assert.equal((await call('send',send)).status,'queued');await assert.rejects(call('send',{...send,text:'changed'}),e=>e.status===409);

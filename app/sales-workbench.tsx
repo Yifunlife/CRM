@@ -1,11 +1,12 @@
 'use client';
+import CommunicationConnections from './communication-connections';
 import CustomerService from './customer-service';
 import {useEffect,useRef,useState} from 'react';
 import CloudCommunication from './cloud-communication';
 import {SceneManager,CustomerArchive} from './workbench-modules';
 import WorkbenchCustomers,{stages} from './workbench-customers';
 function responseText(result:any){const value=result.reply||result.text?.translation||result.text?.text||result.text;if(typeof value!=='string')throw Error('未返回有效文案');return value;}
-function LegacySalesWorkbench({user,leads,request,openLead,initialLeadId='',initialLeadIds=[]}:{initialLeadIds?:string[];initialLeadId?:string;user:any;leads:any[];request:(path:string,body?:any)=>Promise<any>;openLead:(lead:any)=>void}){
+function LegacySalesWorkbench({user,leads,request,openLead,onTransportChange,initialLeadId='',initialLeadIds=[]}:{onTransportChange?:(mode:'desktop'|'whatsapp')=>void;initialLeadIds?:string[];initialLeadId?:string;user:any;leads:any[];request:(path:string,body?:any)=>Promise<any>;openLead:(lead:any)=>void}){
  const prepared=useRef('');
  const [links,LS]=useState<any[]>([]),[linkTarget,LT]=useState(''),[data,D]=useState<any>(null),[error,E]=useState(''),[busy,B]=useState(false),[scope,T]=useState(initialLeadIds.length?'本次沟通清单':'全部会话'),[query,Q]=useState(''),[selected,S]=useState(initialLeadId?'lead:'+initialLeadId:''),[channel,C]=useState('WhatsApp'),[drafts,DS]=useState<any[]>([]),[message,M]=useState(''),[localDrafts,LD]=useState<Record<string,string>>({}),[reference,R]=useState('');
  const [page,PAGE]=useState('聊天'),[directoryReady,DR]=useState(false),[chinese,ZH]=useState(''),[translations,TR]=useState<Record<string,string>>({});
@@ -62,7 +63,7 @@ function LegacySalesWorkbench({user,leads,request,openLead,initialLeadId='',init
  <p className="chat-connection" role="status">{live.online?'本地工作台已连接':'本地工作台离线 · 请保持电脑开机并打开工作台'} · WhatsApp {live.online&&live.status.whatsapp?'已连接':'未连接'} · {conversation?'当前为实时会话':'当前显示归档记录'}</p>
  
  {live.history?.customers>0&&<p className="chat-connection" role="status">{live.history.completed===live.history.customers?'文字聊天已完整同步':'文字聊天完整同步中'} · 已核对 {live.history.completed} / {live.history.customers} 位客户 · 云端已保存 {live.history.messages.toLocaleString()} 条。已同步记录可在客户档案的沟通历史中查看。</p>}
- {page==='连接设置'&&<CloudCommunication {...{user,leads,request,openLead}} settingsOnly/>}
+ {page==='连接设置'&&<CommunicationConnections user={user} request={request} current="desktop" canSwitch={!Object.entries(localDrafts).some(([key,value])=>value.trim()&&!drafts.some(d=>key==='lead:'+d.lead_id+':'+d.channel&&d.content===value))&&!busy} onUse={mode=>{PAGE('聊天');if(mode!=='desktop')onTransportChange?.(mode);}}/>}
  {page==='场景管理'&&live.online&&directoryReady&&<SceneManager command={(kind,p)=>command(kind,p,clients[0]?.id)} canEdit={user.role==='admin'||!!user.can_switch}/>}
  {page==='档案'&&current&&!current.client?.group&&<><div className="archive-actions"><button onClick={()=>PAGE('聊天')}>返回聊天</button><button className="primary" disabled={busy||!live.online||!directoryReady||!current.client} onClick={()=>PAGE('编辑档案')}>编辑客户档案</button></div><section className="wb-management archive-profile" aria-label="客户与项目"><h2>客户与项目</h2><dl><dt>姓名</dt><dd>{current.name}</dd><dt>国家</dt><dd>{current.country||'待补充'}</dd><dt>客户分类</dt><dd>{current.grade}</dd><dt>项目阶段</dt><dd>{stages[Number(current.client?.stage)-1]||current.stage||'待跟进'}</dd><dt>项目</dt><dd>{current.client?.project||'待补充'}</dd><dt>下一步行动</dt><dd>{current.client?.nextAction||'待安排'}</dd><dt>下次跟进</dt><dd>{current.client?.nextContact||'待安排'}</dd><dt>备注</dt><dd>{current.client?.notes||'暂无'}</dd><dt>WhatsApp</dt><dd>{current.phone||'待补充'}</dd><dt>邮箱</dt><dd>{current.email||'待补充'}</dd></dl>{current.lead&&<button onClick={()=>openLead(current.lead)}>客户资料、跟进与成交</button>}
  {!current.lead&&!current.client?.group&&<div className="chat-link"><div className="chat-link-heading"><h3>关联 CRM 客资</h3><p>核对为同一客户后关联，保留原有资料。</p></div><div className="chat-link-controls"><label>我的客资<select value={linkTarget} onChange={e=>LT(e.target.value)}><option value="">请选择客资</option>{assigned.filter(l=>!links.some(x=>x.lead_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name} · {l.phone||l.email||l.id}</option>)}</select></label><button disabled={busy||!linkTarget} onClick={()=>act(async()=>{await request('workbench/links',{lead_id:linkTarget,desktop_id:current.client.id});await load();select('lead:'+linkTarget);M('已关联，客户资料和负责人未更改');})}>确认关联</button></div></div>}
@@ -101,7 +102,8 @@ export default function SalesWorkbench(props:{initialLeadIds?:string[];initialLe
 
 function SalesCommunication(props:{initialLeadIds?:string[];initialLeadId?:string;user:any;leads:any[];request:(path:string,body?:any)=>Promise<any>;openLead:(lead:any)=>void}){
  const [desktop,D]=useState<boolean|null>(null);
- useEffect(()=>{let active=true;D(null);Promise.allSettled([props.request('workbench/snapshot'),props.request('workbench/live'),props.request('cloud/status')]).then(([snapshot,live,cloud])=>{if(!active)return;const history=snapshot.status==='fulfilled'&&snapshot.value?.snapshot;const hasHistory=!!(history?.clients?.length||history?.groups?.length);const desktopOnline=live.status==='fulfilled'&&!!live.value?.online;const cloudOnline=cloud.status==='fulfilled'&&!!cloud.value?.connection?.active;D(hasHistory&&(desktopOnline||!cloudOnline));});return()=>{active=false;};},[props.user.id,props.request]);
+ useEffect(()=>{let active=true;D(null);Promise.allSettled([props.request('workbench/snapshot'),props.request('communication/connection')]).then(([snapshot,connection])=>{if(!active)return;const history=snapshot.status==='fulfilled'&&snapshot.value?.snapshot;const hasHistory=!!(history?.clients?.length||history?.groups?.length);const mode=connection.status==='fulfilled'?connection.value.mode:'';D(mode?mode==='desktop':hasHistory);});return()=>{active=false;};},[props.user.id,props.request]);
  if(desktop===null)return <p role="status">正在读取客户沟通工作台…</p>;
- return desktop?<LegacySalesWorkbench {...props}/>:<CloudCommunication {...props}/>;
+ const onTransportChange=(mode:'desktop'|'whatsapp')=>D(mode==='desktop');
+ return desktop?<LegacySalesWorkbench {...props} onTransportChange={onTransportChange}/>:<CloudCommunication {...props} onTransportChange={onTransportChange}/>;
 }

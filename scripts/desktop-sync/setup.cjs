@@ -32,10 +32,10 @@ async function prepare(app,output){
 }
 async function install(){
  const test=process.argv.indexOf('--verify-app');
- if(test>=0){const output=fs.mkdtempSync(path.join(os.tmpdir(),'yifun-mark-verify-'));console.log(JSON.stringify(await prepare(process.argv[test+1],output)));return;}
+ if(test>=0){const output=fs.mkdtempSync(path.join(os.tmpdir(),'yifun-crm-verify-'));console.log(JSON.stringify(await prepare(process.argv[test+1],output)));return;}
  const config=JSON.parse(fs.readFileSync(path.join(__dirname,'account.json'),'utf8'));
- if(config.owner_id!=='b9bde8d1-8f87-4981-956b-128423cd6651'||config.username!=='yw001')throw Error('安装包账号核对失败');
- dialog('display dialog "此连接包仅用于 Mark Fang（方星球 / yw001）本人的 Mac。请先保存并退出亦玩销售工作台。" buttons {"取消", "继续安装"} default button "继续安装" cancel button "取消"');
+ if(!/^[a-f0-9-]{36}$/.test(config.owner_id||'')||typeof config.username!=='string'||!config.username||!/^https:\/\//.test(config.origin||'')||!(/^[a-f0-9]{96}$/.test(config.token||'')||/^[a-f0-9-]{64,80}$/.test(config.token||'')))throw Error('连接包账号核对失败，请从本人CRM账号重新下载');
+ dialog('display dialog '+JSON.stringify('连接当前CRM账号：'+config.name+' / '+config.username+'。请先保存并退出原工作台，仅在本人Mac使用。')+' buttons {"取消", "继续安装"} default button "继续安装" cancel button "取消"');
  const app='/Applications/亦玩销售工作台.app';closed(app);
  const dir=path.join(os.homedir(),'Library','Application Support','亦玩销售工作台'),configFile=path.join(dir,'crm-bridge.json'),settingsFile=path.join(dir,'settings.json');
  const settings=fs.existsSync(settingsFile)?JSON.parse(fs.readFileSync(settingsFile,'utf8')):{};
@@ -43,19 +43,19 @@ async function install(){
  const workspace=dialog('POSIX path of (choose folder with prompt "选择原来的工作台资料文件夹；不要新建文件夹" default location POSIX file '+JSON.stringify(start)+')').replace(/\/$/,'');
  const crm=path.join(workspace,'.workbench','crm.json');if(!fs.existsSync(path.join(workspace,'knowledge','04_客户聊天'))||!fs.existsSync(crm))throw Error('所选文件夹没有现有客户资料；未建立空工作区，也未修改应用');
  const original=fs.readFileSync(crm),data=JSON.parse(original);if(!Array.isArray(data.clients))throw Error('客户资料格式不符合原工作台');
- const labels=[...new Set(data.clients.filter(c=>!c.deleted&&!c.group).map(c=>String(c.owner||'')))];if(!labels.length||labels.some(x=>!x))throw Error('原资料的客户归属不完整，需先核对');
- let localOwner=labels[0];if(labels.length>1){const list=labels.map(x=>JSON.stringify(x)).join(',');localOwner=dialog('set picked to choose from list {'+list+'} with prompt "选择此资料库里属于 Mark 的原有负责人标签（保持原标签，不改客户归属）"\nif picked is false then error number -128\nreturn item 1 of picked');}
- if(fs.existsSync(configFile)){const old=JSON.parse(fs.readFileSync(configFile,'utf8'));if(old.token&&old.token!==config.token)throw Error('此 Mac 已有另一连接配置；为避免覆盖已停止，请先核对该配置归属。');}
+ const labels=[...new Set(data.clients.filter(c=>!c.deleted&&!c.group).map(c=>String(c.owner||'')))];if(labels.some(x=>!x))throw Error('原资料的客户归属不完整，需先核对');
+ let localOwner=labels[0]||config.name||config.username;if(labels.length>1){const list=labels.map(x=>JSON.stringify(x)).join(',');localOwner=dialog('set picked to choose from list {'+list+'} with prompt "选择此资料库里属于本人的原有负责人标签（保持原标签，不改客户归属）"\nif picked is false then error number -128\nreturn item 1 of picked');}
+ const old=fs.existsSync(configFile)?JSON.parse(fs.readFileSync(configFile,'utf8')):{};if(old.owner_id&&old.owner_id!==config.owner_id)throw Error('此Mac已绑定另一CRM账号，未覆盖原连接');if(old.token&&old.token!==config.token&&!(old.owner_id===config.owner_id&&config.replace_existing===true))throw Error('此Mac已有连接，请先在本人CRM核对并更换配置');
  const journalFile=path.join(workspace,'.workbench','crm-account-sync.json');if(fs.existsSync(journalFile)&&JSON.parse(fs.readFileSync(journalFile,'utf8')).owner_id!==config.owner_id)throw Error('工作区已绑定其他CRM账号，未修改');
- const before=fs.mkdtempSync(path.join(os.homedir(),'Documents','Mark-CRM连接备份-')),output=fs.mkdtempSync(path.join(path.dirname(app),'.mark-crm-update-'));
+ const before=fs.mkdtempSync(path.join(os.homedir(),'Documents','CRM工作台连接备份-')),output=fs.mkdtempSync(path.join(path.dirname(app),'.crm-connector-update-'));
  fs.writeFileSync(path.join(before,'crm.json'),original,{mode:0o600});if(fs.existsSync(configFile))fs.copyFileSync(configFile,path.join(before,'crm-bridge.json'));if(fs.existsSync(settingsFile))fs.copyFileSync(settingsFile,path.join(before,'settings.json'));
  const result=await prepare(app,output);closed(app);
  if(digest(fs.readFileSync(crm))!==digest(original))throw Error('安装期间客户资料发生变化，未覆盖应用，请重新安装');
  const backup=path.join(before,'previous-installed.app');fs.renameSync(app,backup);
- try{fs.renameSync(result.candidate,app);run('/usr/bin/codesign',['--verify','--deep','--strict',app]);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(configFile,JSON.stringify({...config,enabled:true,accountSync:true,fullHistory:true,workspace,localOwner},null,2),{mode:0o600});fs.chmodSync(configFile,0o600);fs.writeFileSync(settingsFile,JSON.stringify({...settings,workspace},null,2),{mode:0o600});}catch(e){if(fs.existsSync(app))fs.renameSync(app,path.join(output,'failed.app'));fs.renameSync(backup,app);if(fs.existsSync(path.join(before,'crm-bridge.json')))fs.copyFileSync(path.join(before,'crm-bridge.json'),configFile);else if(fs.existsSync(configFile))fs.unlinkSync(configFile);if(fs.existsSync(path.join(before,'settings.json')))fs.copyFileSync(path.join(before,'settings.json'),settingsFile);else if(fs.existsSync(settingsFile))fs.unlinkSync(settingsFile);throw e;}
+ try{fs.renameSync(result.candidate,app);run('/usr/bin/codesign',['--verify','--deep','--strict',app]);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(configFile,JSON.stringify({...config,enabled:true,accountSync:true,fullHistory:true,historyOnly:old.owner_id===config.owner_id&&old.historyOnly===true,workspace,localOwner},null,2),{mode:0o600});fs.chmodSync(configFile,0o600);fs.writeFileSync(settingsFile,JSON.stringify({...settings,workspace},null,2),{mode:0o600});}catch(e){if(fs.existsSync(app))fs.renameSync(app,path.join(output,'failed.app'));fs.renameSync(backup,app);if(fs.existsSync(path.join(before,'crm-bridge.json')))fs.copyFileSync(path.join(before,'crm-bridge.json'),configFile);else if(fs.existsSync(configFile))fs.unlinkSync(configFile);if(fs.existsSync(path.join(before,'settings.json')))fs.copyFileSync(path.join(before,'settings.json'),settingsFile);else if(fs.existsSync(settingsFile))fs.unlinkSync(settingsFile);throw e;}
  fs.writeFileSync(path.join(before,'verification.json'),JSON.stringify({...result,workspace,owner_id:config.owner_id,customerFileUnchanged:digest(fs.readFileSync(crm))===digest(original)},null,2),{mode:0o600});
  run('/usr/bin/open',[app]);
  dialog('display dialog "安装完成。请保持工作台打开和联网，在CRM切换到我的业务 → 客户沟通。首次全文导入按记录量分批进行，可在客户档案查看同步进度；未完成前请保持工作台运行。两端同时修改的字段会保留并提示核对。旧应用和资料已备份到 Documents。" buttons {"完成"} default button "完成"');
- console.log('Mark 本地工作台连接已安装。备份：'+before);
+ console.log('本人工作台连接已安装。备份：'+before);
 }
 install().catch(error=>{console.error(error.message);process.exitCode=1;});

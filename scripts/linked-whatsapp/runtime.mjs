@@ -15,6 +15,11 @@ export function parseEnvelope(output){
  for(let i=output.indexOf('{');i>=0;i=output.indexOf('{',i+1)){try{const result=JSON.parse(output.slice(i).trim());if(typeof result.success==='boolean'){if(!result.success)throw Error('CLI rejected command');return result.data;}}catch(e){if(e.message==='CLI rejected command')throw e;}}
  throw Error('Missing CLI receipt');
 }
+export function messageBatches(messages){
+ const batches=[];let batch=[],bytes=0;
+ for(const message of messages){const size=Buffer.byteLength(JSON.stringify(message));if(batch.length&&(bytes+size>700000||batch.length===100)){batches.push(batch);batch=[];bytes=0;}batch.push(message);bytes+=size+1;}
+ if(batch.length)batches.push(batch);return batches;
+}
 export async function startRuntime(configPath){
  const config=JSON.parse(readFileSync(configPath,'utf8')),origin=new URL(config.origin).origin;
  if(!/^https:\/\//.test(origin)||!config.token||!/^[-a-zA-Z0-9]{16,80}$/.test(config.owner_id))throw Error('Invalid isolated runtime configuration');
@@ -45,7 +50,7 @@ export async function startRuntime(configPath){
   if(state!=='connected')return;const rows=sqlite(join(store,'messages.db'),`SELECT rowid AS cursor,id,chat_jid,content,timestamp,is_from_me FROM messages WHERE rowid>${Number(saved.cursor)||0} ORDER BY rowid LIMIT 100`);if(!rows.length)return;
   const lids=new Map(sqlite(join(store,'whatsapp.db'),'SELECT lid,pn FROM whatsmeow_lid_map').map(r=>[String(r.lid),String(r.pn)]));
   const messages=rows.filter(r=>/^\d+@(s\.whatsapp\.net|lid)$/.test(r.chat_jid)).flatMap(r=>{const [number,type]=r.chat_jid.split('@'),peer=type==='lid'?lids.get(number):number,at=new Date(r.timestamp);if(!peer||!Number.isFinite(at.getTime()))return [];return [{id:peer+':'+r.id,peer,direction:r.is_from_me?'out':'in',content:r.content,created:at.toISOString(),history:at.getTime()<saved.connectedAt}];});
-  if(messages.length)await post({messages});saved.cursor=rows.at(-1).cursor;save();
+  for(const batch of messageBatches(messages))await post({messages:batch});saved.cursor=rows.at(-1).cursor;save();
  }
  async function execute(command){
   const previous=saved.journal[command.id];if(previous){await post({result:{id:command.id,...(previous.state==='running'?{state:'uncertain',error:'执行记录待核实，未重复发送'}:previous)}});return;}

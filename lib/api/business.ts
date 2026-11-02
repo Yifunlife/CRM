@@ -1,3 +1,4 @@
+import {communicationConnection} from '../communication-connections';
 import {allocationManagementEndpoint} from '../allocation-management';
 import {personalWorkEndpoint} from '../personal-work-server';
 import {salesWorkflowEndpoint} from '../sales-workflow-server';
@@ -58,6 +59,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   const executionResult=await executionEndpoint(db,env.QUOTE_DB,user,actor,path,req.method,body,url);if(executionResult!==undefined){if(req.method==='POST'&&'id' in executionResult&&typeof executionResult.id==='string')await afterWorkflowWrite(db,env.QUOTE_DB,executionResult,{order:executionResult.id});return json(executionResult);}
   const followupResult=await followupEndpoint(db,user,actor,path,req.method,body);if(followupResult!==undefined){if(req.method==='POST'&&'id' in followupResult&&followupResult.id)await afterWorkflowWrite(db,env.QUOTE_DB,followupResult,{order:followupResult.id});return json(followupResult);}
   const service=await customerServiceEndpoint(db,user,actor,path,req.method,body);if(service!==undefined)return json(service);
+  const connection=await communicationConnection(db,user,actor,path,req.method,body,url);if(connection!==undefined)return json(connection);
   const linked=await linkedEndpoint(db,user,actor,path,req.method,body);if(linked!==undefined)return json(linked);
   const cloud=await cloudEndpoint(db,env as any,user,actor,path,req.method,body,url);if(cloud!==undefined)return json(cloud);
   const wb=await workbenchEndpoint(db,user,actor,path,req.method,body);if(wb!==undefined)return json(wb);

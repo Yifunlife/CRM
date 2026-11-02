@@ -35,7 +35,7 @@ export async function linkedEndpoint(db:D1Database,user:any,actor:any,path:strin
 export async function linkedWorker(db:D1Database,req:Request,body:any){
  const token=req.headers.get('authorization')?.match(/^Bearer (.{32,200})$/)?.[1];
  const row:any=token?await db.prepare("SELECT d.*,u.active,u.role FROM crm_linked_devices d JOIN crm_users u ON u.id=d.owner_id WHERE d.token_hash=?").bind(await digest(token)).first():null;
- if(!row?.enabled||!row.active||!['sales','admin','ceo'].includes(row.role))fail('连接服务认证失败',401);
+ if(!row?.enabled||!row.active||!['sales','admin','ceo','management'].includes(row.role)||row.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(row.owner_id).first())fail('连接服务认证失败',401);
  const owner=row.owner_id,timestamp=Date.now();
  if(body.ack==='reconnect')await db.prepare("UPDATE crm_linked_devices SET desired='connect',qr='[]',qr_expires=0 WHERE owner_id=? AND desired='reconnect'").bind(owner).run();
  if(body.state){
@@ -51,10 +51,10 @@ export async function linkedWorker(db:D1Database,req:Request,body:any){
   const leads=(await db.prepare('SELECT id,phone FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
   for(const m of body.messages){
    const peer=phoneKey(m.peer),at=new Date(m.created);if(!m.id||!/^\d{8,15}$/.test(peer)||!['in','out'].includes(m.direction)||!Number.isFinite(at.getTime())||at.getTime()>timestamp+300000)fail('消息格式无效');
-   const matches=leads.filter(l=>phoneKey(l.phone)===peer),lead=matches.length===1?matches[0].id:null,provider='linked:'+owner+':'+clean(m.id,200),key='linked-'+await digest(provider),content=clean(m.content,12000)||'[非文字消息，请在手机查看附件]',status=m.history?'history':m.direction==='in'?'received':'sent';
+   const matches=leads.filter(l=>phoneKey(l.phone)===peer),lead=matches.length===1?matches[0].id:null,provider='linked:'+owner+':'+clean(m.id,200),key='linked-'+await digest(provider),content=(typeof m.content==='string'?m.content:'')||'[非文字消息，请在手机查看附件]',status=m.history?'history':m.direction==='in'?'received':'sent';
    await db.prepare('INSERT OR IGNORE INTO crm_cloud_messages(id,owner_id,phone_id,lead_id,peer,direction,content,status,provider_id,created) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(key,owner,'linked:'+owner,lead,peer,m.direction,content,status,provider,at.toISOString()).run();
    if(row.role==='admin')await receiveServiceMessage(db,owner,{...m,peer,content,created:at.toISOString()});
-   if(lead&&!m.history&&row.role==='sales')await recordCommunication(db,owner,lead,provider,content,m.direction==='in',at.toISOString());
+   if(lead&&!m.history&&['sales','ceo','management'].includes(row.role))await recordCommunication(db,owner,lead,provider,content,m.direction==='in',at.toISOString());
   }
   await db.prepare("UPDATE crm_linked_devices SET synced_count=(SELECT COUNT(*) FROM crm_cloud_messages WHERE owner_id=? AND phone_id=?) WHERE owner_id=?").bind(owner,'linked:'+owner,owner).run();
  }

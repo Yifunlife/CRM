@@ -1,5 +1,5 @@
 import {readJson,storeJson} from './object-storage';
-import {digest,id,clean,phoneKey,emailKey,now} from './crm';
+import {digest,id,clean,phoneKey,emailKey,now,can} from './crm';
 import {AllocationError} from './allocation-server';
 const kinds=['unread','read','conversation','send','generate','rewrite','translate','pause','resume','material','email-sync','test-email','directory','client-update','client-create','archive','record-add','scenes','scene-save','message-translate'];
 export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:string,method:string,body:any){
@@ -61,10 +61,10 @@ export async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string
 }
 export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const bearer=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';
- const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
+ const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
  if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
- if(body.sync)return synchronizeWorkbench(db,device.owner_id,body.sync);
+ if(body.sync)return synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
  if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,error:clean(s.error,300)}),device.owner_id).run();}
