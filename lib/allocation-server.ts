@@ -1,3 +1,4 @@
+import {ALLOCATION_START,allocationPoliciesSQL,fullLeadSQL,cumulativeAllocationCounts} from './allocation-priority';
 import {canSetManagement} from './crm';
 import {BUSINESS_SCOPES,GLOBAL_ALLOCATION_SCOPE,defaultConfig,monthNow,nextMonth,validMonth,validateConfig,effectiveShares,equalShares,type Config} from './allocation';
 import {id,now,can} from './crm';
@@ -9,10 +10,11 @@ export async function allocationWeights(db:D1Database,_scope?:string){const conf
 export async function distribute(db:D1Database,ids:string[],scope:string,actor:string){
  const {weights}=await allocationWeights(db);if(!weights.length)throw new AllocationError('全渠道分配尚无正常接收人员');
  const month=monthNow(),created=now(),statements:D1PreparedStatement[]=[],filter=scope===GLOBAL_ALLOCATION_SCOPE?'':scope;
- for(const leadId of ids){
+ const ordered=(await db.prepare(`SELECT id,${fullLeadSQL('crm_leads')} AS is_full FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) ORDER BY is_full DESC,entered,id`).bind(JSON.stringify(ids)).all<{id:string;is_full:number}>()).results;
+ for(const {id:leadId,is_full} of ordered){
   // The choice and update run in the same database statement. Each next lead sees the preceding assignment in this batch.
-  statements.push(db.prepare(`WITH candidates AS (SELECT json_extract(value,'$.user_id') AS user_id FROM json_each(?) w WHERE EXISTS(SELECT 1 FROM crm_users u WHERE u.id=json_extract(w.value,'$.user_id') AND u.active=1 AND u.role IN ('sales','ceo','management')) AND EXISTS(SELECT 1 FROM crm_allocation_configs cfg,json_each(cfg.payload,'$.members') m WHERE cfg.scope=? AND json_extract(m.value,'$.user_id')=json_extract(w.value,'$.user_id') AND json_extract(m.value,'$.state')='参与')), counts AS (SELECT c.*, (SELECT COUNT(*) FROM crm_assignments a WHERE a.owner_id=c.user_id AND a.allocation_month=? AND a.policy IN ('equal-v1','equal-global-v1','full-first-v1') AND EXISTS(SELECT 1 FROM crm_leads counted WHERE counted.id=a.lead_id AND counted.cohort='new')) AS n FROM candidates c), pick AS (SELECT user_id FROM counts ORDER BY n,user_id LIMIT 1) UPDATE crm_leads SET owner_id=(SELECT user_id FROM pick) WHERE id=? AND (?='' OR business_scope=?) AND business_scope IN (SELECT value FROM json_each(?)) AND cohort='new' AND owner_id IS NULL AND original_owner='' AND review=0 AND EXISTS(SELECT 1 FROM pick)`).bind(JSON.stringify(weights),GLOBAL_ALLOCATION_SCOPE,month,leadId,filter,filter,JSON.stringify(BUSINESS_SCOPES.map(s=>s.id))));
-  statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month,policy) SELECT ?,id,?,owner_id,?,business_scope,?,'equal-global-v1' FROM crm_leads WHERE id=? AND changes()>0 AND owner_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),actor,created,month,leadId,leadId));
+  statements.push(db.prepare(`WITH candidates AS (SELECT json_extract(value,'$.user_id') AS user_id FROM json_each(?) w WHERE EXISTS(SELECT 1 FROM crm_users u WHERE u.id=json_extract(w.value,'$.user_id') AND u.active=1 AND u.role IN ('sales','ceo','management')) AND EXISTS(SELECT 1 FROM crm_allocation_configs cfg,json_each(cfg.payload,'$.members') m WHERE cfg.scope=? AND json_extract(m.value,'$.user_id')=json_extract(w.value,'$.user_id') AND json_extract(m.value,'$.state')='参与')), counts AS (SELECT c.*, (SELECT COUNT(DISTINCT a.lead_id) FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE a.owner_id=c.user_id AND a.created>=? AND a.policy IN ${allocationPoliciesSQL} AND l.review=0) AS n,(SELECT COUNT(DISTINCT a.lead_id) FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE a.owner_id=c.user_id AND a.created>=? AND a.policy IN ${allocationPoliciesSQL} AND l.review=0 AND ${fullLeadSQL()}) AS full_count FROM candidates c), pick AS (SELECT user_id FROM counts ORDER BY CASE WHEN ? THEN full_count ELSE n END,n,user_id LIMIT 1) UPDATE crm_leads SET owner_id=(SELECT user_id FROM pick) WHERE id=? AND (?='' OR business_scope=?) AND business_scope IN (SELECT value FROM json_each(?)) AND cohort='new' AND owner_id IS NULL AND original_owner='' AND review=0 AND EXISTS(SELECT 1 FROM pick)`).bind(JSON.stringify(weights),GLOBAL_ALLOCATION_SCOPE,ALLOCATION_START,ALLOCATION_START,is_full,leadId,filter,filter,JSON.stringify(BUSINESS_SCOPES.map(s=>s.id))));
+  statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month,policy) SELECT ?,id,?,owner_id,?,business_scope,?,'full-first-v1' FROM crm_leads WHERE id=? AND changes()>0 AND owner_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM crm_assignments WHERE lead_id=?)").bind(id(),actor,created,month,leadId,leadId));
  }
  const result=await db.batch(statements);return result.filter((_,i)=>i%2===0).reduce((n,r)=>n+(r.meta.changes||0),0);
 }
@@ -28,7 +30,7 @@ async function report(db:D1Database,scope:string,month:string){
  const confirmed:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE key=?').bind(scope+':'+next).first();
  const liveCurrent=equalShares(config,users.filter(u=>u.active).map(u=>u.id));
  const proposal=liveCurrent,warning='';
- return {scope,config_scope:GLOBAL_ALLOCATION_SCOPE,month,next,config,users,cash,receiptPolicy,policy:'equal-global-v1',liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,globalAssigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
+ return {priorityAssigned:await cumulativeAllocationCounts(db),allocationStart:ALLOCATION_START,scope,config_scope:GLOBAL_ALLOCATION_SCOPE,month,next,config,users,cash,receiptPolicy,policy:'full-first-v1',liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,globalAssigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
 }
 export async function allocationEndpoint(db:D1Database,user:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/'))return undefined;
@@ -49,6 +51,6 @@ export async function allocationEndpoint(db:D1Database,user:any,path:string,meth
   const config:Config=body.config;try{validateConfig(config,await activeUsers(db));}catch(e:any){throw new AllocationError(e.message);}
   await db.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(scope,JSON.stringify(config),now(),user.id).run();return {ok:true};
  }
- if(path==='allocation/confirm'&&method==='POST')throw new AllocationError('新增客户已统一平均分配，不再确认业绩占比；历史方案保留查阅',409);
+ if(path==='allocation/confirm'&&method==='POST')throw new AllocationError('新增客资按全案优先、累计均衡分配，不再确认业绩占比；历史方案保留查阅',409);
  throw new AllocationError('分配操作不存在',404);
 }

@@ -37,8 +37,8 @@ try{
  for(const [index,id] of authorized.entries()){
   await request(id,'sales-management/targets',{...target,items:[{...target.items[0],version:index}]});
   const report=await request(id,'sales-management/report?period=month&month='+month);assert.equal(report.can_edit,true);assert.deepEqual(report.allowed_currencies,['CNY','USD']);
-  const plan=await request(id,'allocation/management/preview',{ids:['pending'],recipients:['sales']});assert.equal(plan.rows[0].owner_id,'sales');
   await request(id,'allocation/config',{scope:'all',config:{members:[{user_id:'sales',state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false}}});
+  const plan=await request(id,'allocation/management/preview',{ids:['pending'],recipients:['sales']});assert.equal(plan.rows[0].owner_id,'sales');
   await request(id,'role-workspace/report?month='+month+'&market='+encodeURIComponent('内贸'));
   await request(id,'role-workspace/report?month='+month+'&market='+encodeURIComponent('外贸'));
   await request(id,'sales-monitor',{},405);
