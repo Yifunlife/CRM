@@ -1,6 +1,6 @@
 process.noAsar=true;
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process'),crypto=require('node:crypto');
-const asar=require('@electron/asar'),{patchFirstContactMain,patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionMain,patchConnectionPreload}=require('./patch-app.cjs');
+const asar=require('@electron/asar'),{patchFirstContactMail,patchFirstContactMain,patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionMain,patchConnectionPreload}=require('./patch-app.cjs');
 const run=(bin,args)=>cp.execFileSync(bin,args,{encoding:'utf8',stdio:['ignore','pipe','pipe']});
 const dialog=script=>run('/usr/bin/osascript',['-e',script]).trim();
 const digest=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
@@ -15,17 +15,18 @@ async function prepare(app,output){
  const stored=run('/usr/libexec/PlistBuddy',['-c','Print :ElectronAsarIntegrity:Resources/app.asar:hash',info]).trim();if(stored!==before.hash)throw Error('原应用完整性检查未通过，未修改');
  const folder=path.join(output,'source'),candidate=path.join(output,'亦玩销售工作台.app');
  asar.extractAll(archive,folder);run('/usr/bin/ditto',[app,candidate]);
- for(const [name,patch] of [['main.js',source=>patchFirstContactMain(patchConnectionMain(patchMain(source)))],['preload.js',patchConnectionPreload],['crm-client-management.js',patchManagement],['crm-bridge.js',patchBridge],['renderer/renderer.js',patchRenderer]]){const file=path.join(folder,name);fs.writeFileSync(file,patch(fs.readFileSync(file,'utf8')));}
+ for(const [name,patch] of [['main.js',source=>patchFirstContactMain(patchConnectionMain(patchMain(source)))],['outlook-outreach.js',patchFirstContactMail],['preload.js',patchConnectionPreload],['crm-client-management.js',patchManagement],['crm-bridge.js',patchBridge],['renderer/renderer.js',patchRenderer]]){const file=path.join(folder,name);fs.writeFileSync(file,patch(fs.readFileSync(file,'utf8')));}
  fs.copyFileSync(path.join(__dirname,'crm-account-sync.cjs'),path.join(folder,'crm-account-sync.js'));
  fs.copyFileSync(path.join(__dirname,'crm-history-sync.cjs'),path.join(folder,'crm-history-sync.cjs'));
  fs.copyFileSync(path.join(__dirname,'crm-first-contact.cjs'),path.join(folder,'crm-first-contact.js'));
+ fs.copyFileSync(path.join(__dirname,'crm-first-contact-mail.cjs'),path.join(folder,'crm-first-contact-mail.js'));
  for(const [file,name]of [['crm-connection-settings.cjs','crm-connection-settings.cjs'],['crm-connection-renderer.js','crm-connection-renderer.js']])fs.copyFileSync(path.join(__dirname,file),path.join(folder,name));
- for(const name of ['crm-first-contact.js','main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js']){const script=fs.readFileSync(path.join(folder,name),'utf8');new (require('node:vm').Script)(script,{filename:name});}
+ for(const name of ['crm-first-contact-mail.js','outlook-outreach.js','crm-first-contact.js','main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js']){const script=fs.readFileSync(path.join(folder,name),'utf8');new (require('node:vm').Script)(script,{filename:name});}
  const files=entries(before.tree),unpacked=files.filter(f=>f.unpacked).map(f=>path.join(folder,f.name));
  await asar.createPackageWithOptions(folder,candidate+'/Contents/Resources/app.asar',unpacked.length?{unpack:unpacked.length===1?unpacked[0]:'{'+unpacked.join(',')+'}'}:{});
- const next=candidate+'/Contents/Resources/app.asar',after=header(next),allowed=['crm-first-contact.js','main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js'];
+ const next=candidate+'/Contents/Resources/app.asar',after=header(next),allowed=['crm-first-contact-mail.js','outlook-outreach.js','crm-first-contact.js','main.js','crm-client-management.js','crm-bridge.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js'];
  for(const file of files){if(file.link)continue;const original=asar.extractFile(archive,file.name),updated=asar.extractFile(next,file.name);if(!allowed.includes(file.name)&&digest(original)!==digest(updated))throw Error('无关应用文件发生变化，未安装：'+file.name);}
- for(const file of entries(after.tree)){if(!files.some(f=>f.name===file.name)&&!['crm-first-contact.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js'].includes(file.name))throw Error('更新包含未知文件，未安装');}
+ for(const file of entries(after.tree)){if(!files.some(f=>f.name===file.name)&&!['crm-first-contact-mail.js','crm-first-contact.js','crm-account-sync.js','crm-history-sync.cjs','renderer/renderer.js','preload.js','crm-connection-settings.cjs','crm-connection-renderer.js'].includes(file.name))throw Error('更新包含未知文件，未安装');}
  run('/usr/libexec/PlistBuddy',['-c','Set :ElectronAsarIntegrity:Resources/app.asar:hash '+after.hash,candidate+'/Contents/Info.plist']);
  const ent=run('/usr/bin/codesign',['-d','--entitlements',':-',app]);if(!ent.includes('<plist'))throw Error('无法核对原应用权限，未安装');
  const entitlement=path.join(output,'entitlements.plist');fs.writeFileSync(entitlement,ent);

@@ -9,7 +9,7 @@ async function firstContact({phonePolicy,command,config,getClient,clients,read,d
  if(!guard())throw Error('客户资料、归属或人工草稿已变化，自动首联未发送');
  const c=getClient(id);
  const receipts=['whatsapp-outbox.json','crm-mail-outbox.json','outlook-graph-outbox.json','outlook-web-outbox.json','mac-mail-outbox.json','winnie-email-outreach.json'].flatMap(name=>read(name,[]));
- if(receipts.some(r=>(r.clientId===id||p.channel==='email'&&email(r.recipient)===p.recipient_key||p.channel==='whatsapp'&&digits(r.jid?.split('@')[0]||r.phone)===p.recipient_key)&&terminal(r)))return{status:'skipped',detail:'已有联系或待核实发送记录，不重复首联'};
+ if(receipts.some(r=>(r.clientId===id||p.channel==='email'&&email(r.recipient)===p.recipient_key||p.channel==='whatsapp'&&digits(r.jid?.split('@')[0]||r.phone)===p.recipient_key)&&terminal(r)&&!(p.channel==='email'&&r.automaticFirstContact===true&&r.status==='preparing'&&r.messageId&&!r.sendRequestedAt)))return{status:'skipped',detail:'已有联系或待核实发送记录，不重复首联'};
  const history=archive(c)||[];
  if(history.some(m=>m.outgoing===true||/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')))return{status:'skipped',detail:'已有发给客户的历史消息，不重复首联'};
  if(p.channel==='email'){
