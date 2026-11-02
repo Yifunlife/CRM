@@ -220,6 +220,8 @@
 .office-app .workspace .management-workspace :is(th,td) { padding:var(--crm-space-control) 10px; }
 .office-app .workspace .management-workspace td > small { margin-top:2px; }
 .office-app .workspace .management-workspace .mw-filterbar { gap:var(--crm-space-control); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .management-workspace .mw-filterbar > label.checkbox { display:flex; flex:0 0 auto; align-items:center; gap:var(--crm-space-control); min-width:0; max-width:none; min-height:var(--crm-control-height); white-space:nowrap; }
+.office-app .workspace .management-workspace .mw-filterbar > label.checkbox > input[type=checkbox] { flex:0 0 17px; width:17px; min-width:17px; max-width:17px; height:17px; min-height:17px; margin:0; }
 .office-app .workspace .management-workspace .mw-focus-grid { gap:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
 .office-app .workspace .management-workspace .mw-focus {
  display:grid;
@@ -253,6 +255,7 @@
 .office-app .workspace .personal-metrics > div { padding:10px var(--crm-space-section); }
 @media(max-width:720px) {
  .office-app .workspace .management-workspace h1 { font-size:20px; }
+ .office-app .workspace .management-workspace .mw-filterbar > label.checkbox { flex-basis:100%; }
  .office-app .workspace .management-workspace .mw-focus-grid { grid-template-columns:1fr; gap:var(--crm-space-control); }
  .office-app .workspace .management-workspace .mw-focus { padding:10px var(--crm-space-section); }
  .office-app .workspace .management-workspace .mw-focus > strong { font-size:24px; }
