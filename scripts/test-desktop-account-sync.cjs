@@ -1,0 +1,26 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),vm=require('node:vm');
+const {patchMain,patchManagement}=require('./desktop-sync/patch-app.cjs'),{createAccountSync}=require('./desktop-sync/account-sync.cjs');
+(async()=>{
+ const root='/Users/jingwu/Desktop/Yifun Life/Yifun-V1-macOS-USB/workbench-v1',dir=fs.mkdtempSync(path.join(os.tmpdir(),'mark-sync-test-'));
+ const configFile=path.join(dir,'config.json');fs.writeFileSync(configFile,JSON.stringify({accountSync:true,enabled:true,origin:'https://yifun-crm.yifunlife.workers.dev',owner_id:'mark',token:'fixture',workspace:dir,localOwner:'Winnie'}));
+ let data={clients:[{id:'native-one',owner:'Winnie',name:'Original',country:'',whatsapp:'61400000001',grade:'A',notes:'preserve original notes'},{id:'private-other',owner:'Other',name:'Do not upload'}]},sent,remoteName='Original';
+ const state=()=>structuredClone(data),sync=createAccountSync({configFile,root:()=>dir,state,save:s=>data=s,profile:c=>({...c,revision:'r1'}),archive:()=>[],scenes:()=>[],request:async(_url,o)=>{sent=JSON.parse(o.body);return {ok:true,json:async()=>({owner_id:'mark',updates:[{lead_id:'lead-one',desktop_id:'native-one',values:{name:remoteName,country:'Australia',whatsapp:'61400000001',email:'',grade:'A',nextContact:'2026-11-03'}},{lead_id:'new-lead',desktop_id:'crm-new-lead',create:true,values:{name:'New assigned',country:'China',whatsapp:'8610000000000',grade:'B'}}],bindings:[],blocked:[],conflicts:[]})};}});
+ await sync.tick();assert.deepEqual(sent.sync.clients.map(c=>c.id),['native-one']);assert.equal(data.clients[0].notes,'preserve original notes');assert.equal(data.clients[0].country,'Australia');assert.equal(data.clients.length,3);await sync.tick();assert.equal(data.clients.length,3);
+ remoteName='Changed in CRM';await sync.tick();assert.equal(data.clients[0].name,remoteName);
+ data.clients[0].name='Changed on desktop';remoteName='Another CRM change';await sync.tick();assert.equal(data.clients[0].name,'Changed on desktop');
+ const before=JSON.stringify(data);fs.writeFileSync(configFile,JSON.stringify({accountSync:true,enabled:true,origin:'https://evil.invalid',workspace:dir}));await sync.tick();assert.equal(JSON.stringify(data),before);assert.match(sync.error(),/不匹配/);
+ const handlers={},managementModule={exports:{}};vm.runInNewContext(patchManagement(fs.readFileSync(path.join(root,'crm-client-management.js'),'utf8')),{module:managementModule,require});
+ const source=patchMain(fs.readFileSync(path.join(root,'main.js'),'utf8'));
+ new vm.Script(source);
+ const ctx=vm.createContext({require:name=>name==='electron'?{app:{getPath:()=>dir},dialog:{},ipcMain:{handle:(n,f)=>handlers[n]=f,on(){}}}:name==='./crm-client-management'?managementModule.exports:require(require.resolve(name,{paths:[root]})),console,process,__dirname:root,Buffer,URL,AbortController,setTimeout,clearTimeout,setInterval,clearInterval});
+ vm.runInContext(source.split('app.whenReady().then')[0]+`\nworkspaceRoot=${JSON.stringify(dir)};\n`+source.slice(source.indexOf("ipcMain.handle('reception:get'")),ctx);
+ fs.mkdirSync(path.join(dir,'knowledge','04_客户聊天'),{recursive:true});
+ fs.writeFileSync(path.join(dir,'crm-bridge.json'),JSON.stringify({accountSync:true,workspace:dir,localOwner:'Mark'}));
+ const run=code=>vm.runInContext(code,ctx);run("saveClients({clients:[{id:'mark-only',owner:'Mark',name:'Mark private',grade:'A',stage:1,notes:'retained',whatsapp:'61400000004',markdownFile:'test.md'},{id:'winnie-only',owner:'Winnie',name:'Hidden'}]});listWhatsAppChats=async()=>[]");
+ const directory=await run("executeCrmCommand({desktop_id:'mark-only',kind:'directory',payload:{}})");assert.equal(directory.clients.length,1);assert.equal(directory.clients[0].id,'mark-only');
+ const revision=directory.clients[0].revision;
+ await run(`executeCrmCommand({desktop_id:'mark-only',kind:'client-update',payload:{changes:[{id:'mark-only',revision:${JSON.stringify(revision)},patch:{grade:'VIP'}}]}})`);
+ run("channelMessages=()=>[{speaker:'Winnie Wu',text:'mine'}];whatsappRecipient=()=>({});whatsappDelivery=()=>({})");assert.equal(run("crmBridgeConversation('mark-only','whatsapp').messages[0].outgoing"),true);
+ assert.equal(run("getClient('mark-only').grade"),'VIP');assert.equal(run("getClient('mark-only').notes"),'retained');await assert.rejects(run("executeCrmCommand({desktop_id:'winnie-only',kind:'directory',payload:{}})"),/客户不存在/);
+ fs.rmSync(dir,{recursive:true});console.log('PASS: desktop account scope, initial pull, stable IDs, repeated sync, CRM update, concurrent local edit preservation, workspace guard, original directory/edit behavior and unchanged notes');
+})().catch(e=>{console.error(e.message);process.exitCode=1});

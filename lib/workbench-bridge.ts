@@ -1,5 +1,5 @@
 import {readJson,storeJson} from './object-storage';
-import {digest,id,clean} from './crm';
+import {digest,id,clean,phoneKey,emailKey,now} from './crm';
 import {AllocationError} from './allocation-server';
 const kinds=['unread','read','conversation','send','generate','rewrite','translate','pause','resume','material','email-sync','test-email','directory','client-update','client-create','archive','record-add','scenes','scene-save','message-translate'];
 export async function bridgeUserEndpoint(db:D1Database,owner:any,actor:any,path:string,method:string,body:any){
@@ -52,7 +52,8 @@ export async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string
 export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const bearer=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';
  const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
- if(!device||!device.active||!['sales','management'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
+ if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
+ if(body.sync)return synchronizeWorkbench(db,device.owner_id,body.sync);
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
  if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,error:clean(s.error,300)}),device.owner_id).run();}
@@ -79,7 +80,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
   if(r.state==='done'&&completed.kind==='conversation'&&Array.isArray(r.value?.messages)){
    const prior:any=await db.prepare("SELECT result FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind='conversation' AND state='done' AND id<>? AND json_extract(payload,'$.channel')=? ORDER BY updated DESC LIMIT 1").bind(device.owner_id,completed.desktop_id,completed.id,JSON.parse(completed.payload).channel).first();
    if(prior){const previous=await readJson(prior.result),known=new Set((previous.messages||[]).map((m:any)=>m.key)),anchor=(previous.messages||[]).filter((m:any)=>m.key).at(-1)?.key,anchorIndex=anchor?r.value.messages.findIndex((m:any)=>m.key===anchor):-1;
-    for(const m of anchorIndex<0?[]:r.value.messages.slice(anchorIndex+1)){if(!m.key||!m.speaker||known.has(m.key))continue;const incoming=!/^Winnie Wu(?: \(Email\))?$/.test(m.speaker||'');await recordOnlineContact(db,device.owner_id,completed.desktop_id,'message:'+m.channel+':'+(m.channel==='whatsapp'?m.key.split(':').at(-1):m.key),m.channel,m.text||'非文字消息',incoming,timestamp);}
+    for(const m of anchorIndex<0?[]:r.value.messages.slice(anchorIndex+1)){if(!m.key||!m.speaker||known.has(m.key))continue;const incoming=typeof m.outgoing==='boolean'?!m.outgoing:!/^Winnie Wu(?: \(Email\))?$/.test(m.speaker||'');await recordOnlineContact(db,device.owner_id,completed.desktop_id,'message:'+m.channel+':'+(m.channel==='whatsapp'?m.key.split(':').at(-1):m.key),m.channel,m.text||'非文字消息',incoming,timestamp);}
    }
   }
   if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)){
@@ -107,4 +108,63 @@ async function recordOnlineContact(db:D1Database,owner:string,desktop:string,eve
  const existing=await db.prepare('SELECT id FROM crm_notes WHERE id=?').bind(noteId).first();if(existing)return;
  const method=incoming?'系统收信':channel==='email'?'邮件':'WhatsApp';
  await db.batch([db.prepare('INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)').bind(noteId,lead.id,owner,(incoming?'客户线上回复':'线上发送已确认')+'｜'+clean(text,12000)+'\n沟通凭据：'+event,method,'',at),db.prepare("UPDATE crm_leads SET status=CASE WHEN status IN ('待首次联系','已联系待回复','正在沟通') THEN ? ELSE status END,last_contact=? WHERE id=? AND owner_id=?").bind(incoming?'正在沟通':lead.status==='正在沟通'?'正在沟通':'已联系待回复',at,lead.id,owner)]);
+}
+
+const fields={name:'name',country:'country',whatsapp:'phone',email:'email',grade:'grade',nextContact:'next_date'} as const;
+async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
+ if(!input||!Array.isArray(input.clients)||input.clients.length>5000||!Array.isArray(input.bindings)||input.bindings.length>5000||JSON.stringify(input).length>1400000)throw new AllocationError('本地同步资料过大或格式无效');
+ const seen=new Set<string>(),clients=input.clients.map((c:any)=>{
+  if(typeof c.id!=='string'||!/^[-a-zA-Z0-9_:]{1,150}$/.test(c.id)||seen.has(c.id)||!Array.isArray(c.messages)||c.messages.length>80)throw new AllocationError('本地客户编号或会话格式无效');seen.add(c.id);
+  const out:any={id:c.id,messages:c.messages.map((m:any)=>({channel:clean(m.channel,30),timestamp:clean(m.timestamp,50),speaker:clean(m.speaker,200),text:clean(m.text,4000),key:clean(m.key,300),outgoing:m.outgoing===true}))};
+  for(const key of ['name','country','whatsapp','email','grade','project','stage','projectStatus','source','customerType','nextAction','nextContact','followStatus','closeDate','amount','lostReason','notes','revision','createdAt','lastContact'])out[key]=clean(c[key],['notes','nextAction','lostReason'].includes(key)?6000:500);
+  out.phone=out.whatsapp;return out;
+ });
+ const rows=(await db.prepare('SELECT * FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
+ const allLinks=(await db.prepare('SELECT w.*,l.owner_id AS current_owner FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? OR l.owner_id=?').bind(owner,owner).all<any>()).results;
+ const conflicts:any[]=[],updates:any[]=[],bindings:any[]=[],blocked=new Set(allLinks.filter(l=>l.current_owner!==owner||l.owner_id!==owner).map(l=>l.desktop_id));
+ const used=new Set<string>();
+ for(const lead of rows){
+  const existing=allLinks.find(l=>l.lead_id===lead.id);
+  if(existing&&existing.owner_id!==owner){conflicts.push({lead_id:lead.id,reason:'原沟通归属需要核对'});continue;}
+  let client=existing?clients.find((c:any)=>c.id===existing.desktop_id):undefined;
+  const report=input.bindings.find((b:any)=>b.lead_id===lead.id);
+  if(!client&&!existing){
+   const p=phoneKey(lead.phone),e=emailKey(lead.email);
+   const matched=clients.filter((c:any)=>!blocked.has(c.id)&&((p&&phoneKey(c.whatsapp)===p)||(e&&emailKey(c.email)===e)||c.id==='crm-'+lead.id));
+   const remoteDuplicates=rows.filter((l:any)=>l.id!==lead.id&&((p&&phoneKey(l.phone)===p)||(e&&emailKey(l.email)===e)));
+   if(matched.length>1||remoteDuplicates.length){conflicts.push({lead_id:lead.id,reason:'电话或邮箱对应多个客户，请核对后关联'});continue;}
+   client=matched[0];
+   if(client&&(used.has(client.id)||allLinks.some(l=>l.desktop_id===client.id))){conflicts.push({lead_id:lead.id,reason:'会话已有关联，请核对'});continue;}
+   if(client){await db.prepare('INSERT OR IGNORE INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) SELECT id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?').bind(client.id,now(),owner,lead.id,owner).run();}
+  }
+  if(client){const confirmed:any=await db.prepare('SELECT owner_id,desktop_id FROM crm_workbench_links WHERE lead_id=?').bind(lead.id).first();if(!confirmed||confirmed.owner_id!==owner||confirmed.desktop_id!==client.id){conflicts.push({lead_id:lead.id,reason:'关联刚被修改，请重新核对'});continue;}used.add(client.id);}
+  const values:any={},base=report?.desktop_id===client?.id?report?.base:null;
+  for(const [key,column] of Object.entries(fields)){
+   const remote=String(lead[column]||''),local=String(client?.[key]||'');values[key]=remote;
+   if(!client)continue;
+   if(base&&typeof base[key]==='string'){
+    if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'两端均已修改，请核对'});continue;}
+    if(local!==base[key]&&remote===base[key]){
+     if(key==='name'&&!local||key==='grade'&&local&&!['VIP','A','B','C','D'].includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
+     if(['whatsapp','email'].includes(key)&&local&&rows.some((r:any)=>r.id!==lead.id&&(key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local)))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
+     const changed:any=await db.prepare(`UPDATE crm_leads SET ${column}=? WHERE id=? AND owner_id=? AND ${column}=? RETURNING id`).bind(local,lead.id,owner,remote).first();
+     if(changed){values[key]=local;lead[column]=local;}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});
+    }
+   }else if(local&&remote&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'首次关联的两端内容不同，请核对'});}
+  }
+  updates.push({lead_id:lead.id,desktop_id:client?.id||'crm-'+lead.id,create:!client,values,source:lead.source,detail:lead.detail});
+  if(client)bindings.push({lead_id:lead.id,desktop_id:client.id});
+ }
+ // A transfer during this request must not expose or update the previous owner's conversation.
+ const current=(await db.prepare('SELECT id FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
+ const allowed=new Set(current.map(l=>l.id));
+ const latestLinks=(await db.prepare('SELECT w.desktop_id,l.owner_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=?').bind(owner).all<any>()).results;
+ for(const link of latestLinks)if(link.owner_id!==owner)blocked.add(link.desktop_id);
+ const previous:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner).first();
+ const snapshot=previous?await readJson(previous.payload):{format:'yifun-workbench-v1',clients:[],scenes:[]};
+ for(const client of clients.filter((c:any)=>!blocked.has(c.id))){const prior=snapshot.clients.find((c:any)=>c.id===client.id);if(prior){const messages=new Map();for(const m of [...(prior.messages||[]),...client.messages])messages.set(m.key||JSON.stringify([m.channel,m.timestamp,m.speaker,m.text]),m);Object.assign(prior,client,{messages:[...messages.values()].slice(-80)});}else snapshot.clients.push(client);}
+ snapshot.clients=snapshot.clients.filter((c:any)=>!blocked.has(c.id));snapshot.captured_at=now();
+ snapshot.scenes=(input.scenes||[]).slice(0,300).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,12000)}));
+ await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner,await storeJson(snapshot,`snapshots/${owner}`,true),now(),owner).run();
+ return {owner_id:owner,updates:updates.filter(u=>allowed.has(u.lead_id)),bindings:bindings.filter(b=>allowed.has(b.lead_id)),blocked:[...blocked],conflicts};
 }
