@@ -33,4 +33,4 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","lib/f
 
 本地合成 API 数据截图位于 `.impeccable/review/`：`desktop.png`、`mobile.png`、`editor-desktop.png`、`editor-mobile.png`、`node-desktop.png`、`recovery-desktop.png`。主任务验证记录为机械检测 `[]`、生产构建及针对本次变更的后端／浏览器检查通过；全模块的三项既有失败已在基线 `08bc18d` 复现，不在本次范围。本文档步骤读取源码，未另行执行这些检查。
 
-**Reviewer disposition: ship — fix scope only.** 最终复核将状态继承、保存已落库但读取失败时的重试与填写备份、负责人及通知隔离三项列举修复均判为 resolved；结论仅覆盖这三项，不扩展为整站无问题或真实业务验收。尚未部署，亦未完成真实账号生产验收；本地合成数据证据不代表线上验收。没有待选视觉方向；部署及真实账号验收另行记录。
+**Reviewer disposition: ship — fix scope only.** 最终复核将状态继承、保存已落库但读取失败时的重试与填写备份、负责人及通知隔离三项列举修复均判为 resolved；结论仅覆盖这三项，不扩展为整站无问题或真实业务验收。2026-11-02 程序已发布，公开入口、新资源及未登录接口保护已核对；真实账号生产验收与通知送达尚未核实，本地合成数据证据不代表线上验收。没有待选视觉方向；部署及真实账号验收另行记录。
