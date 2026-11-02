@@ -117,7 +117,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
   if(typeof c.id!=='string'||!/^[-a-zA-Z0-9_:]{1,150}$/.test(c.id)||seen.has(c.id)||!Array.isArray(c.messages)||c.messages.length>80)throw new AllocationError('本地客户编号或会话格式无效');seen.add(c.id);
   const out:any={id:c.id,messages:c.messages.map((m:any)=>({channel:clean(m.channel,30),timestamp:clean(m.timestamp,50),speaker:clean(m.speaker,200),text:clean(m.text,4000),key:clean(m.key,300),outgoing:m.outgoing===true}))};
   for(const key of ['name','country','whatsapp','email','grade','project','stage','projectStatus','source','customerType','nextAction','nextContact','followStatus','closeDate','amount','lostReason','notes','revision','createdAt','lastContact'])out[key]=clean(c[key],['notes','nextAction','lostReason'].includes(key)?6000:500);
-  out.phone=out.whatsapp;return out;
+  out.stage=Number(out.stage)||1;out.phone=out.whatsapp;return out;
  });
  const rows=(await db.prepare('SELECT * FROM crm_leads WHERE owner_id=?').bind(owner).all<any>()).results;
  const allLinks=(await db.prepare('SELECT w.*,l.owner_id AS current_owner FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? OR l.owner_id=?').bind(owner,owner).all<any>()).results;
@@ -163,9 +163,10 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
  for(const link of latestLinks)if(link.owner_id!==owner)blocked.add(link.desktop_id);
  const previous:any=await db.prepare('SELECT payload FROM crm_workbench_snapshots WHERE owner_id=?').bind(owner).first();
  const snapshot=previous?await readJson(previous.payload):{format:'yifun-workbench-v1',clients:[],scenes:[]};
+ const before=JSON.stringify({...snapshot,captured_at:undefined});
  for(const client of clients.filter((c:any)=>!blocked.has(c.id))){const prior=snapshot.clients.find((c:any)=>c.id===client.id);if(prior){const messages=new Map();for(const m of [...(prior.messages||[]),...client.messages])messages.set(m.key||JSON.stringify([m.channel,m.timestamp,m.speaker,m.text]),m);Object.assign(prior,client,{messages:[...messages.values()].slice(-80)});}else snapshot.clients.push(client);}
  snapshot.clients=snapshot.clients.filter((c:any)=>!blocked.has(c.id));snapshot.captured_at=now();
- snapshot.scenes=(input.scenes||[]).slice(0,300).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,12000)}));
- await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner,await storeJson(snapshot,`snapshots/${owner}`,true),now(),owner).run();
+ snapshot.scenes=(input.scenes||[]).slice(0,300).map((s:any)=>({id:clean(s.id,150),name:clean(s.name,200),category:clean(s.category,40),reply:clean(s.reply,2000)}));
+ if(!previous||before!==JSON.stringify({...snapshot,captured_at:undefined}))await db.prepare('INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(owner_id) DO UPDATE SET payload=excluded.payload,updated=excluded.updated,updated_by=excluded.updated_by').bind(owner,await storeJson(snapshot,`snapshots/${owner}`,true),now(),owner).run();
  return {owner_id:owner,updates:updates.filter(u=>allowed.has(u.lead_id)),bindings:bindings.filter(b=>allowed.has(b.lead_id)),blocked:[...blocked],conflicts};
 }
