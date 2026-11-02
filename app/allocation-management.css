@@ -3,3 +3,66 @@
 .allocation-management .am-disclosure-heading{margin:0}.allocation-management .am-disclosure{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;padding:0;border:0;background:transparent;box-shadow:none;color:var(--ink);font:inherit;text-align:left}.allocation-management .am-disclosure:hover{color:var(--blue);background:transparent}.allocation-management .am-disclosure-meta,.allocation-management .am-disclosure-action{display:flex;align-items:center;gap:12px}.allocation-management .am-disclosure-action{font-size:13px;font-weight:500;white-space:nowrap;color:var(--blue);gap:6px}.allocation-management .am-chevron-open{transform:rotate(180deg)}.allocation-management #am-customer-body{padding-top:4px}.allocation-management #am-customer-body[hidden]{display:none}@media(max-width:720px){.allocation-management .am-disclosure{gap:8px}.allocation-management .am-disclosure-meta{gap:10px}.allocation-management .am-disclosure-meta .small{font-size:12px}}
 
 .allocation-management .am-platform-title{display:flex;align-items:baseline;gap:12px;margin:20px 0 12px;color:var(--ink)}.allocation-management .am-platform-title span{font-size:13px;color:var(--muted)}.allocation-management .am-platform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:16px}.allocation-management .am-platform{min-width:0;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--panel,#fff)}.allocation-management .am-platform h3{margin:0 0 10px}.allocation-management .am-platform button{display:block;width:100%;padding:9px 8px;border:0;border-radius:4px;background:none;box-shadow:none;text-align:left;white-space:normal;overflow-wrap:anywhere;color:var(--blue)}.allocation-management .am-platform button[aria-pressed=true]{background:#edf3fb;color:var(--ink)}.allocation-management .am-import-source label{flex:1;min-width:160px}.allocation-management .am-import-source select,.allocation-management .am-import-source input{width:100%}.allocation-management .am-intake-row{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:16px 0;border-top:1px solid var(--line)}.allocation-management .am-intake h2{margin-bottom:16px}.allocation-management .am-intake h3{margin:0 0 6px}.allocation-management .am-intake-row>div{min-width:0}.allocation-management .am-intake-row>button{flex-shrink:0}.allocation-management .am-intake-row details{flex:1;max-width:520px;text-align:right}.allocation-management .am-intake-help{text-align:left;padding:16px;background:#f4f7fb;border-radius:6px}.allocation-management .am-intake-help p{margin:0 0 12px}.allocation-management .am-intake-help a{display:inline-block;margin-right:16px}.allocation-management .am-intake-help button{margin-top:8px}.allocation-management .am-filters select{max-width:100%}@media(max-width:720px){.allocation-management .am-platform-grid{grid-template-columns:1fr}.allocation-management .am-intake-row{align-items:flex-start;flex-wrap:wrap}.allocation-management .am-intake-row details{flex-basis:100%;text-align:left}.allocation-management .am-platform-title{flex-wrap:wrap;gap:6px 12px}.allocation-management .am-filters label{min-width:0;max-width:100%}}
+
+
+/* Keep the allocation workspace compact without changing shared CRM tables. */
+:root .office-app .workspace .allocation-management.management-workspace .page-heading{min-height:0;padding:12px 14px;margin-bottom:8px}
+:root .office-app .workspace .allocation-management.management-workspace .panel{padding:12px;margin-bottom:12px}
+:root .office-app .workspace .allocation-management.management-workspace .section-heading{gap:12px;margin-bottom:8px}
+:root .office-app .workspace .allocation-management.management-workspace h2{margin:0;font-size:15px;line-height:1.4}
+:root .office-app .workspace .allocation-management.management-workspace h3{margin:0 0 6px;font-size:14px;line-height:1.4}
+:root .office-app .workspace .allocation-management.management-workspace p{margin:8px 0;line-height:1.45}
+:root .office-app .workspace .allocation-management.management-workspace .am-tabs{gap:20px;margin-bottom:12px}
+:root .office-app .workspace .allocation-management.management-workspace .am-tabs button{min-height:34px;padding:6px 4px}
+:root .office-app .workspace .allocation-management.management-workspace .am-filters{gap:8px 12px;margin:12px 0}
+:root .office-app .workspace .allocation-management.management-workspace .am-filters label{flex:1 1 120px;min-width:120px;margin:0}
+:root .office-app .workspace .allocation-management.management-workspace .am-filters .am-search{flex:2 1 200px;min-width:200px}
+:root .office-app .workspace .allocation-management.management-workspace .am-filters :is(input,select){width:100%;min-width:0}
+:root .office-app .workspace .allocation-management.management-workspace :is(th,td){padding:6px 8px;font-size:13px;line-height:1.4;vertical-align:middle}
+:root .office-app .workspace .allocation-management.management-workspace :is(td,th) small{margin-top:2px}
+:root .office-app .workspace .allocation-management.management-workspace .am-customer-table :is(th,td):has(>input[type=checkbox]){width:36px;text-align:center}
+:root .office-app .workspace .allocation-management.management-workspace .am-customer-table button.text{min-height:24px}
+:root .office-app .workspace .allocation-management.management-workspace .am-stats :is(th,td){padding:4px 8px;text-align:center}
+:root .office-app .workspace .allocation-management.management-workspace .am-stats th:first-child{width:180px;text-align:left}
+:root .office-app .workspace .allocation-management.management-workspace .am-stats tbody th{position:static;background:transparent;border-bottom:1px solid var(--line);font-weight:500}
+:root .office-app .workspace .allocation-management.management-workspace .am-number{min-height:32px;min-width:40px;padding:4px 8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-media{top:auto;bottom:100%}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;align-items:start}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake h2{grid-column:1/-1;margin:0 0 4px}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:8px 0;align-items:start}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-row h3{margin-bottom:4px}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-row p{margin:0}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-row details{max-width:none}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-row details[open]{grid-column:1/-1;text-align:left}
+:root .office-app .workspace .allocation-management.management-workspace details summary{padding:6px 0}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-help{padding:12px}
+:root .office-app .workspace .allocation-management.management-workspace .am-intake-help p{margin:0 0 8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-manual{padding-top:12px;margin-top:12px}
+:root .office-app .workspace .allocation-management.management-workspace .am-recipients{gap:8px 16px;margin:8px 0 12px}
+:root .office-app .workspace .allocation-management.management-workspace .am-recipients label{min-height:32px}
+:root .office-app .workspace .allocation-management.management-workspace .am-preview{margin-top:12px;padding:12px}
+:root .office-app .workspace .allocation-management.management-workspace .am-mapping{gap:8px 12px;margin-top:8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-mapping label{margin-bottom:0}
+:root .office-app .workspace .allocation-management.management-workspace .am-platform-title{gap:8px;margin:12px 0 8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-platform-grid{gap:8px;margin-bottom:8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-platform{padding:8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-platform h3{margin-bottom:4px}
+:root .office-app .workspace .allocation-management.management-workspace .am-platform button{padding:4px 8px}
+:root .office-app .workspace .allocation-management.management-workspace .am-rules :is(ol,ul){margin:8px 0;padding-left:20px}
+:root .office-app .workspace .allocation-management.management-workspace .am-rules li{margin:4px 0;line-height:1.45}
+@media(max-width:900px){:root .office-app .workspace .allocation-management.management-workspace .am-intake{grid-template-columns:1fr;gap:0}}
+@media(max-width:720px){
+ :root .office-app .workspace .allocation-management.management-workspace .page-heading{padding:12px;gap:8px}
+ :root .office-app .workspace .allocation-management.management-workspace .am-heading-actions{gap:8px}
+ :root .office-app .workspace .allocation-management.management-workspace .am-filters{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ :root .office-app .workspace .allocation-management.management-workspace .am-filters label{min-width:0}
+ :root .office-app .workspace .allocation-management.management-workspace .am-filters .am-search{grid-column:1/-1;min-width:0}
+ :root .office-app .workspace .allocation-management.management-workspace .am-stats th:first-child{width:34%}
+ :root .office-app .workspace .allocation-management.management-workspace .am-stats :is(th,td){padding:4px}
+ :root .office-app .workspace .allocation-management.management-workspace .am-number{min-height:36px;min-width:32px;padding:4px}
+ :root .office-app .workspace .allocation-management.management-workspace .am-mapping{grid-template-columns:1fr}
+ :root .office-app .workspace .allocation-management.management-workspace .am-intake-row{grid-template-columns:1fr}
+ :root .office-app .workspace .allocation-management.management-workspace .am-intake-row>button{justify-self:start}
+ :root .office-app .workspace .allocation-management.management-workspace .am-intake-row details{text-align:left}
+}
+@media(max-width:360px){:root .office-app .workspace .allocation-management.management-workspace .am-filters{grid-template-columns:1fr}}
