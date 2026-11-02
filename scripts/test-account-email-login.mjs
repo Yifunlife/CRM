@@ -58,5 +58,19 @@ try{
  sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created,email) VALUES(?,?,?,?,?,?,?)').run('employee','yw123','employee','sales',await passwordHash('YW123'),'2026-10-31','employee@example.test');
  await request('login',{username:'employee@example.test',password:'YW123'});
  assert.equal(sql.prepare("SELECT must_change_password FROM crm_users WHERE id='employee'").get().must_change_password,1);
+ // Renaming a login account must preserve both aliases and its existing password.
+ for(const role of ['admin','ceo','management','sales','followup','operations']){
+  const id='renamed-'+role,old='old-'+role,newName='updated-'+role,email='updated-'+role+'@example.test';
+  sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,old,id,role,await passwordHash(password),'2026-11-02');
+  const beforePassword=sql.prepare('SELECT password FROM crm_users WHERE id=?').get(id).password;
+  await request('users',{id,name:id,username:newName,email},'admin',200,'PATCH');
+  for(const identifier of [newName,newName.toUpperCase(),email,email.toUpperCase()])await request('login',{username:identifier,password});
+  await request('login',{username:old,password},'admin',401);
+  assert.equal(sql.prepare('SELECT password FROM crm_users WHERE id=?').get(id).password,beforePassword);
+ }
+ const pollyId='fixture-polly';
+ sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(pollyId,'caishunxin','Polly fixture','sales',await passwordHash(password),'2026-11-02');
+ await request('users',{id:pollyId,name:'Polly fixture',username:'pollychai',email:'polly@example.test'},'admin',200,'PATCH');
+ await request('login',{username:'pollychai',password});await request('login',{username:'polly@example.test',password});
  console.log('PASS: username/email login, case and whitespace normalization, optional/unique email, own-profile isolation across all roles, administrator editing, inactive accounts, shared alias rate limit, unchanged passwords/roles/scopes/customer ownership.');
 }finally{rmSync(tmp,{recursive:true,force:true});}
