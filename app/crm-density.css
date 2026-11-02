@@ -257,3 +257,38 @@
  .office-app .workspace .management-workspace .mw-focus { padding:10px var(--crm-space-section); }
  .office-app .workspace .management-workspace .mw-focus > strong { font-size:24px; }
 }
+
+/* Sales pages retain the same density through detail forms and order workflows. */
+.office-app.sales-workspace .workspace :is(.role-toolbar,.fb-toolbar,.ft-toolbar,.contract-actions) { gap:var(--crm-space-control); }
+.office-app.sales-workspace .workspace :is(.personal-form-grid,.role-form-grid,.followup-form-grid,.fb-meta,.ft-date-fields) { gap:var(--crm-space-control) var(--crm-space-section); }
+.office-app.sales-workspace .workspace :is(.personal-form-grid,.role-form-grid,.followup-form-grid,.fb-meta,.ft-date-fields) > label { margin-bottom:0; }
+.office-app.sales-workspace .workspace :is(.fb-editor,.ft-editor,.followup-task-form) { padding:var(--crm-space-section); }
+.office-app.sales-workspace .workspace .fb-table :is(th,td) { padding:var(--crm-space-control) 10px; }
+.office-app.sales-workspace .workspace .fb-table .fb-cell { gap:4px; }
+.office-app.sales-workspace .workspace .ft-page > :is(.panel,.fb-editor) { margin-top:var(--crm-space-section); }
+.office-app.sales-workspace .workspace :is(.ft-plan-head,.ft-plan-row) { gap:var(--crm-space-control) var(--crm-space-section); padding:var(--crm-space-control) 10px; }
+.office-app.sales-workspace .workspace .ft-save { gap:var(--crm-space-section); margin-top:var(--crm-space-section); }
+.office-app.sales-workspace .workspace .ft-caption { margin:var(--crm-space-control) 0 var(--crm-space-section); }
+.office-app.sales-workspace .workspace .ft-reminder { padding-block:var(--crm-space-control); }
+.office-app.sales-workspace .workspace .ft-quick { gap:var(--crm-space-control); margin-bottom:var(--crm-space-section); }
+.office-app.sales-workspace .workspace .ft-quick-form { gap:var(--crm-space-control) var(--crm-space-section); padding-block:var(--crm-space-control) var(--crm-space-section); }
+.office-app.sales-workspace .workspace .fb-files { gap:var(--crm-space-control); margin-top:var(--crm-space-section); padding-top:var(--crm-space-control); }
+.office-app.sales-workspace .workspace :is(.fb-original,.fb-history) { margin-top:var(--crm-space-section); padding-top:var(--crm-space-control); }
+.office-app.sales-workspace .workspace .followup-task { padding-block:10px; }
+.office-app.sales-workspace .workspace .contract-templates .contract-selector { gap:var(--crm-space-control) var(--crm-space-section); margin-bottom:var(--crm-space-section); }
+.office-app.sales-workspace .workspace .contract-templates .panel > p { margin-bottom:var(--crm-space-control); }
+.office-app.sales-workspace .workspace .contract-templates .contract-line { padding-block:var(--crm-space-control); }
+.office-app.sales-workspace .workspace .contract-templates .contract-fees { gap:var(--crm-space-tight) var(--crm-space-section); }
+.office-app.sales-workspace .workspace .contract-templates .contract-field { gap:4px; }
+.office-app.sales-workspace .workspace .contract-templates .contract-field > label { margin-bottom:0; }
+@media(min-width:1280px) {
+ .office-app.sales-workspace .workspace .personal-form-grid,
+ .office-app.sales-workspace .workspace .contract-templates .role-form-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:720px) {
+ .office-app.sales-workspace .workspace :is(.personal-form-grid,.role-form-grid,.followup-form-grid,.fb-meta,.ft-date-fields) { grid-template-columns:minmax(0,1fr); }
+ .office-app.sales-workspace .workspace .ft-plan-row { padding-inline:0; }
+}
+@media(pointer:coarse) {
+ .office-app.sales-workspace .workspace .contract-fees label { min-height:44px; }
+}
