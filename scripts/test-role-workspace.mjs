@@ -13,7 +13,7 @@ const {deliveryStage,DELIVERY_STAGES}=await import(role);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 function stmt(sql,args=[]){return {bind:(...v)=>stmt(sql,v),async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){return {meta:sqlite.prepare(sql).run(...args)}}};}
 const db={prepare:sql=>stmt(sql),async batch(ss){sqlite.exec('BEGIN');try{const out=[];for(const s of ss)out.push(await s.run());sqlite.exec('COMMIT');return out;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
-const admin={id:'admin',role:'admin'},sales={id:'sales',role:'sales',permissions:{customers_all:true}},other={id:'other',role:'sales'},follow={id:'follow',role:'followup'},ceo={id:'ceo',role:'ceo'};
+const admin={id:'admin',role:'admin'},sales={id:'sales',role:'sales',trade_scopes:['domestic','foreign'],permissions:{customers_all:true}},other={id:'other',role:'sales',trade_scopes:['domestic','foreign']},follow={id:'follow',role:'followup'},ceo={id:'b9bde8d1-8f87-4981-956b-128423cd6651',role:'ceo'};
 for(const u of [admin,sales,other,follow,ceo])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-10-01');
 const original={原需求:'必须保留',_sales_progress:{stage:'design'},附件:'原位置'};
 for(const [id,owner,grade] of [['lead','sales','A'],['foreign','other','B']])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,grade,detail,fingerprint,created) VALUES(?,?,'Meta',?,?,?,?,?)").run(id,id,owner,grade,JSON.stringify(original),id,'2026-10-01');
