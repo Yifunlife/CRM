@@ -55,6 +55,7 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
  }
  function start(){stopped=false;void tick();timer=setInterval(tick,30000);}
  function stop(){stopped=true;clearInterval(timer);}
- return {tick,start,stop,error:()=>lastError};
+ async function stopAndWait(){stop();while(busy)await new Promise(resolve=>setTimeout(resolve,50));}
+ return {tick,start,stop,stopAndWait,error:()=>lastError};
 }
 module.exports={createAccountSync};

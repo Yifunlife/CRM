@@ -3708,11 +3708,32 @@ function startCrmAccountSync(){let snapshot,byClient;
     }
     function patchRenderer2(source) {
       const prior = "const grades=['VIP','A','B','C','D','Yifun Staff'];", next = "const grades=['VIP','A','B','C','D','Yifun Staff','\u672A\u5206\u7C7B'];";
-      if (source.includes(next)) return source;
-      if (!source.includes(prior) || !source.includes("list.filter(c=>c.grade===grade)")) throw Error("\u5BA2\u6237\u5206\u7EC4\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
-      return source.replace(prior, next).replace("list.filter(c=>c.grade===grade)", "list.filter(c=>(c.grade||'\u672A\u5206\u7C7B')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])", "new Set(['VIP','A','B','C','whatsapp-groups','\u672A\u5206\u7C7B'])");
+      if (!source.includes(next)) {
+        if (!source.includes(prior) || !source.includes("list.filter(c=>c.grade===grade)")) throw Error("\u5BA2\u6237\u5206\u7EC4\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
+        source = source.replace(prior, next).replace("list.filter(c=>c.grade===grade)", "list.filter(c=>(c.grade||'\u672A\u5206\u7C7B')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])", "new Set(['VIP','A','B','C','whatsapp-groups','\u672A\u5206\u7C7B'])");
+      }
+      return source.includes("crm-connection-renderer.js") ? source : source + "\n(()=>{const script=document.createElement('script');script.src='../crm-connection-renderer.js';document.head.appendChild(script)})();\n";
     }
-    module2.exports = { patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2 };
+    function patchConnectionPreload2(source) {
+      return source.includes("exposeInMainWorld('crmConnection'") ? source : source + "\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";
+    }
+    function patchConnectionMain2(source) {
+      const create = source.indexOf("ipcMain.handle('clients:create'");
+      if (create >= 0) {
+        const end = source.indexOf("\n", create), part = source.slice(create, end < 0 ? source.length : end);
+        source = source.replace(part, part.replace("owner:'Winnie'", "owner:crmBridgeOwner()"));
+      }
+      source = source.replace("owner:'Winnie',lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'", "owner:crmBridgeOwner(),lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'");
+      source = source.replace("require('./crm-connection-settings')", "require('./crm-connection-settings.cjs')");
+      if (source.includes("require('./crm-connection-settings.cjs')")) return source;
+      return source + `
+const crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
+ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
+ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));
+`;
+    }
+    module2.exports = { patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2, patchConnectionPreload: patchConnectionPreload2, patchConnectionMain: patchConnectionMain2 };
   }
 });
 
@@ -3724,7 +3745,7 @@ var os = require("node:os");
 var cp = require("node:child_process");
 var crypto = require("node:crypto");
 var asar = require_asar();
-var { patchMain, patchManagement, patchBridge, patchRenderer } = require_patch_app();
+var { patchMain, patchManagement, patchBridge, patchRenderer, patchConnectionMain, patchConnectionPreload } = require_patch_app();
 var run = (bin, args) => cp.execFileSync(bin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 var dialog = (script) => run("/usr/bin/osascript", ["-e", script]).trim();
 var digest = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
@@ -3753,26 +3774,27 @@ async function prepare(app, output) {
   const folder = path.join(output, "source"), candidate = path.join(output, "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app");
   asar.extractAll(archive, folder);
   run("/usr/bin/ditto", [app, candidate]);
-  for (const [name, patch] of [["main.js", patchMain], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
+  for (const [name, patch] of [["main.js", (source) => patchConnectionMain(patchMain(source))], ["preload.js", patchConnectionPreload], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
     const file = path.join(folder, name);
     fs.writeFileSync(file, patch(fs.readFileSync(file, "utf8")));
   }
   fs.copyFileSync(path.join(__dirname, "crm-account-sync.cjs"), path.join(folder, "crm-account-sync.js"));
   fs.copyFileSync(path.join(__dirname, "crm-history-sync.cjs"), path.join(folder, "crm-history-sync.cjs"));
-  for (const name of ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"]) {
+  for (const [file, name] of [["crm-connection-settings.cjs", "crm-connection-settings.cjs"], ["crm-connection-renderer.js", "crm-connection-renderer.js"]]) fs.copyFileSync(path.join(__dirname, file), path.join(folder, name));
+  for (const name of ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"]) {
     const script = fs.readFileSync(path.join(folder, name), "utf8");
     new (require("node:vm")).Script(script, { filename: name });
   }
   const files = entries(before.tree), unpacked = files.filter((f) => f.unpacked).map((f) => path.join(folder, f.name));
   await asar.createPackageWithOptions(folder, candidate + "/Contents/Resources/app.asar", unpacked.length ? { unpack: unpacked.length === 1 ? unpacked[0] : "{" + unpacked.join(",") + "}" } : {});
-  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"];
+  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"];
   for (const file of files) {
     if (file.link) continue;
     const original = asar.extractFile(archive, file.name), updated = asar.extractFile(next, file.name);
     if (!allowed.includes(file.name) && digest(original) !== digest(updated)) throw Error("\u65E0\u5173\u5E94\u7528\u6587\u4EF6\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u5B89\u88C5\uFF1A" + file.name);
   }
   for (const file of entries(after.tree)) {
-    if (!files.some((f) => f.name === file.name) && !["crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
+    if (!files.some((f) => f.name === file.name) && !["crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
   }
   run("/usr/libexec/PlistBuddy", ["-c", "Set :ElectronAsarIntegrity:Resources/app.asar:hash " + after.hash, candidate + "/Contents/Info.plist"]);
   const ent = run("/usr/bin/codesign", ["-d", "--entitlements", ":-", app]);
@@ -3788,6 +3810,34 @@ async function install() {
   if (test >= 0) {
     const output2 = fs.mkdtempSync(path.join(os.tmpdir(), "yifun-crm-verify-"));
     console.log(JSON.stringify(await prepare(process.argv[test + 1], output2)));
+    return;
+  }
+  if (process.argv.includes("--add-connection-ui")) {
+    const app2 = "/Applications/\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app";
+    closed(app2);
+    const dir2 = path.join(os.homedir(), "Library", "Application Support", "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0"), settings2 = fs.existsSync(path.join(dir2, "settings.json")) ? JSON.parse(fs.readFileSync(path.join(dir2, "settings.json"), "utf8")) : {}, workspace2 = settings2.workspace || path.join(os.homedir(), "Documents", "Yifun Sales Workbench V1");
+    const backup2 = fs.mkdtempSync(path.join(os.homedir(), "Documents", "CRM\u8FDE\u63A5\u529F\u80FD\u5347\u7EA7\u5907\u4EFD-")), output2 = fs.mkdtempSync(path.join(path.dirname(app2), ".crm-connector-update-")), hashes = {};
+    for (const file of [path.join(dir2, "crm-bridge.json"), path.join(dir2, "settings.json"), ...["crm.json", "crm-account-sync.json", "drafts.json"].map((name) => path.join(workspace2, ".workbench", name))]) if (fs.existsSync(file)) {
+      hashes[file] = digest(fs.readFileSync(file));
+      fs.copyFileSync(file, path.join(backup2, path.basename(file)));
+      fs.chmodSync(path.join(backup2, path.basename(file)), 384);
+    }
+    const result2 = await prepare(app2, output2);
+    closed(app2);
+    for (const [file, hash] of Object.entries(hashes)) if (digest(fs.readFileSync(file)) !== hash) throw Error("\u5347\u7EA7\u671F\u95F4\u8D44\u6599\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u8986\u76D6\u5E94\u7528");
+    const previous = path.join(backup2, "previous-installed.app");
+    fs.renameSync(app2, previous);
+    try {
+      fs.renameSync(result2.candidate, app2);
+      run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app2]);
+    } catch (error) {
+      if (fs.existsSync(app2)) fs.renameSync(app2, path.join(output2, "failed.app"));
+      fs.renameSync(previous, app2);
+      throw error;
+    }
+    fs.writeFileSync(path.join(backup2, "verification.json"), JSON.stringify({ ...result2, businessFilesUnchanged: true }, null, 2), { mode: 384 });
+    run("/usr/bin/open", [app2]);
+    dialog('display dialog "\u8FDE\u63A5\u529F\u80FD\u5DF2\u5347\u7EA7\u3002\u8BF7\u6253\u5F00\u5DE5\u4F5C\u53F0\u53F3\u4E0A\u89D2\u7684CRM\u8FDE\u63A5\uFF0C\u586B\u5199CRM\u5730\u5740\u548C\u672C\u4EBA\u8FDE\u63A5\u7801\u3002\u539F\u8D44\u6599\u548C\u539F\u8FDE\u63A5\u914D\u7F6E\u4FDD\u7559\u3002" buttons {"\u5B8C\u6210"} default button "\u5B8C\u6210"');
     return;
   }
   const config = JSON.parse(fs.readFileSync(path.join(__dirname, "account.json"), "utf8"));
@@ -3828,7 +3878,7 @@ async function install() {
     fs.renameSync(result.candidate, app);
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, pullOnly: old.owner_id === config.owner_id && old.pullOnly === true, uploadNewLeads: old.owner_id === config.owner_id && old.uploadNewLeads === true, workspace, localOwner }, null, 2), { mode: 384 });
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: false, pullOnly: true, uploadNewLeads: true, workspace, localOwner }, null, 2), { mode: 384 });
     fs.chmodSync(configFile, 384);
     fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, workspace }, null, 2), { mode: 384 });
   } catch (e) {

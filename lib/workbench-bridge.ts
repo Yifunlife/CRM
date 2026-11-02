@@ -62,8 +62,9 @@ export async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string
 }
 export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const bearer=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';
- const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
+ const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions,u.username,u.name FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
  if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
+ if(body.connect===true)return {owner_id:device.owner_id,username:device.username,name:device.name,protocol:2,can_import:device.role!=='sales'||can(device,'customers_edit')};
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
  if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
  const timestamp=Date.now();
