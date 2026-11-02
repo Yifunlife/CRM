@@ -10,7 +10,7 @@ export const MODULES={
  contracts:{name:'合同确认建单',entry:'lib/confirmation/contract.ts',tests:['workflow-confirmations']},
  documents:{name:'合同档案与附件',entry:'lib/confirmation/documents.ts',tests:['workflow-confirmations','order-followup']},
  execution:{name:'订单执行',entry:'lib/order-execution-server.ts',tests:['order-execution-summary','order-followup']},
- orders:{name:'订单维护',entry:'lib/order-followup-server.ts',tests:['order-followup','followup-role','follower-changes','order-import','followup-phase1','followup-schedule']},
+ orders:{name:'订单维护',entry:'lib/order-followup-server.ts',tests:['order-followup','followup-role','follower-changes','order-import','followup-phase1','followup-schedule','followup-dual-tracking']},
  release:{name:'付款与特殊放行',entry:'lib/confirmation/release.ts',tests:['workflow-confirmations']},
  finance:{name:'成交与实际收款',entry:'lib/api/finance.ts',tests:['workflow','sales-suite']},
  notifications:{name:'站内通知',entry:'lib/api/notifications.ts',tests:['followup-phase1-scheduled','workflow-confirmations']},
