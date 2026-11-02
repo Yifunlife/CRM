@@ -207,3 +207,53 @@
  .office-app .workspace .accounts-page .accounts-filters select { width:100%; }
  .office-app .workspace .accounts-page .accounts-filters>span { grid-column:1/-1; width:auto; line-height:1.4; }
 }
+
+/* Keep lazy-loaded workspaces on the shared compact spacing scale. */
+.office-app .workspace .management-workspace { max-width:none; margin:0; }
+.office-app .workspace .management-workspace > .page-heading { margin-bottom:var(--crm-space-section); gap:var(--crm-space-section); }
+.office-app .workspace .management-workspace h1 { font-size:22px; margin-bottom:0; }
+.office-app .workspace .management-workspace .panel { padding:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .management-workspace .panel h2 { font-size:15px; }
+.office-app .workspace .management-workspace .section-heading { margin-bottom:var(--crm-space-control); }
+.office-app .workspace .section-heading h2,
+.office-app .workspace .management-workspace .section-heading h2 { margin:0; }
+.office-app .workspace .management-workspace :is(th,td) { padding:var(--crm-space-control) 10px; }
+.office-app .workspace .management-workspace td > small { margin-top:2px; }
+.office-app .workspace .management-workspace .mw-filterbar { gap:var(--crm-space-control); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .management-workspace .mw-focus-grid { gap:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .management-workspace .mw-focus {
+ display:grid;
+ grid-template-columns:minmax(0,1fr) auto;
+ gap:var(--crm-space-tight) var(--crm-space-section);
+ align-content:start;
+ align-items:center;
+ padding:var(--crm-space-section) var(--crm-space-page);
+}
+.office-app .workspace .management-workspace .mw-focus > span { grid-column:1; grid-row:1; }
+.office-app .workspace .management-workspace .mw-focus > strong { grid-column:2; grid-row:1; margin:0; font-size:26px; line-height:1.2; text-align:right; }
+.office-app .workspace .management-workspace .mw-focus > :is(p,small,button) { grid-column:1/-1; margin:0; }
+.office-app .workspace .management-workspace .mw-focus > button { justify-self:start; }
+.office-app .workspace .management-workspace .mw-split { gap:var(--crm-space-section); }
+.office-app .workspace .management-workspace .mw-allocation-summary > p { margin:0 0 var(--crm-space-control); }
+.office-app .workspace .management-workspace .mw-summary-list > div { padding-block:var(--crm-space-control); }
+.office-app .workspace .management-workspace .mw-summary-list dt { margin-bottom:4px; }
+.office-app .workspace .management-workspace .mw-actions { margin-block:var(--crm-space-section); }
+.office-app .workspace .sales-overview :is(.so-three,.so-four,.so-split,.so-people) { gap:var(--crm-space-section); margin-bottom:var(--crm-space-section); }
+.office-app .workspace .sales-overview :is(.so-metric,.so-person) { padding:var(--crm-space-section); }
+.office-app .workspace .sales-overview .so-metric > strong { margin-block:var(--crm-space-tight); }
+.office-app .workspace .sales-overview .so-metric > small { padding-top:var(--crm-space-control); }
+.office-app .workspace .sales-overview .so-goal { margin-block:var(--crm-space-section); }
+.office-app .workspace .sales-overview .so-reminder { padding-block:10px; }
+.office-app .workspace .personal-work-stack { gap:var(--crm-space-section); }
+.office-app .workspace .personal-work-stack > :is(.panel,.page-heading) { margin-bottom:0; }
+.office-app .workspace .personal-work { gap:var(--crm-space-control); }
+.office-app .workspace .personal-work :is(form,fieldset,.personal-form-grid) { gap:var(--crm-space-control) var(--crm-space-section); }
+.office-app .workspace .personal-form-grid > label { margin-bottom:0; }
+.office-app .workspace .personal-metrics { gap:var(--crm-space-control); }
+.office-app .workspace .personal-metrics > div { padding:10px var(--crm-space-section); }
+@media(max-width:720px) {
+ .office-app .workspace .management-workspace h1 { font-size:20px; }
+ .office-app .workspace .management-workspace .mw-focus-grid { grid-template-columns:1fr; gap:var(--crm-space-control); }
+ .office-app .workspace .management-workspace .mw-focus { padding:10px var(--crm-space-section); }
+ .office-app .workspace .management-workspace .mw-focus > strong { font-size:24px; }
+}
