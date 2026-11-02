@@ -1,6 +1,6 @@
 import {assignmentCategory} from './assignment-categories';
 export const assignmentFields=`a.created AS assigned_at,a.policy AS assignment_policy,
- CASE WHEN a.policy='' AND l.original_owner=(SELECT name FROM crm_users WHERE id=a.owner_id)
+ CASE WHEN a.policy='' AND trim(l.original_owner)<>''
  AND json_valid(l.detail) AND json_type(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.分配同步来源')='object'
  AND a.id=(SELECT first.id FROM crm_assignments first WHERE first.lead_id=l.id ORDER BY first.created,first.rowid LIMIT 1)
  THEN 1 ELSE 0 END AS legacy_sync`;

@@ -45,6 +45,7 @@ try{
  for(const policy of ['historical-sheet-v1','historical-alignment','historical-sync'])assert.equal(assignmentCategory({cohort:'new',assigned_at:'2026-11-02',assignment_policy:policy}),'historical','historical imports after cutoff stay historical');
  assert.equal(assignmentCategory({cohort:'historical',assigned_at:'2026-10-30',legacy_sync:1}),'historical');
  assert.equal(assignmentCategory({cohort:'unknown',assigned_at:'2026-10-30',assignment_policy:'equal-v1'}),'new','verified allocation does not depend on date classification');
+ sql.prepare("UPDATE crm_users SET name='A Renamed' WHERE id='a'").run();
  const before=sql.prepare('SELECT total_changes() AS n').get().n;
  const classified=await assignmentReminders(db,a);
  assert.deepEqual(Object.fromEntries(classified.map(l=>[l.id,l.assignment_category])),{new:'new',sheet:'historical',legacy:'historical',unknown:'unverified'});
