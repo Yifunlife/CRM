@@ -1,5 +1,6 @@
+import {boardLeadIds} from './market-access';
 import {customerEntryMonitor} from './customer-entry-monitor';
-import {can,now} from './crm';
+import {canViewAllMarkets,can,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {assignmentReminders} from './assignment-reminders';
 export type MonitorItem={id:string;stage:string;level:'异常'|'待确认'|'待处理'|'到期提醒'|'历史对齐';title:string;evidence:string;suggestion:string;owner_id:string;owner_name:string;lead_id?:string;project_id?:string;order_id?:string;page:string;count:number};
@@ -24,9 +25,18 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
   db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first<any>(),
   customerEntryMonitor(db,u)
  ]);
+ const visibleIds=await boardLeadIds(db,u);
+ if(!canViewAllMarkets(u)){
+ const ownerIds=new Set((await list(db,'SELECT id,owner_id FROM crm_leads')).filter(l=>visibleIds.has(l.id)).map(l=>l.owner_id));
+ for(const rows of [projects,quotes,orders,salesNotices])for(let i=rows.length-1;i>=0;i--)if(!visibleIds.has(rows[i].lead_id))rows.splice(i,1);
+ const orderIds=new Set(orders.map(o=>o.id)),projectIds=new Set(projects.map(p=>p.project_id));
+ for(const rows of [requests,orderNotices])for(let i=rows.length-1;i>=0;i--)if(!orderIds.has(rows[i].order_id))rows.splice(i,1);
+ for(let i=confirmations.length-1;i>=0;i--)if(!projectIds.has(confirmations[i].project_id))confirmations.splice(i,1);
+ for(const rows of [people,devices])for(let i=rows.length-1;i>=0;i--)if(!ownerIds.has(rows[i].owner_id||rows[i].id))rows.splice(i,1);
+ }
  const items:MonitorItem[]=[];
  const add=(v:Omit<MonitorItem,'count'> & {count?:number})=>items.push({...v,count:v.count||1});
- const assigned=await Promise.all(people.map(async p=>({p,rows:(await assignmentReminders(db,{...u,id:p.id})).filter(l=>l.assignment_category==='new')})));
+ const assigned=await Promise.all(people.map(async p=>({p,rows:(await assignmentReminders(db,{...u,id:p.id})).filter(l=>l.assignment_category==='new'&&visibleIds.has(l.id))})));
  for(const {p,rows} of assigned)if(rows.length)add({id:'first:'+p.id,stage:'客户',level:'待处理',title:'新增客资待首次联系',evidence:`${rows.length} 条新增分配客资尚无符合规则的首次联系记录。`,suggestion:'打开客户看板核对，并记录真实联系结果。',owner_id:p.id,owner_name:p.name,page:'客户看板',count:rows.length,lead_id:rows[0].id});
  for(const p of projects)if(!['won','lost','paused'].includes(p.stage)&&!p.next_action?.trim())add({id:'next:'+p.project_id,stage:'项目',level:'待处理',title:p.name+'：缺少下一步计划',evidence:'项目仍在推进，未填写下一步行动。',suggestion:'与负责业务员确认当前进度和下一步安排。',owner_id:p.owner_id,owner_name:p.owner_name||'待确认',lead_id:p.lead_id,project_id:p.project_id,page:'客户与项目'});
  for(const q of quotes){

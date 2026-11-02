@@ -3,20 +3,26 @@ import {can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {orderReminders} from './order-followup';
 import {chinaDay} from './followup-phase1';
+import {followupOrder} from './order-followup-server';
 
 export async function refreshFollowupNotifications(db:D1Database,at=now(),orderId=''){
  const users=(await db.prepare('SELECT id,role,permissions FROM crm_users WHERE active=1').all<any>()).results;
  const active=new Set(users.map(u=>u.id)),leaders=users.filter(u=>can(u,'followup_all')).map(u=>u.id);
  const orders=(await db.prepare('SELECT * FROM crm_followup_orders WHERE archived=0'+(orderId?' AND id=?':'')).bind(...(orderId?[orderId]:[])).all<any>()).results;
  const tasks=(await db.prepare("SELECT t.* FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id WHERE o.archived=0 AND t.status='待处理'"+(orderId?' AND o.id=?':'')).bind(...(orderId?[orderId]:[])).all<any>()).results;
- // Operations retire/update existing due notices, but only the daily scan creates them.
+ // Operations update notices; calendar due notices are created by the daily scan.
  const existing=new Set(orderId?(await db.prepare("SELECT dedupe_key FROM crm_followup_notifications WHERE order_id=? AND resolved_at=''").bind(orderId).all<any>()).results.map(n=>n.dedupe_key):[]);
  const today=chinaDay(at),notices:any[]=[];
- const add=(o:any,key:string,title:string,content:string,recipients:string[],due=false)=>{for(const recipient of new Set(recipients.filter(r=>active.has(r)&&(users.find(u=>u.id===r)?.role!=='followup'||o.logistics_id===r)))){const noticeKey=o.id+':'+key+':'+recipient;if(orderId&&due&&!existing.has(noticeKey))continue;notices.push({key:noticeKey,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});}};
+ const access=new Map<string,Set<string>>();
+ const add=(o:any,key:string,title:string,content:string,recipients:string[],due=false)=>{for(const recipient of new Set(recipients.filter(r=>active.has(r)&&access.get(o.id)?.has(r)))){const noticeKey=o.id+':'+key+':'+recipient;if(orderId&&due&&!existing.has(noticeKey))continue;notices.push({key:noticeKey,order_id:o.id,recipient,title,content:o.project+'｜'+o.order_number+'\n'+content});}};
  for(const raw of orders){
   const o={...raw,details:JSON.parse(raw.details),steps:JSON.parse(raw.steps)};
+  const eligible=new Set<string>(),candidates=new Set<string>([o.logistics_id,o.commercial_id,o.details.delegate_id,...leaders,...tasks.filter(t=>t.order_id===o.id).map(t=>t.owner_id),...Object.values(o.details.business_process||{}).map((n:any)=>n.owner_id)].filter(Boolean));
+  for(const recipient of candidates){if(!active.has(recipient))continue;try{await followupOrder(db,{id:recipient},o.id);eligible.add(recipient);}catch(e){if(!(e instanceof AllocationError)||![403,404].includes(e.status))throw e;}}
+  access.set(o.id,eligible);
   // Calendar reminders are independent of work-week and response-time policies.
-  for(const r of orderReminders(o,[],today))add(o,r.key+':'+(o.details.dates?.[r.key]?.date||r.due),r.title,r.title+'｜'+r.due,[o.logistics_id,...(r.overdue?leaders:[])],true);
+  for(const r of orderReminders(o,[],today)){const node=r.page?o.details.business_process?.[r.page]:null;add(o,r.key+':'+(o.details.dates?.[r.key]?.date||r.due)+(r.page&&r.overdue?':overdue':''),r.title,r.title+'｜'+r.due+(node?.problem?'\n异常：'+node.problem+'\n预计解决：'+node.expected:''),[r.owner_id||o.logistics_id,...(r.overdue?leaders:[])],!r.key.startsWith('process-problem-')&&!r.key.startsWith('customer-sync-'));}
+  for(const [page,node] of Object.entries(o.details.business_process||{}) as [string,any][])if(node.customer_followup?.money_related&&!node.customer_followup.commercial_notice)add(o,'customer-money-'+page+':'+(node.customer_pending_at||node.at),page+' · 金额事项先请商务确认','涉及金额、费用或付款，请商务确认处理口径，跟单记录确认依据。',[o.commercial_id]);
   for(const t of tasks.filter(t=>t.order_id===o.id)){
    const meta=JSON.parse(t.meta||'{}'),content=t.title+'\n当前：'+t.impact+'\n下一步：'+t.next_action+'\n期限：'+t.due_at;
    const overdue=!!t.due_at&&Date.parse(t.due_at)<Date.parse(at),follow=!!t.next_followup&&Date.parse(t.next_followup)<=Date.parse(at);

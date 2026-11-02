@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {customerAllocationSummary}=await import(moduleURL('lib/customer-allocation-summary.ts'));
+const {salesWorkflowEndpoint}=await import(moduleURL('lib/sales-workflow-server.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
+for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),admin={id:'admin',role:'admin'},a={id:'a',role:'sales'};
+for(const [id,name,role,active] of [['admin','管理员','admin',1],['a','A','sales',1],['b','B','sales',1],['zero','A','sales',1],['inactive','停用业务员','sales',0],['ceo','老板','ceo',1],['manager','主管','management',1],['follow','跟单','followup',1]])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,?,?)').run(id,id,name,role,'unused',active,'2026-01-01');
+function lead(id,owner='a',extra={}){sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,original_owner,detail,fingerprint,created,review,cohort) VALUES(?,?,'Meta',?,?,?,?,?,?,?)").run(id,id,owner,extra.original_owner||'',JSON.stringify(extra.detail||{}),id,'2026-01-01',extra.review||0,extra.cohort||'new');}
+function assign(id,leadId,owner,date,policy='equal-global-v1'){sql.prepare('INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES(?,?,?,?,?,?)').run(id,leadId,'admin',owner,date,policy);}
+lead('boundary');assign('boundary','boundary','a','2026-11-01T16:00:00Z');assign('duplicate','boundary','a','2026-11-02T02:00:00Z');
+lead('past','a',{cohort:'historical'});assign('past','past','a','2026-11-01T15:59:59Z');
+lead('transfer','b');assign('old-owner','transfer','a','2026-11-01T08:00:00Z');assign('new-owner','transfer','b','2026-11-02T00:00:00Z');
+lead('return','a',{original_owner:'A',detail:{分配同步来源:{sheet:'历史表'}}});assign('first-sync','return','a','2026-11-01T01:00:00Z','');assign('return','return','a','2026-11-02T01:00:00Z','');
+lead('legacy','a',{original_owner:'A',detail:{分配同步来源:{sheet:'历史表'}}});assign('legacy','legacy','a','2026-11-02T01:00:00Z','');
+for(const policy of ['historical-sheet-v1','historical-alignment','historical-sync','test-simulation']){lead(policy);assign(policy,policy,'a','2026-11-02T00:00:00Z',policy);}
+lead('review','a',{review:1});assign('review','review','a','2026-11-02T00:00:00Z');
+lead('future');assign('future','future','a','2026-11-02T16:00:00Z');
+lead('bad-date');assign('bad-date','bad-date','a','unknown');
+lead('inactive','inactive');assign('inactive','inactive','inactive','2026-11-02T00:00:00Z');
+lead('prior-only');assign('prior-only','prior-only','a','2026-10-31T15:59:59Z');
+lead('month-start','b');assign('month-start','month-start','b','2026-10-31T16:00:00Z');
+assign('prior-repeat','boundary','a','2026-10-31T15:59:59Z');
+const snapshot=()=>JSON.stringify(['crm_users','crm_leads','crm_assignments','crm_notes'].map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY id').all()));
+const before=snapshot(),changes=sql.prepare('SELECT total_changes() n').get().n;
+const summary=await customerAllocationSummary(db,admin,'2026-11-02'),byId=id=>summary.rows.find(r=>r.id===id);
+assert.equal(summary.date,'2026-11-02');assert.equal(summary.timezone,'Asia/Shanghai');
+assert.equal(byId('a').today,2);assert.equal(byId('a').cumulative,5);
+assert.equal(byId('b').today,1);assert.equal(byId('b').cumulative,2);
+assert.equal(byId('zero').today,0);assert.equal(byId('zero').cumulative,0);
+assert.equal(byId('manager').today,0);assert.equal(byId('ceo').cumulative,0);
+assert.equal(byId('inactive').today,1);assert.equal(byId('inactive').active,0);
+assert.equal(byId('a').month,4);assert.equal(byId('b').month,2);assert.equal(byId('zero').month,0);assert.equal(byId('inactive').month,1);assert.equal(summary.month,7);
+assert.equal(summary.today,4);assert.equal(summary.cumulative,8);assert.equal(summary.rows.length,6);
+assert(!byId('admin'));assert(!byId('follow'));
+const own=await customerAllocationSummary(db,a,'2026-11-02');assert.equal(own.rows.length,1);assert.equal(own.rows[0].id,'a');assert.equal(own.today,2);assert.equal(own.month,4);assert.equal(own.cumulative,5);
+const get=(user,path='http://test/?owner=b')=>salesWorkflowEndpoint(db,user,user,'sales-management/customers','GET',{},new URL(path));
+const response=await get(a);assert.equal(response.allocationSummary.rows.length,1);assert.equal(response.allocationSummary.rows[0].id,'a');assert.equal(response.rows.length,0);
+const management=await get(admin);assert.deepEqual(management.allocationSummary,await customerAllocationSummary(db,admin));
+await assert.rejects(get({id:'follow',role:'followup'}),e=>e.status===403);
+const empty=await customerAllocationSummary(db,{id:'missing',role:'sales'},'2026-11-02');assert.deepEqual(empty.rows,[]);assert.equal(empty.today,0);assert.equal(empty.month,0);
+assert.equal(snapshot(),before);assert.equal(sql.prepare('SELECT total_changes() n').get().n,changes);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: Beijing day/month midnight boundaries and monthly deduplication; distinct recipients/customers; transfers and return after legacy sync; future, invalid, review, historical and simulation exclusions; zero/disabled receivers; same-name IDs; owner isolation and endpoint access; no writes.');

@@ -1,4 +1,7 @@
+import {allocationManagementEndpoint} from '../allocation-management';
+import {personalWorkEndpoint} from '../personal-work-server';
 import {salesWorkflowEndpoint} from '../sales-workflow-server';
+import {followupScheduleEndpoint} from '../followup-schedule-server';
 import {salesMonitor} from '../sales-monitor';
 import {salesManagementEndpoint} from '../sales-management-server';
 import {roleWorkspaceEndpoint as roleDashboardEndpoint} from '../role-workspace-server';
@@ -31,11 +34,13 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const personal=await personalWorkEndpoint(db,user,actor,path,req.method,body,url);if(personal!==undefined)return json(personal);
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);
  const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);
  const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method,url);if(monitor!==undefined)return json(monitor);
  const template=await contractTemplateEndpoint(user,path,req.method,body);if(template!==undefined)return template instanceof Response?template:json(template);
- const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined)return json(dashboard);
+ const schedule=await followupScheduleEndpoint(db,user,actor,path,req.method,body);if(schedule!==undefined){if(req.method==='POST'&&'id' in schedule)await afterWorkflowWrite(db,env.QUOTE_DB,schedule,{order:schedule.id});return json(schedule);}
+ const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined){if(req.method==='POST'&&path.endsWith('/business-process')&&'id' in dashboard)await afterWorkflowWrite(db,env.QUOTE_DB,dashboard,{order:dashboard.id});return json(dashboard);}
   const workspace=await roleWorkspaceEndpoint(db,user,path,req.method,url);if(workspace!==undefined)return json(workspace);
   const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
   const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined){if(req.method==='POST'&&path==='confirmations/quote'&&'id' in confirmation)await afterWorkflowWrite(db,env.QUOTE_DB,confirmation,{project:confirmation.id});return json(confirmation);}
@@ -60,6 +65,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   if(operationsResult!==undefined)return json(operationsResult);
   const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
   if(advertisingResult!==undefined)return json(advertisingResult);
+  const managementAllocation=await allocationManagementEndpoint(db,user,actor,path,req.method,body,url);if(managementAllocation!==undefined)return json(managementAllocation);
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
 }

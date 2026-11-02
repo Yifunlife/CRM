@@ -37,4 +37,13 @@ export function permissionDefaults(role:string):Record<PermissionKey,boolean>{
 export function permissionOverrides(user:any):Partial<Record<PermissionKey,boolean>>{try{const p=typeof user.permissions==='string'?JSON.parse(user.permissions):user.permissions;return p&&typeof p==='object'&&!Array.isArray(p)?p:{};}catch{return {};}}
 export const SALES_PERSONAL_ONLY:readonly PermissionKey[]=['customers_all','leads_allocate','performance_view','advertising_view','advertising_edit'];
 export function ceoRequestAllowed(user:any,path:string,method:string){return user?.role!=='ceo'||method==='GET'||method==='POST'&&['logout','password','profile','service/conversation','role-workspace/templates/generate'].includes(path);}
-export function can(user:any,key:PermissionKey){if(user?.role==='ceo')return permissionDefaults('ceo')[key];if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
+export function can(user:any,key:PermissionKey){if(key==='leads_allocate')return canSetManagement(user);if(user?.role==='ceo')return permissionDefaults('ceo')[key];if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
+
+// Stable identities keep settings access independent of editable names and usernames.
+export function canSetManagement(user:any){return user?.active!==0&&['ceo','management','admin'].includes(user?.role)&&['b7e34925-ec83-4f4e-ad42-04be344dc82b','b9bde8d1-8f87-4981-956b-128423cd6651','588a2047-59ad-49f8-ad38-f963df003046'].includes(user?.id);}
+export function canViewAllMarkets(user:any){return user?.active!==0&&(user?.role==='admin'||canSetManagement(user));}
+export function boardMarkets(user:any):string[]{
+ if(canViewAllMarkets(user))return ['内贸','外贸'];
+ try{const scopes=typeof user?.trade_scopes==='string'?JSON.parse(user.trade_scopes):user?.trade_scopes;return ['domestic','foreign'].filter(v=>Array.isArray(scopes)&&scopes.includes(v)).map(v=>v==='domestic'?'内贸':'外贸');}catch{return [];}
+}
+export function managementSettingPath(path:string){return path.startsWith('allocation/')||path==='assign'||path==='sales-management/targets'||path.startsWith('sales-monitor');}

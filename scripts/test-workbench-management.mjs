@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import ts from 'typescript';
+const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
+const envUrl='data:text/javascript,'+encodeURIComponent(`const objects=new Map();export const env={BUCKET:{async put(key,input){const bytes=new Uint8Array(await new Response(input).arrayBuffer());objects.set(key,bytes);return {size:bytes.length};},async get(key){const bytes=objects.get(key);return bytes?{size:bytes.length,body:bytes,json:async()=>JSON.parse(new TextDecoder().decode(bytes))}:null;},async delete(key){objects.delete(key);}}};`);
+const storageUrl=moduleUrl('lib/object-storage.ts',{"'cloudflare:workers'":JSON.stringify(envUrl)});
+const bridgeUrl=moduleUrl('lib/workbench-bridge.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
+const {bridgeDeviceEndpoint}=await import(bridgeUrl);
+const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
+const db={prepare:sql=>new Statement(sql),batch:async statements=>Promise.all(statements.map(s=>s.run()))},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
+for(const u of [admin,winnie,other,ops])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unchanged','2026-10-18');
+for(const u of [winnie,other])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-18')").run(u.id,u.id,u.id,u.id);
+
+sqlite.prepare("INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES('winnie',?,?,'admin')").run(JSON.stringify({clients:[{id:'only-winnie',messages:[]}],scenes:[]}),'2026-11-02');
+const paired=await workbenchEndpoint(db,admin,admin,'workbench/bridge','POST',{});
+sqlite.prepare("UPDATE crm_users SET role='management' WHERE id='winnie'").run();
+const management={...winnie,role:'management',permissions:{customers_all:true,leads_allocate:true}};
+const personal=await viewUser(db,management,'personal');
+assert.equal(personal.id,'winnie');assert.equal(personal.role,'sales');assert.equal(personal.personal_business,true);assert.equal(personal.permissions.customers_all,false);assert.equal(personal.permissions.leads_allocate,false);assert.equal((await viewUser(db,management,'boss')).role,'management');
+assert.equal((await viewUser(db,admin,'winnie')).role,'sales');
+assert.equal((await workbenchEndpoint(db,personal,management,'workbench/snapshot','GET',{})).owner.id,'winnie');
+await assert.rejects(viewUser(db,{...other,role:'management'},'personal'),e=>e.status===403);
+await assert.rejects(viewUser(db,other,'personal'),e=>e.status===403);
+const req=new Request('https://crm.test/api/bridge/poll',{headers:{authorization:'Bearer '+paired.token}});
+await bridgeDeviceEndpoint(db,req,{heartbeat:true,status:{whatsapp:true,email:true}});
+assert.ok(sqlite.prepare("SELECT seen FROM crm_workbench_bridge WHERE owner_id='winnie'").get().seen>0);
+sqlite.prepare("INSERT INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) VALUES('winnie','winnie','only-winnie','2026-11-02','admin')").run();
+sqlite.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='winnie'").run();
+assert.equal((await workbenchEndpoint(db,personal,management,'workbench/snapshot','GET',{})).snapshot.clients.length,0);
+const token2=await workbenchEndpoint(db,other,admin,'workbench/bridge','POST',{});
+sqlite.prepare("UPDATE crm_users SET role='management' WHERE id='other'").run();
+await assert.rejects(bridgeDeviceEndpoint(db,new Request('https://crm.test/api/bridge/poll',{headers:{authorization:'Bearer '+token2.token}}),{heartbeat:true}),e=>e.status===401);
+sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='winnie'").run();await assert.rejects(bridgeDeviceEndpoint(db,req,{heartbeat:true}),e=>e.status===401);
+console.log('PASS management personal view preserves owner, removes company permissions, denies unqualified switching, keeps existing bridge, hides reassigned clients, rejects missing archive and disabled account');
