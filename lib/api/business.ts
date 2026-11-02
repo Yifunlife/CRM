@@ -1,3 +1,5 @@
+import {allocationManagementEndpoint} from '../allocation-management';
+import {personalWorkEndpoint} from '../personal-work-server';
 import {salesWorkflowEndpoint} from '../sales-workflow-server';
 import {followupScheduleEndpoint} from '../followup-schedule-server';
 import {salesMonitor} from '../sales-monitor';
@@ -32,6 +34,7 @@ import type { ApiContext } from './context';
 import { notifications } from './notifications';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const personal=await personalWorkEndpoint(db,user,actor,path,req.method,body,url);if(personal!==undefined)return json(personal);
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);
  const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);
  const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method,url);if(monitor!==undefined)return json(monitor);
@@ -62,6 +65,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   if(operationsResult!==undefined)return json(operationsResult);
   const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
   if(advertisingResult!==undefined)return json(advertisingResult);
+  const managementAllocation=await allocationManagementEndpoint(db,user,actor,path,req.method,body,url);if(managementAllocation!==undefined)return json(managementAllocation);
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
 }

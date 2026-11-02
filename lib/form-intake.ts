@@ -26,7 +26,7 @@ export function groupForms(rows:any[]){
  return [...groups.values()].map(g=>g.sort(ordered)).sort((a,b)=>ordered(a[0],b[0]));
 }
 
-export async function importForms(db:D1Database,rawRows:any[],actor:string,options:{scope?:string;filename?:string;preview?:boolean;allocate?:boolean}={}){
+export async function importForms(db:D1Database,rawRows:any[],actor:string,options:{scope?:string;filename?:string;preview?:boolean;allocate?:boolean;manualOnly?:boolean}={}){
  const user=await db.prepare('SELECT role,permissions FROM crm_users WHERE id=? AND active=1').bind(actor).first<any>();
  if(!user||!can(user,'customers_edit')||!can(user,'customers_all'))throw new AllocationError('表单入库需要全公司客户查看及维护权限',403);
  const rows:any[]=[...new Map(rawRows.map(r=>{const row=formRow(r,options.scope);return [row.id,row];})).values()];
@@ -64,7 +64,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    // Only resume assignment for leads created by this form pipeline, never sweep historical waiting leads.
    for(const r of group){const s=submissions.find(s=>s.id===r.id&&s.kind==='new');if(s?.lead_id)allocate.add(s.lead_id);}
    if(!fresh.length)continue;
-   const reason=owners.size>1?'相同联系方式对应多个负责人，请核查归属':lead?.owner_id&&!lead.owner_active?'原负责人已停用，请先交接':lead&&!lead.owner_id&&!allocate.has(lead.id)?'已有客户尚未分配，请核查原归属':!first.name||!keys(first).length?'姓名或有效联系方式不完整':!BUSINESS_SCOPES.some(s=>s.id===first.business_scope&&s.source==='Meta')?'业务范围待确认':'';
+   const reason=owners.size>1?'相同联系方式对应多个负责人，请核查归属':lead?.owner_id&&!lead.owner_active?'原负责人已停用，请先交接':lead&&!lead.owner_id&&!allocate.has(lead.id)?'已有客户尚未分配，请核查原归属':!first.name||!keys(first).length?'姓名或有效联系方式不完整':!(options.manualOnly&&!first.business_scope)&&!BUSINESS_SCOPES.some(s=>s.id===first.business_scope&&s.source==='Meta')?'业务范围待确认':'';
    if(reason){
     for(const r of fresh){
      const poolId='form-'+await digest(r.id),payload={name:r.name,phone:r.phone,email:r.email,country:r.country,business_scope:r.business_scope,requirement:r.requirement,summary:'表单再次提交，待核查',source_kind:'未知来源',campaign_id:'',attribution_reason:''};
@@ -99,7 +99,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
   }
   if(!options.preview){
    await flush();
-   if(options.allocate!==false&&allocate.size){
+   if(!options.manualOnly&&options.allocate!==false&&allocate.size){
     const {config,weights}=await allocationWeights(db);
     if(config.rule.automatic&&weights.length){const ids=[...allocate];for(let i=0;i<ids.length;i+=40){await db.batch([guard()]);result.autoAssigned+=await distribute(db,ids.slice(i,i+40),'all',actor);}}
     else result.allocationWarning='客资已去重入库，自动分配未开启或没有可接收人员';
