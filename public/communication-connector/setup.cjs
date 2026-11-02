@@ -3828,7 +3828,7 @@ async function install() {
     fs.renameSync(result.candidate, app);
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, pullOnly: old.owner_id === config.owner_id && old.pullOnly === true, workspace, localOwner }, null, 2), { mode: 384 });
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, pullOnly: old.owner_id === config.owner_id && old.pullOnly === true, uploadNewLeads: old.owner_id === config.owner_id && old.uploadNewLeads === true, workspace, localOwner }, null, 2), { mode: 384 });
     fs.chmodSync(configFile, 384);
     fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, workspace }, null, 2), { mode: 384 });
   } catch (e) {
