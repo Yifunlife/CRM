@@ -115,3 +115,11 @@ assert.equal(sqlite.prepare('SELECT cancelled FROM crm_deals WHERE id=?').get(de
 assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE id=?").get(ceo.id).role,'ceo');
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: CEO account editing, permissions, deal and receipt confirmations/reversals preserve actor identity; management cannot write finance.');
+
+const {operationsEndpoint}=await import(moduleURL('lib/operations-server.ts'));
+const {advertisingEndpoint}=await import(moduleURL('lib/advertising-server.ts'));
+const account=await operationsEndpoint(db,ceo,'operations/accounts','POST',{name:'CEO managed account',platform:'Instagram',owner_id:ceo.id});
+await advertisingEndpoint(db,ceo,'advertising','POST',{account_id:account.id,name:'CEO campaign',platform:'Meta',date:'2026-10-22',status:'投放中',owner_id:ceo.id,budget:'100',spent:'10',notes:''});
+const ad=sqlite.prepare("SELECT * FROM crm_advertising WHERE name='CEO campaign'").get();assert.equal(ad.owner_id,ceo.id);assert.equal(ad.created_by,ceo.id);
+await assert.rejects(operationsEndpoint(db,management,'operations/accounts','POST',{}),e=>e.status===403);
+console.log('PASS: CEO can maintain operations and advertising with its own identity; unprivileged management remains restricted.');

@@ -15,7 +15,7 @@ export async function advertisingEndpoint(db:D1Database,user:any,path:string,met
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new AllocationError('请填写有效的投放日期');
  function amount(value:unknown){const text=String(value??'').trim();if(!/^\d{1,10}(\.\d{1,2})?$/.test(text))throw new AllocationError('金额须为非负数，最多两位小数');return Math.round(Number(text)*100);}
  const budget=amount(body.budget),spent=amount(body.spent),owner=clean(body.owner_id,80),notes=clean(body.notes),time=now();
- if(!await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('admin','operations')").bind(owner).first())throw new AllocationError('请选择有效的运营或管理员负责人');
+ if(!await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('admin','ceo','operations')").bind(owner).first())throw new AllocationError('请选择有效的运营或管理员负责人');
  const previous:any=method==='PATCH'?await db.prepare('SELECT platform,account_id,spend_basis FROM crm_advertising WHERE id=?').bind(body.id).first():null;
  const spendBasis=previous?.spend_basis||'daily';
  if(spendBasis==='daily'&&spent>0&&date>opToday())throw new AllocationError('实际广告支出不能计入未来日期');
