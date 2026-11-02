@@ -1,2 +1,26 @@
 .office-app .followup-actions .notification-trigger.has-pending{background:#c62828;border-color:#c62828;color:#fff}
 .office-app .followup-actions .notification-trigger.has-pending:hover{background:#a91f1f;border-color:#a91f1f;color:#fff}
+.notification-dialog .followup-actions{justify-content:flex-start;gap:8px;margin-bottom:14px}
+.notification-dialog .notification-assignment-list{margin:0 0 8px}
+.notification-dialog .notification-assignment-list h3{font-size:13px;font-weight:500;color:var(--muted);margin:0;padding:2px 0 8px}
+.notification-dialog .notification-item{border-bottom:1px solid var(--line);margin:0;padding:0}
+.notification-dialog .notification-item>summary{display:grid;grid-template-columns:26px minmax(0,1fr) 15px;gap:10px;align-items:center;list-style:none;padding:12px 0;cursor:pointer}
+.notification-dialog .notification-item>summary::-webkit-details-marker{display:none}
+.notification-dialog .notification-number{align-self:start;color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px;padding-top:1px;text-align:center}
+.notification-dialog .notification-summary{display:grid;gap:3px;min-width:0}
+.notification-dialog .notification-title-line,.notification-dialog .notification-preview-line{display:flex;gap:10px;align-items:baseline;min-width:0}
+.notification-dialog .notification-title-line>strong,.notification-dialog .notification-preview-line>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.notification-dialog .notification-title-line>strong{font-size:14px;font-weight:600;line-height:1.5}
+.notification-dialog .notification-read,.notification-dialog .notification-unread{font-size:12px;white-space:nowrap;flex-shrink:0}
+.notification-dialog .notification-read{color:var(--muted)}
+.notification-dialog .notification-unread{color:#b42318}
+.notification-dialog .notification-preview-line{font-size:12px;line-height:1.5;color:var(--muted)}
+.notification-dialog .notification-preview-line>time{flex-shrink:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.notification-dialog .notification-item>summary>svg{color:var(--muted)}
+.notification-dialog .notification-item[open]>summary>svg{transform:rotate(180deg)}
+.notification-dialog .notification-detail{padding:4px 0 16px 36px;overflow-wrap:anywhere}
+.notification-dialog .notification-detail>strong{font-size:14px}
+.notification-dialog .notification-detail p{white-space:pre-wrap;margin:8px 0}
+.notification-dialog .notification-item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.notification-dialog .notification-caption{margin:14px 0 0}
+@media(max-width:420px){.notification-dialog .notification-item>summary{grid-template-columns:20px minmax(0,1fr) 14px;gap:8px}.notification-dialog .notification-title-line{gap:8px}.notification-dialog .notification-detail{padding-left:28px}}
