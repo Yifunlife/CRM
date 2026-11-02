@@ -6,7 +6,8 @@ const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');fo
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const storage='data:text/javascript,'+encodeURIComponent('export const readJson=async s=>JSON.parse(s);export const storeJson=async v=>JSON.stringify(v);');
 const crm=moduleUrl('lib/crm.ts');
-const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
+const autoUrl=moduleUrl('lib/auto-first-contact.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))});
+const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
 const {digest}=await import(crm),sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async s=>Promise.all(s.map(x=>x.run()))};
@@ -38,3 +39,24 @@ assert.equal(JSON.parse(sqlite.prepare("SELECT payload FROM crm_workbench_snapsh
 assert.equal(sqlite.prepare("SELECT count(*) n FROM crm_workbench_snapshots WHERE owner_id='winnie'").get().n,0);
 sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='mark'").run();await assert.rejects(run({clients:[],bindings:[],scenes:[]}),e=>e.status===401);
 console.log('PASS: CEO own-account bootstrap, own CRM pull, exact association, idempotence, local update, conflict preservation, history suppression, transfer revocation, Winnie isolation, disabled account');
+
+// A newly assigned, confirmed desktop client is contacted without opening a CRM page.
+sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='mark'").run();
+const enabledAt=new Date(Date.now()-60000).toISOString(),assignedAt=new Date().toISOString();
+sqlite.prepare("INSERT INTO crm_cloud_settings VALUES('auto-first-contact:mark',?,?,'mark')").run(JSON.stringify({enabled:true,assigned_from:enabledAt,options:['Approved one','Approved two','Approved three']}),enabledAt);
+sqlite.prepare("INSERT INTO crm_leads(id,name,phone,owner_id,source,detail,fingerprint,created,status) VALUES('automatic-new','Automatic new','16145550009','mark','Meta','{\"偏好联系方式\":\"by_whats_app\"}','automatic-new',?,'待首次联系')").run(assignedAt);
+sqlite.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('automatic-assignment','automatic-new','mark','mark',?,'full-first-v1')").run(assignedAt);
+await bridgeDeviceEndpoint(db,req,{heartbeat:true,status:{whatsapp:true,email:true,autoFirstContact:true}});
+await run({clients:[{id:'automatic-desktop',name:'Automatic new',whatsapp:'16145550009',messages:[]}],bindings:[],scenes:[]});
+const automatic=sqlite.prepare("SELECT * FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_first_contact')=1").get();assert.equal(automatic.state,'queued');
+sqlite.prepare('UPDATE crm_workbench_commands SET created=? WHERE id=?').run(Date.now()-120000,automatic.id);
+const firstClaim=await bridgeDeviceEndpoint(db,req,{});assert.equal(firstClaim.command.id,automatic.id,'automatic work persists while the desktop is disconnected');
+assert.equal((await bridgeDeviceEndpoint(db,req,{})).command,null,'a claimed send is never replayed');
+await bridgeDeviceEndpoint(db,req,{result:{id:automatic.id,state:'done',value:{status:'sent',messageId:'verified-first-message',text:'Approved one'}}});
+assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='automatic-new'").get().status,'已联系待回复');
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='automatic-new'").get().n,1);
+await bridgeDeviceEndpoint(db,req,{result:{id:automatic.id,state:'done',value:{status:'sent',messageId:'verified-first-message',text:'Approved one'}}});
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='automatic-new'").get().n,1);
+await run({clients:[{id:'automatic-desktop',name:'Automatic new',whatsapp:'16145550009',messages:[]}],bindings:[],scenes:[]});
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_first_contact')=1").get().n,1);
+console.log('PASS: background sync queues automatic first contact, offline persistence, single claim, confirmed receipt updates contact state once, no repeat on subsequent sync');

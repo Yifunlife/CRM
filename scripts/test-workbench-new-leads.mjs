@@ -6,7 +6,8 @@ const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');fo
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const storage='data:text/javascript,'+encodeURIComponent('export const readJson=async s=>JSON.parse(s);export const storeJson=async v=>JSON.stringify(v);');
 const crm=moduleUrl('lib/crm.ts');
-const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
+const autoUrl=moduleUrl('lib/auto-first-contact.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))});
+const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
 const {digest}=await import(crm),sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async s=>Promise.all(s.map(x=>x.run()))};
