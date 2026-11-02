@@ -129,10 +129,10 @@ export default function CRM({businessEntry=false}:{businessEntry?:boolean}){
  const pageLabel=(name:string)=>({项目总览:'项目总揽',单项目详情:'项目明细',业务员业绩:'销售管理',销售目标表:'目标管理',业绩明细表:'业绩明细',业绩完成表:'完成表',客户总况:'总况',客户档案:'档案',客户推进:'推进',客户看板:'销售看板',工作台:'客户管理',我的客资:'客户管理',销售工作台:user.role==='sales'?'客户沟通':'客服对接',订单跟单:user.role==='sales'?'项目跟进':'订单台账',客户与项目:'项目推进',报价与协作:'报价与成交协作',我的工作:'待办与审批'} as Record<string,string>)[name]||name;
  const suitePages=['客户与项目','报价与协作','销售管理','客户经营'];
  const suiteManager=['admin','ceo','management'].includes(user.role)&&can(user,'customers_all');
- const customerSections:Record<string,string>={客户总况:'总况',客户档案:'档案',客户推进:'推进',会议到访:'会议到访'};
+ const customerSections:Record<string,string>={客户总况:'总况',客户档案:'档案',客户推进:'推进',会议到访:'会议到访',分配管理:'分配管理'};
  const projectPages=['项目管理','项目总览','单项目详情'];
  const followupSections:Record<string,string>={我的待办:'我的待办',交接确认:'交接确认',节点跟进表:'节点跟进表'};
- const groups:Record<string,string[]>={...(suiteManager?{销售管理:['销售目标表','业绩明细表','业绩完成表']}:{}),客户管理:['客户总况','客户档案','客户推进','会议到访'],跟单管理:['我的待办','交接确认','节点跟进表'],系统设置:['账号与权限','连接Google','分配设置']};
+ const groups:Record<string,string[]>={...(suiteManager?{销售管理:['销售目标表','业绩明细表','业绩完成表']}:{}),客户管理:['客户总况','客户档案','客户推进','会议到访',...(canAllocate||user.role==='ceo'?['分配管理']:[])],跟单管理:['我的待办','交接确认','节点跟进表'],系统设置:['账号与权限','连接Google','分配设置']};
  const activeGroup=page==='跟单管理'?'跟单管理':Object.keys(groups).find(g=>groups[g].includes(page))||(['全部客资','客资分配','分配设置','导入客资'].includes(page)?'客户管理':'');
  const expandedGroup=openNav===null?activeGroup:openNav;
  const monitorVisible=['sales','admin','ceo','management'].includes(user.role);

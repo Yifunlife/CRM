@@ -1,3 +1,4 @@
+import {allocationManagementEndpoint} from '../allocation-management';
 import {salesWorkflowEndpoint} from '../sales-workflow-server';
 import {salesMonitor} from '../sales-monitor';
 import {salesManagementEndpoint} from '../sales-management-server';
@@ -60,6 +61,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
   if(operationsResult!==undefined)return json(operationsResult);
   const advertisingResult=await advertisingEndpoint(db,user,path,req.method,body);
   if(advertisingResult!==undefined)return json(advertisingResult);
+  const managementAllocation=await allocationManagementEndpoint(db,user,actor,path,req.method,body,url);if(managementAllocation!==undefined)return json(managementAllocation);
   const allocationResult=await allocationEndpoint(db,user,path,req.method,body,url);
   if(allocationResult!==undefined)return json(allocationResult);
 }
