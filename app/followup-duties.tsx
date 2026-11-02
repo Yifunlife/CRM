@@ -3,10 +3,10 @@ import {useState} from 'react';
 import {CUSTOMER_CHANNELS,CUSTOMER_FOLLOWUP_STATES,FOLLOWUP_DUTIES,FOLLOWUP_TIME_RULES} from '../lib/followup-duties';
 import {customerSyncState} from '../lib/order-followup';
 import './followup-duties.css';
-export function FollowupDuties({page,order}:{page:string;order:any}){
+export function FollowupDuties({page,order}:{page:string;order?:any}){
  const guide=FOLLOWUP_DUTIES[page];if(!guide)return null;
- const handed=order.details.handover?.submitted_at||order.details.contract_source?.confirmed_at;
- return <section className="fd-guide" aria-label="本节点双向跟进要求"><p className="fd-deadline"><strong>什么时候做：</strong>{guide.when}</p>{page==='接单确认'&&<p className="small muted">业务交接时间：{handed?new Date(handed).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'原记录未提供，待核实'}。工作日按公司排班计算，不从跟单点击接收后重新起算。</p>}<details><summary>查看对内 / 对客职责与全部时限</summary><div className="fd-directions"><section><h3>对公司内部</h3><ul>{guide.internal.map(t=><li key={t}>{t}</li>)}</ul></section><section><h3>对客户跟进</h3><ul>{guide.customer.map(t=><li key={t}>{t}</li>)}</ul></section></div><p>设计、报价核算、验货及整改由对应责任部门负责。跟单接收已确认资料，配合客户同步；金额、费用、付款先通知商务。</p><dl>{FOLLOWUP_TIME_RULES.map(([name,rule])=><div key={name}><dt>{name}</dt><dd>{rule}</dd></div>)}</dl><p className="small muted">工作时间及单双休按公司排班；缺少收发时间或排班依据时，不自动判定回复超时，不自动扣分。</p></details></section>;
+ const handed=order?.details.handover?.submitted_at||order?.details.contract_source?.confirmed_at;
+ return <section className="fd-guide" aria-label="本节点双向跟进要求"><p className="fd-deadline"><strong>什么时候做：</strong>{guide.when}</p>{page==='接单确认'&&order&&<p className="small muted">业务交接时间：{handed?new Date(handed).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'原记录未提供，待核实'}。工作日按公司排班计算，不从跟单点击接收后重新起算。</p>}<details><summary>查看对内 / 对客职责与全部时限</summary><div className="fd-directions"><section><h3>对公司内部</h3><ul>{guide.internal.map(t=><li key={t}>{t}</li>)}</ul></section><section><h3>对客户跟进</h3><ul>{guide.customer.map(t=><li key={t}>{t}</li>)}</ul></section></div><p>设计、报价核算、验货及整改由对应责任部门负责。跟单接收已确认资料，配合客户同步；金额、费用、付款先通知商务。</p><dl>{FOLLOWUP_TIME_RULES.map(([name,rule])=><div key={name}><dt>{name}</dt><dd>{rule}</dd></div>)}</dl><p className="small muted">工作时间及单双休按公司排班；缺少收发时间或排班依据时，不自动判定回复超时，不自动扣分。</p></details></section>;
 }
 export function CustomerFollowupFields({saved,page,order}:{saved:any;page:string;order:any}){
  const old=saved?.customer_followup||{},[status,S]=useState(customerSyncState(saved)||'待同步客户'),[money,M]=useState(['费用对账','跟进收款'].includes(page)||!!old.money_related),[photos,P]=useState(!!old.has_inspection_photos);

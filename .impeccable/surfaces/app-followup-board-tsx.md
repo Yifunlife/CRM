@@ -2,14 +2,20 @@
 version: 1
 slug: "app-followup-board-tsx"
 primary_target: "app/followup-board.tsx"
-related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","app/followup-duties.tsx","app/followup-duties.css","lib/followup-duties.ts","lib/followup-schedule-server.ts","lib/order-followup.ts","lib/followup-board.ts","lib/followup-notifications.ts","lib/role-workspace-server.ts"]
+related_targets: ["app/followup-navigation.tsx","app/followup-navigation.css","app/followup-workspace.tsx","app/crm.tsx","app/followup-timeline.tsx","app/followup-timeline.css","app/followup-duties.tsx","app/followup-duties.css","lib/followup-duties.ts","lib/followup-schedule-server.ts","lib/order-followup.ts","lib/followup-board.ts","lib/followup-notifications.ts","lib/role-workspace-server.ts"]
 ---
 
-# 跟单年度时间轴与项目排期
+# 跟单导航、阶段队列与年度时间轴
 
 ## Scope and direction
 
-`app/followup-board.tsx` 的既有 Operate 界面扩展，面向在权限内查看、排期和跟进订单的管理者、商务及跟单人员。延续根 `DESIGN.md` 的深蓝导航、蓝色操作、白色办公面板与文字状态；沿用现有字体及密度，不建立新视觉身份。标题旁嵌入“时间轴／流程表”分段切换，右侧工具使用简短标签；搜索、订单范围、数量、年份、年度／月份与“项目排期”合并为桌面单行、可换行工具栏。年份／范围等视觉标签收起，控件保留明确可访问名称，“项目排期”保留完整可访问名称“录入 / 编辑项目排期”；图例移至图表下方。筛选在排期编辑及节点视图仍保留，返回时延续月份选择；表单独立打开，不常驻时间轴。根 `PRODUCT.md`、`DESIGN.md` 继续作为全局权威。
+`app/followup-board.tsx` 的既有 Operate 界面扩展，面向在权限内查看、排期和跟进订单的管理者、商务及跟单人员。继承当前根 `DESIGN.md` 的 Microsoft 365 浅色 Fluent 外壳、蓝色操作、白色工作面板、Segoe UI 字体与文字状态；保留 YIFUN LIFE 身份，不建立新视觉身份。总览“跟进表”标题旁嵌入“时间轴／流程表”分段切换，右侧工具使用简短标签；搜索、订单范围、数量、年份、年度／月份与“项目排期”合并为桌面单行、可换行工具栏。年份／范围等视觉标签收起，控件保留明确可访问名称，“项目排期”保留完整可访问名称“录入 / 编辑项目排期”；图例移至图表下方。筛选在排期编辑及节点视图仍保留，返回时延续月份选择；表单独立打开，不常驻时间轴。根 `PRODUCT.md`、`DESIGN.md` 继续作为全局权威，旧版深蓝导航描述不再定义当前外壳。
+
+## Navigation and phase queues
+
+“跟单管理”下依次提供总览“跟进表”、可折叠“我的工作”（待办／交接确认）及七个编号阶段入口；存储键“跟进收款”显示为“收款归档”。跟单账号登录落在总览；业务员全局“我的工作”保留自身含义。阶段键及旧入口别名、单项目订单范围和返回原项目路径继续保留，阶段路由优先进入共享 `FollowupBoard`。
+
+七阶段页分别列出项目／客户、内部进度、客户同步、负责人／日期、下一步及操作；打开项目进入原双向记录编辑器，返回该阶段列表并恢复原操作按钮焦点，搜索与范围保持。阶段层可显示职责和时限说明，不虚构交接时间；选中真实订单后才显示该单已有正式交接时间或待核实提示。手机队列按文字标签堆叠，各项目操作至少44px；导航沿用现有移动抽屉，不另建一套导航。总览、职责时限、双向记录及数据权限边界沿用。
 
 ## Timeline and schedule
 
@@ -52,3 +58,5 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","app/f
 双向跟进证据在 `.impeccable/review/followup-dual/`：`overview/node/money` 各桌面与手机截图、`handover-desktop.png` 及 `shipping-desktop/mobile.png`。主任务记录源码检测 `[]`，先后合并已部署基线 `39b0176`、`a404007` 以保留其他已授权工作；合并后的跟单双向／排期／权限／一期／订单／合同确认、内外贸权限及模块边界专项通过，类型与生产构建通过。旧全模块套件40／43通过的三项既有失败保留；合并后旧角色看板夹具缺少内外贸范围，在已部署 `a404007` 也复现，不放宽真实权限迎合旧夹具。新上下文 `followup_dual_finish_reviewer` 首轮要求修复一项P1验货照片问题，最终给出 **ship — fix scope only**，该项判为 resolved；结论仅覆盖该修复。本次双向跟进已于2026-11-02发布，版本 `be3f15a9-2f8d-45f4-8c3a-0ca7eb51ffb0` 承担100%流量；公开入口200、新版跟单资源与构建校验一致、未登录写接口401。真实账号及实际通知送达验收按用户要求暂停，公开资源检查不代表登录后业务验收。沿用原合同、附件、历史、归属与权限，不迁移或批量改写数据；本文档步骤未重跑检查。
 
 顶部工具栏按用户指出的三层按钮占位再次收紧。证据为 `.impeccable/review/followup-toolbar/{desktop,intermediate,mobile,empty}.png`：桌面／中间宽度图表顶部从260px移至157px，手机从454px移至277px。主任务记录编辑筛选与月份保留、视图／范围切换、空态“查看示例”入口及无溢出检查通过，布局检测前后 `[]`，类型检查与生产构建通过；审阅后仅对齐空态入口文案，最终重建通过。独立 `toolbar_compact_finish_reviewer` 给出 **ship — compact-header scope**，该范围无实质性发现。已整合当前生产基线 `44447d9b`（源码 `2d55caa`）；本次工具栏已发布，版本 `7afd0cb0-af57-44d0-b19c-dd0439f07ab7` 承担100%流量；公开入口200、新跟单资源与构建一致、未登录接口401，已在Safari真实登录会话确认紧凑工具栏（当前在办空态），实拍位于 `outputs/followup-toolbar-20261102/safari-production.png`。原职责规范、双向记录及权限边界沿用，真实账号及实际通知送达验收继续暂停。
+
+导航与七阶段队列扩展继承已部署基线 `ad15bb3`（源码 `8b6336e0`）的现有主题。1440／390px本地合成数据证据为 `.impeccable/review/followup-navigation/` 下 `overview-desktop.png`、`phase-desktop.png`、`editor-desktop.png`、`work-desktop.png`、`phase-mobile.png`、`navigation-mobile.png`、`editor-mobile.png`。主任务记录层级、七阶段页面、保存后重读、返回焦点、筛选及手机无溢出／运行时检查通过，类型及角色／双向／排期专项通过，机械检测 `[]`；生产构建完成状态另行记录。独立 `followup_navigation_finish_reviewer` 给出 **ship — navigation/phase-queue scope**，该范围无实质性发现。此证据仅为本地合成数据检查，本次导航扩展尚未发布，不代表当前生产或真实账号验收；原合同、附件、历史、归属及权限不变。
