@@ -77,7 +77,15 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const status=archiving?'已完成':body.status??previous.status??'进行中';if(!PROCESS_STATUSES.includes(status))fail('请选择有效环节状态');if(status==='不适用'&&['接单确认','出货交付','跟进收款'].includes(body.page))fail('该关键环节不能设为不适用');
   if(!archiving&&body.page==='跟进收款'&&['已完成','不适用'].includes(status))fail('收款归档须通过原收款确认及订单归档流程完成');
   const ownerId=body.owner_id??previous.owner_id??row.logistics_id;if(typeof ownerId!=='string'||!await db.prepare('SELECT id FROM crm_users WHERE id=? AND active=1').bind(ownerId).first())fail('请选择有效负责人');
+  if(u.role==='followup'&&![row.logistics_id,row.commercial_id].includes(ownerId))fail('只能指定本订单的商务或跟单负责人',403);
+  try{await followupOrder(db,{id:ownerId},row.id);}catch(e){if(!(e instanceof AllocationError)||![403,404].includes(e.status))throw e;fail('该负责人无权查看本订单',403);}
   const due=body.due??previous.due??'';if(typeof due!=='string'||due&&(!/^\d{4}-\d{2}-\d{2}$/.test(due)||!Number.isFinite(Date.parse(due))||new Date(due).toISOString().slice(0,10)!==due))fail('请填写有效计划日期');
+  const dates:Record<string,string>={};for(const key of ['start','expected','completed']){const value=body[key]??previous[key]??'';if(typeof value!=='string'||value&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value))fail('请填写有效节点日期');dates[key]=value;}
+  if(dates.start&&due&&dates.start>due)fail('计划完成日期不能早于开始日期');
+  if(dates.expected&&dates.start&&dates.expected<dates.start)fail('预计完成日期不能早于开始日期');
+  if(status==='已完成'&&body.completed!==undefined&&!dates.completed)fail('请填写实际完成日期');
+  if(dates.completed&&dates.completed>suiteDay())fail('实际完成日期不能在未来');
+  if(!['已完成','不适用'].includes(status)&&dates.completed)fail('请核对环节状态与实际完成日期');
   if(archiving){
    if(FOLLOWUP_NODES.slice(0,-1).some(n=>!['已完成','不适用'].includes(row.details.business_process?.[n.page]?.status)))fail('请先核对完成前面的全部环节');
    if(!Array.isArray(body.archive_checks)||body.archive_checks.length!==4||new Set(body.archive_checks).size!==4||body.archive_checks.some((n:any)=>!Number.isInteger(n)||n<0||n>3))fail('请逐项核对归档清单');
@@ -94,7 +102,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    const node=FOLLOWUP_NODES.find(n=>n.page===body.page)!;
    if(await db.prepare("SELECT id FROM crm_followup_tasks WHERE order_id=? AND step=? AND status='待处理' LIMIT 1").bind(row.id,node.step).first())fail('本环节仍有未解决待办，请先处理');
   }
-  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:{...previous,values,next,status,owner_id:ownerId,due,...(archiving?{archive_checks:body.archive_checks}:{}),at:now(),by:actor.id}}};
+  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:{...previous,...dates,values,next,status,schedule_only:false,owner_id:ownerId,due,original_start:previous.original_start||previous.start||dates.start,original_due:previous.original_due||previous.due||due,confirmed_at:now(),...(status==='已完成'?{problem:''}:{}),...(archiving?{archive_checks:body.archive_checks}:{}),at:now(),by:actor.id}}};
   return writeFollowup(db,row,body,actor,archiving?'订单归档':'更新'+body.page,{page:body.page,mode:archiving?'流程总表':undefined,before:row.details.business_process?.[body.page]||null,after:details.business_process[body.page],business_stage:businessStage,purchase_kind:body.purchase_kind},()=>[],{...row,details,archived:archiving?1:row.archived});
  }
  return undefined;

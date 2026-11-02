@@ -19,12 +19,45 @@ export const LOGISTICS_FIELDS=[['forwarder_mode','货代安排（我方／客户
 export const ORDER_DATES=[['production_ordered','下单生产'],['purchase_ordered','下单采购'],['planned_ship','计划发货'],['actual_ship','实际发货'],['eta_port','预计到港'],['eta_site','预计到客户现场'],['inspection','预计验货'],['installation','安装日期']] as const;
 export const orderToday=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 export const blankSteps=()=>ORDER_STEPS.map(()=>({status:'待处理',checks:[] as number[],note:'',by:'',at:'',for_date:''}));
+export const FOLLOWUP_NODES=[
+ {page:'接单确认',label:'接单确认',step:0,execution:['handover'],legacy:[0]},
+ {page:'生产跟进',label:'生产跟进',step:3,execution:['production','stock'],legacy:[3]},
+ {page:'出货交付',label:'出货交付',step:6,execution:['inspection','freight','release','shipping'],legacy:[4,5,6]},
+ {page:'单证制作',label:'单证制作',step:5,execution:[],legacy:[]},
+ {page:'核对提单',label:'核对提单',step:7,execution:[],legacy:[]},
+ {page:'费用对账',label:'费用对账',step:4,execution:[],legacy:[]},
+ {page:'跟进收款',label:'收款归档',step:11,execution:[],legacy:[]}
+] as const;
+export function processNodeStatus(order:any,page:string){
+ const saved=order.details?.business_process?.[page],explicit=saved&&!saved.schedule_only;
+ if(page==='跟进收款')return order.archived?'已完成':explicit&&saved.status&&!['已完成','不适用'].includes(saved.status)?saved.status:explicit&&saved.at?'进行中':'未开始';
+ if(explicit&&['未开始','进行中','待确认','已完成','不适用'].includes(saved.status))return saved.status;
+ if(explicit)return '已记录';
+ const node=FOLLOWUP_NODES.find(n=>n.page===page);if(!node)return '未开始';
+ const stages=order.details?.execution?.stages,states=stages?node.execution.map(k=>stages[k]).filter(Boolean):node.legacy.map(k=>order.steps?.[k]).filter(Boolean);
+ if(states.length&&states.every(s=>['已完成','不适用'].includes(s.status)))return states.every(s=>s.status==='不适用')?'不适用':'已完成';
+ return states.some(s=>s.status&&s.status!=='待处理'||s.note||s.next)?'进行中':'未开始';
+}
+export function processActivityDay(order:any,page:string){
+ const saved=order.details?.business_process?.[page]||{},node=FOLLOWUP_NODES.find(n=>n.page===page);
+ const dates=[Object.hasOwn(saved,'confirmed_at')?saved.confirmed_at:saved.at,...(node?.execution||[]).flatMap(k=>[order.details?.execution?.stages?.[k]?.at,order.details?.execution?.stages?.[k]?.values?.contact_date]),...(node?.legacy||[]).map(k=>order.steps?.[k]?.at),...(page==='生产跟进'?[order.details?.execution?.last_factory_at]:[])];
+ return dates.filter((d:any)=>d&&Number.isFinite(Date.parse(d))).map((d:string)=>d.includes('T')?new Date(d).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):d).sort().at(-1)||'';
+}
 export function orderReminders(order:any,tasks:any[],today=orderToday()){
  if(order.archived)return [];
- const out:{key:string;title:string;due:string;overdue:boolean}[]=[];
+ const out:{key:string;title:string;due:string;overdue:boolean;owner_id?:string;page?:string}[]=[];
+ for(const [page,node] of Object.entries(order.details?.business_process||{}) as [string,any][]){
+  const status=processNodeStatus(order,page);if(['已完成','不适用'].includes(status))continue;
+  const owner_id=node.owner_id||order.logistics_id,due=node.due||'';
+  if(due&&due<=shiftOrderDay(today,3))out.push({key:'process-due-'+page,title:page+(due<today?' · 已逾期':due===today?' · 今天到期':' · 即将到期'),due,overdue:due<today,owner_id,page});
+  if(node.problem)out.push({key:'process-problem-'+page,title:page+' · 异常待处理',due:node.confirmed_at?.slice(0,10)||today,overdue:true,owner_id,page});
+  const checked=processActivityDay(order,page);
+  const next=checked?shiftOrderDay(checked,7):'';
+  if(['进行中','待确认','已记录'].includes(status)&&next&&next<=today&&(!node.start||node.start<=today))out.push({key:'process-stale-'+page,title:page+' · 已7天未更新',due:next,overdue:next<today,owner_id,page});
+ }
  const flow=order.details?.execution;
  if(flow)for(const [key,item] of Object.entries(flow.stages||{}) as [string,any][]){if(item.status!=='已完成'&&item.due&&item.due<=today)out.push({key:'execution-'+key,title:(key===flow.current_key?flow.current_name:'执行事项')+' · 到期处理',due:item.due,overdue:item.due<today});}
- if(flow?.profile.production&&flow.stages?.handover?.status==='已完成'&&flow.stages?.production?.status!=='已完成'){const contact=[flow.stages?.production?.values?.contact_date||'',flow.last_factory_at||'',flow.stages.handover.at?.slice(0,10)||''].sort().at(-1);if(contact){const due=new Date(Date.parse(contact)+7*86400000).toISOString().slice(0,10);if(due<=today)out.push({key:'factory-weekly',title:'工厂生产进度 · 至少每周跟进',due,overdue:due<today});}}
+ if(flow?.profile.production&&flow.stages?.handover?.status==='已完成'&&flow.stages?.production?.status!=='已完成'&&!['已完成','不适用'].includes(order.details?.business_process?.['生产跟进']?.status)&&!out.some(r=>r.key==='process-stale-生产跟进')){const confirmed=order.details?.business_process?.['生产跟进']?.confirmed_at;const contact=[flow.stages?.production?.values?.contact_date||'',flow.last_factory_at||'',flow.stages.handover.at?.slice(0,10)||'',confirmed?new Date(confirmed).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):''].sort().at(-1);if(contact){const due=new Date(Date.parse(contact)+7*86400000).toISOString().slice(0,10);if(due<=today)out.push({key:'factory-weekly',title:'工厂生产进度 · 至少每周跟进',due,overdue:due<today});}}
  for(const [key,label] of ORDER_DATES.filter(([key])=>!['production_ordered','purchase_ordered'].includes(key))){const item=order.details?.dates?.[key];if(item?.date&&item.updated_at&&!item.sync_record){const due=new Date(item.updated_at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});out.push({key:key+'-sync',title:label+'日期需同步商务及客户',due,overdue:due<today});}}
  for(const [key,index,days,title] of [['planned_ship',4,10,'发货前10天确认货代'],['eta_port',7,7,'到港前7天联系客户']] as const){
   if(flow&&flow.profile.shipping!=='sea')continue;
@@ -42,3 +75,4 @@ export function orderReminders(order:any,tasks:any[],today=orderToday()){
  }
  return out;
 }
+export function shiftOrderDay(day:string,days:number){return new Date(Date.parse(day+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);}
