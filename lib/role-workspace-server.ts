@@ -1,4 +1,5 @@
 import {accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
+import {projectFinancials} from './personal-work';
 import {reportPeriod,inReportPeriod} from './report-period';
 import {can,authorizedLead,id,now,GRADES} from './crm';
 import {PROCESS_STATUSES,FOLLOWUP_NODES} from './followup-board';
@@ -39,8 +40,11 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const leads=pick(rawLeads).filter(l=>inReportPeriod(l.created,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
   const ps=projects.map(p=>({...p,company:companyFor(p),market:classify(p),details:parse(p.details)})),os=orders.map(o=>({...o,company:companyFor(o),market:classify(o),details:parse(o.details),steps:parse(o.steps)})).map(o=>({...o,delivery_stage:deliveryStage(o)}));
   const monthly=deals.filter(d=>inReportPeriod(d.deal_date,period)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,company:companyFor(d),market:classify(d),received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
-  let qrows=quotes.map(q=>({...q,summary:parse(q.summary)})).filter(q=>q.summary.available);
+  let qrows=pick(rawQuotes).map(q=>({...q,summary:parse(q.summary)})).filter(q=>q.summary.available);
   if(personal){let account='';try{account=await quoteAccount(db,source,u);}catch{}const allowed=[];for(const q of qrows){if(q.summary.bridge_shared||account&&q.summary.source_owner===account&&await source!.prepare('SELECT id FROM quotation_history WHERE id=? AND created_by=?').bind(q.quote_id,account).first())allowed.push(q);}qrows=allowed;}
+  for(const p of ps){p.current_quote=qrows.filter(q=>q.project_id===p.project_id).sort((a,b)=>b.created.localeCompare(a.created))[0]?.summary||null;}
+  for(const o of os){o.financials=projectFinancials(o,rawDeals,rawReceipts);o.current_quote=ps.find(p=>p.details.deal_id===o.deal_id)?.current_quote||null;}
+  qrows=qrows.filter(q=>inReportPeriod(q.created,period));
   const forecast=ps.filter(p=>!CLOSED_STAGES.includes(p.stage)&&inReportPeriod(p.expected_date,period));
   const matchesCurrency=(row:any,c:string)=>c===(currency||(classify(row)==='内贸'?'CNY':classify(row)==='外贸'?'USD':''));
   const summary=(owner?:string)=>{
