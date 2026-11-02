@@ -1,4 +1,3 @@
-const fs=require('node:fs');
 function patchMain(source){
  if(source.includes('createAccountSync'))throw Error('此版本已安装账号同步，请先核对现有连接');
  const anchor='function startCrmBridge(){';if(!source.includes(anchor))throw Error('此工作台版本不支持现有CRM连接，请先提供版本号');

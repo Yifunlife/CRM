@@ -41,7 +41,8 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    }
    if(modified)save(current);
    write(file,{owner_id:config.owner_id,bindings,blocked:[...new Set([...(journal.blocked||[]),...(result.blocked||[])])],conflicts,updated_at:new Date().toISOString()});
-   lastError=conflicts.length?'客户同步有 '+conflicts.length+' 项内容需核对，已保留两端资料':'';changed?.({customers:snapshot.length,conflicts:conflicts.length,error:lastError});
+   const first=conflicts[0],name=first?current.clients.find(c=>c.id===first.desktop_id)?.name||result.updates.find(u=>u.lead_id===first.lead_id)?.values.name||'客户':'';
+   lastError=first?'同步有 '+conflicts.length+' 项待核对：'+name+' · '+first.reason+'。已保留两端内容，请核对后统一。':'';changed?.({customers:snapshot.length,conflicts:conflicts.length,error:lastError});
   }catch(e){lastError=e.message;}finally{busy=false;}
  }
  function start(){stopped=false;void tick();timer=setInterval(tick,30000);}

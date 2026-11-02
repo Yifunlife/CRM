@@ -22,5 +22,9 @@ const {patchMain,patchManagement}=require('./desktop-sync/patch-app.cjs'),{creat
  await run(`executeCrmCommand({desktop_id:'mark-only',kind:'client-update',payload:{changes:[{id:'mark-only',revision:${JSON.stringify(revision)},patch:{grade:'VIP'}}]}})`);
  run("channelMessages=()=>[{speaker:'Winnie Wu',text:'mine'}];whatsappRecipient=()=>({});whatsappDelivery=()=>({})");assert.equal(run("crmBridgeConversation('mark-only','whatsapp').messages[0].outgoing"),true);
  assert.equal(run("getClient('mark-only').grade"),'VIP');assert.equal(run("getClient('mark-only').notes"),'retained');await assert.rejects(run("executeCrmCommand({desktop_id:'winnie-only',kind:'directory',payload:{}})"),/客户不存在/);
+ run("let fakeSends=0;sendReception=async(id,action,options)=>{if(!options.guard())throw Error('guard denied');fakeSends++;return {status:'sent',messageId:'fixture-only'}}");
+ await run("executeCrmCommand({id:'fixture-send',desktop_id:'mark-only',kind:'send',payload:{channel:'whatsapp',text:'Hello',revision:''}})");assert.equal(run('fakeSends'),1);
+ run("saveDraft('mark-only','whatsapp',{draft:'Preserve local draft'})");
+ await assert.rejects(run("executeCrmCommand({id:'fixture-no-send',desktop_id:'mark-only',kind:'send',payload:{channel:'whatsapp',text:'Hello',revision:loadDraft('mark-only','whatsapp').sendRevision}})"),/未发送草稿/);assert.equal(run('fakeSends'),1);
  fs.rmSync(dir,{recursive:true});console.log('PASS: desktop account scope, initial pull, stable IDs, repeated sync, CRM update, concurrent local edit preservation, workspace guard, original directory/edit behavior and unchanged notes');
 })().catch(e=>{console.error(e.message);process.exitCode=1});

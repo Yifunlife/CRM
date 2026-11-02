@@ -22,6 +22,7 @@ const base=Object.fromEntries(Object.keys(r.updates[0].values).map(k=>[k,String(
 r=await run({clients:[local],bindings:[{lead_id:'mark-lead',desktop_id:'native-one',base}],scenes:[]});
 assert.equal(sqlite.prepare("SELECT country FROM crm_leads WHERE id='mark-lead'").get().country,'Australia');
 assert.equal(sqlite.prepare("SELECT grade FROM crm_leads WHERE id='mark-lead'").get().grade,'A');
+const missing=await run({clients:[],bindings:[],scenes:[]});assert.equal(missing.updates.some(x=>x.lead_id==='mark-lead'),false,'missing linked client is not recreated');
 const common=r.updates.find(x=>x.lead_id==='mark-lead').values;
 sqlite.prepare("UPDATE crm_leads SET name='CRM changed' WHERE id='mark-lead'").run();
 r=await run({clients:[{...local,name:'Local changed'}],bindings:[{lead_id:'mark-lead',desktop_id:'native-one',base:common}],scenes:[]});

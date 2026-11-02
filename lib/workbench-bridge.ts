@@ -127,6 +127,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
   const existing=allLinks.find(l=>l.lead_id===lead.id);
   if(existing&&existing.owner_id!==owner){conflicts.push({lead_id:lead.id,reason:'原沟通归属需要核对'});continue;}
   let client=existing?clients.find((c:any)=>c.id===existing.desktop_id):undefined;
+  if(existing&&!client){conflicts.push({lead_id:lead.id,desktop_id:existing.desktop_id,reason:'原会话未在本次资料内，未另建客户'});continue;}
   const report=input.bindings.find((b:any)=>b.lead_id===lead.id);
   if(!client&&!existing){
    const p=phoneKey(lead.phone),e=emailKey(lead.email);
@@ -143,14 +144,14 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
    const remote=String(lead[column]||''),local=String(client?.[key]||'');values[key]=remote;
    if(!client)continue;
    if(base&&typeof base[key]==='string'){
-    if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'两端均已修改，请核对'});continue;}
+    if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'两端均已修改，请核对'});continue;}
     if(local!==base[key]&&remote===base[key]){
      if(key==='name'&&!local||key==='grade'&&local&&!['VIP','A','B','C','D'].includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
      if(['whatsapp','email'].includes(key)&&local&&rows.some((r:any)=>r.id!==lead.id&&(key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local)))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
      const changed:any=await db.prepare(`UPDATE crm_leads SET ${column}=? WHERE id=? AND owner_id=? AND ${column}=? RETURNING id`).bind(local,lead.id,owner,remote).first();
      if(changed){values[key]=local;lead[column]=local;}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});
     }
-   }else if(local&&remote&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'首次关联的两端内容不同，请核对'});}
+   }else if(local&&remote&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'首次关联的两端内容不同，请核对'});}
   }
   updates.push({lead_id:lead.id,desktop_id:client?.id||'crm-'+lead.id,create:!client,values,source:lead.source,detail:lead.detail});
   if(client)bindings.push({lead_id:lead.id,desktop_id:client.id});

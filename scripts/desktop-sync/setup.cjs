@@ -6,7 +6,7 @@ const dialog=script=>run('/usr/bin/osascript',['-e',script]).trim();
 const digest=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
 function header(file){const fd=fs.openSync(file,'r'),pre=Buffer.alloc(16);fs.readSync(fd,pre,0,16,0);const bytes=Buffer.alloc(pre.readUInt32LE(12));fs.readSync(fd,bytes,0,bytes.length,16);fs.closeSync(fd);return {tree:JSON.parse(bytes),hash:digest(bytes)};}
 function entries(tree,base=''){return Object.entries(tree.files||{}).flatMap(([name,value])=>value.files?entries(value,base+name+'/'):[{name:base+name,...value}]);}
-function closed(app){if(cp.spawnSync('/usr/bin/pgrep',['-f',app+'/Contents/MacOS/'],{encoding:'utf8'}).status!==1)throw Error('请保存资料并完全退出亦玩销售工作台，再重新双击安装。');}
+function closed(app){const found=cp.spawnSync('/usr/bin/pgrep',['-f',app+'/Contents/MacOS/'],{encoding:'utf8'});if(found.status!==1&&found.stdout.trim().split(/\s+/).some(pid=>Number(pid)!==process.pid))throw Error('请保存资料并完全退出亦玩销售工作台，再重新双击安装。');}
 async function prepare(app,output){
  const archive=app+'/Contents/Resources/app.asar',before=header(archive),info=app+'/Contents/Info.plist';
  const signature=cp.spawnSync('/usr/bin/codesign',['-dv','--verbose=4',app],{encoding:'utf8'});
@@ -36,13 +36,14 @@ async function install(){
  if(config.owner_id!=='b9bde8d1-8f87-4981-956b-128423cd6651'||config.username!=='yw001')throw Error('安装包账号核对失败');
  dialog('display dialog "此连接包仅用于 Mark Fang（方星球 / yw001）本人的 Mac。请先保存并退出亦玩销售工作台。" buttons {"取消", "继续安装"} default button "继续安装" cancel button "取消"');
  const app='/Applications/亦玩销售工作台.app';closed(app);
- const workspace=dialog('POSIX path of (choose folder with prompt "选择 Mark 本人的工作台资料文件夹（里面有 .workbench 和 knowledge）")').replace(/\/$/,'');
+ const dir=path.join(os.homedir(),'Library','Application Support','亦玩销售工作台'),configFile=path.join(dir,'crm-bridge.json'),settingsFile=path.join(dir,'settings.json');
+ const settings=fs.existsSync(settingsFile)?JSON.parse(fs.readFileSync(settingsFile,'utf8')):{};
+ const existing=settings.workspace||path.join(os.homedir(),'Documents','Yifun Sales Workbench V1'),start=fs.existsSync(existing)?existing:path.join(os.homedir(),'Documents');
+ const workspace=dialog('POSIX path of (choose folder with prompt "选择原来的工作台资料文件夹；不要新建文件夹" default location POSIX file '+JSON.stringify(start)+')').replace(/\/$/,'');
  const crm=path.join(workspace,'.workbench','crm.json');if(!fs.existsSync(path.join(workspace,'knowledge','04_客户聊天'))||!fs.existsSync(crm))throw Error('所选文件夹没有现有客户资料；未建立空工作区，也未修改应用');
  const original=fs.readFileSync(crm),data=JSON.parse(original);if(!Array.isArray(data.clients))throw Error('客户资料格式不符合原工作台');
  const labels=[...new Set(data.clients.filter(c=>!c.deleted&&!c.group).map(c=>String(c.owner||'')))];if(!labels.length||labels.some(x=>!x))throw Error('原资料的客户归属不完整，需先核对');
  let localOwner=labels[0];if(labels.length>1){const list=labels.map(x=>JSON.stringify(x)).join(',');localOwner=dialog('set picked to choose from list {'+list+'} with prompt "选择此资料库里属于 Mark 的原有负责人标签（保持原标签，不改客户归属）"\nif picked is false then error number -128\nreturn item 1 of picked');}
- const dir=path.join(os.homedir(),'Library','Application Support','亦玩销售工作台'),configFile=path.join(dir,'crm-bridge.json'),settingsFile=path.join(dir,'settings.json');
- const settings=fs.existsSync(settingsFile)?JSON.parse(fs.readFileSync(settingsFile,'utf8')):{};
  if(fs.existsSync(configFile)){const old=JSON.parse(fs.readFileSync(configFile,'utf8'));if(old.token&&old.token!==config.token)throw Error('此 Mac 已有另一连接配置；为避免覆盖已停止，请先核对该配置归属。');}
  const journalFile=path.join(workspace,'.workbench','crm-account-sync.json');if(fs.existsSync(journalFile)&&JSON.parse(fs.readFileSync(journalFile,'utf8')).owner_id!==config.owner_id)throw Error('工作区已绑定其他CRM账号，未修改');
  const before=fs.mkdtempSync(path.join(os.homedir(),'Documents','Mark-CRM连接备份-')),output=fs.mkdtempSync(path.join(path.dirname(app),'.mark-crm-update-'));

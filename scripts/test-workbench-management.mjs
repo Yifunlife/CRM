@@ -16,6 +16,9 @@ for(const u of [admin,winnie,other,ops])sqlite.prepare('INSERT INTO crm_users(id
 for(const u of [winnie,other])sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta',?,'{}',?,'2026-10-18')").run(u.id,u.id,u.id,u.id);
 
 sqlite.prepare("INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES('winnie',?,?,'admin')").run(JSON.stringify({clients:[{id:'only-winnie',messages:[]}],scenes:[]}),'2026-11-02');
+sqlite.prepare("INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES('other',?,?,'admin')").run(JSON.stringify({clients:[{id:'not-winnie',messages:[]}],scenes:[]}),'2020-01-01');
+assert.equal((await viewUser(db,admin,'winnie')).id,'winnie','another older archive cannot change the configured owner');
+sqlite.prepare("DELETE FROM crm_workbench_snapshots WHERE owner_id='other'").run();
 const paired=await workbenchEndpoint(db,admin,admin,'workbench/bridge','POST',{});
 sqlite.prepare("UPDATE crm_users SET role='management' WHERE id='winnie'").run();
 const management={...winnie,role:'management',permissions:{customers_all:true,leads_allocate:true}};
