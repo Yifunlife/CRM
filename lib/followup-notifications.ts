@@ -55,5 +55,14 @@ export async function notificationEndpoint(db:D1Database,user:any,actor:any,path
   const result=await db.prepare("UPDATE crm_followup_notifications SET read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND recipient_id=?").bind(now(),String(body.id||''),user.id).run();
   if(!result.meta.changes){const leadNotice=await db.prepare("UPDATE crm_lead_notifications SET read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND recipient_id=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(now(),String(body.id||''),user.id,user.id).run();if(!leadNotice.meta.changes)throw new AllocationError('通知不存在',404);}return {ok:true};
  }
+ if(path==='followup-notifications/read-all'&&method==='POST'){
+  if(user.id!==actor.id)throw new AllocationError('请切回本人视角标记已读',403);
+  const at=now(),statements=[db.prepare("UPDATE crm_followup_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=?"+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=order_id AND o.logistics_id=recipient_id)':'')).bind(at,user.id,at)];
+  if(user.role!=='followup'){
+   statements.push(db.prepare("UPDATE crm_lead_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(at,user.id,at,user.id));
+   statements.push(db.prepare("UPDATE crm_sales_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+'))').bind(at,user.id,at,user.id,user.id));
+  }
+  const results=await db.batch(statements);return {ok:true,updated:results.reduce((count,result)=>count+Number(result.meta.changes||0),0),read_at:at};
+ }
  throw new AllocationError('通知操作不存在',404);
 }
