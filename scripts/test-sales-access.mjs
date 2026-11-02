@@ -8,7 +8,7 @@ import {build} from 'esbuild';
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
-const db={prepare:sql=>new Statement(sql)};
+const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
 globalThis.__salesAccessEnv={DB:db};
 const wide={customers_all:true,leads_allocate:true,performance_view:true,advertising_view:true,advertising_edit:true};
 for(const [id,role,permissions] of [['admin','admin',{}],['sales','sales',wide],['other','sales',{}]])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,permissions,created) VALUES(?,?,?,?,?,?,?)').run(id,id==='sales'?'winnie':id,id,role,'test-only',JSON.stringify(permissions),'2026-01-01');
@@ -23,7 +23,7 @@ const before=snapshot();
 const dir=mkdtempSync(join(tmpdir(),'sales-access-'));
 try{
  const result=await build({entryPoints:['app/api/[...path]/route.ts'],bundle:true,format:'esm',platform:'node',write:false,plugins:[{name:'fixture-env',setup(build){build.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env=globalThis.__salesAccessEnv;'}));}}]});
- const file=join(dir,'route.mjs');writeFileSync(file,result.outputFiles[0].text);const {GET}=await import(pathToFileURL(file));
+ const file=join(dir,'route.mjs');writeFileSync(file,result.outputFiles[0].text);const {GET,POST,PATCH}=await import(pathToFileURL(file));
  const request=async(path,view='boss')=>{const response=await GET(new Request('https://crm.test/api/'+path,{headers:{cookie:'crm_session='+token,'X-CRM-View':view}}));return {status:response.status,data:await response.json()};};
  assert.deepEqual((await request('leads')).data.map(r=>r.id),['mine']);
  assert.equal((await request('leads/theirs')).status,404);
@@ -40,4 +40,32 @@ try{
  assert.deepEqual((await request('leads','winnie')).data.map(r=>r.id),['mine'],'admin switched to salesperson uses that personal scope');
  assert.equal((await request('leads/theirs','winnie')).status,404);
  console.log('PASS: real API handler enforces own leads/details/forms/counts with historical broad grants; chat stays available; ads and allocation are blocked; admin and switched sales scopes work; read-only data preserved.');
+
+ sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,permissions,created) VALUES(?,?,?,?,?,?,?)').run('ceo','ceo','CEO','ceo','test-only',JSON.stringify(Object.fromEntries(Object.keys(wide).map(k=>[k,false]))),'2026-01-01');
+ sqlite.prepare("UPDATE crm_sessions SET user_id='ceo' WHERE token=?").run(digest);
+ const write=async(path,body,method='POST',view='boss')=>{const response=await ({POST,PATCH})[method](new Request('https://crm.test/api/'+path,{method,headers:{origin:'https://crm.test',cookie:'crm_session='+token,'X-CRM-View':view,'content-type':'application/json'},body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
+ const me=(await request('me')).data;assert.equal(me.role,'ceo');assert.ok(Object.values(me.capabilities).every(Boolean));
+ const {permissionDefaults}=await import((await import('./test-form-intake.mjs')).moduleURL('lib/crm.ts'));
+ assert.equal((await write('users/permissions',{id:'other',role:'sales',permissions:permissionDefaults('sales')})).status,200);
+ assert.equal((await write('users',{id:'other',name:'Edited by CEO',username:'other'},'PATCH')).status,200);
+ assert.equal((await write('users',{name:'New account',username:'new-account',role:'sales',password:'local-test-password'})).status,200);
+ assert.equal((await write('grade',{id:'theirs',grade:'A'})).status,200);
+ const config={members:[{user_id:'sales',state:'参与',share:100}],rule:{performance:30,maxChange:10,minimum:5,automatic:false}};
+ assert.equal((await write('allocation/config',{scope:'all',config})).status,200);
+ sqlite.exec("UPDATE crm_leads SET business_scope='meta-full' WHERE id='theirs'");
+ assert.equal((await write('deals',{lead_id:'theirs',order_number:'CEO-HTTP-DEAL',deal_date:'2026-10-22'})).status,200);
+ const deal=sqlite.prepare("SELECT * FROM crm_deals WHERE order_number='CEO-HTTP-DEAL'").get();assert.equal(deal.created_by,'ceo');
+ assert.equal((await write('receipts',{deal_id:deal.id,reference:'CEO-HTTP-RECEIPT',currency:'USD',amount:'10',received_date:'2026-10-22'})).status,200);
+ const beforeConfig=snapshot();
+ for(const path of ['google/config','google/start','google/forms/config','cloud/settings','cloud/limit','service/settings','workbench/bridge','workbench/snapshot','linked/connect','linked/disconnect'])assert.equal((await write(path,{})).status,403,path);
+ assert.equal((await write('google/config',{},'POST','personal')).status,403,'personal view cannot bypass system configuration protection');
+ assert.equal((await write('users',{name:'Admin',username:'new-admin',role:'admin',password:'local-test-password'})).status,403);
+ assert.equal((await write('users/reset-password',{id:'admin',password:'local-test-password'})).status,403);
+ assert.equal((await write('users',{id:'admin',name:'Changed admin',username:'changed-admin'},'PATCH')).status,403);
+ assert.equal(snapshot(),beforeConfig,'denied configuration requests never write data');
+ assert.equal((await request('me','personal')).data.role,'sales');
+ assert.equal((await request('leads/theirs','personal')).status,404);
+ assert.equal((await write('grade',{id:'theirs',grade:'B'},'POST','personal')).status,404);
+ assert.equal(sqlite.prepare("SELECT role FROM crm_users WHERE id='ceo'").get().role,'ceo');
+ console.log('PASS: real CEO API session manages accounts, customer data, allocation, deals and receipts; system configuration and administrator escalation are blocked; personal view remains isolated.');
 }finally{rmSync(dir,{recursive:true,force:true});delete globalThis.__salesAccessEnv;}

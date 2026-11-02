@@ -3,13 +3,13 @@ import {acquisitionDashboard} from './operations-dashboard';
 import {operationsReport,reportDay} from './operations-report';
 import {customerChanges} from './customer-changes';
 import {AllocationError} from './allocation-server';
-import {authorizedLead,can,id,now} from './crm';
+import {authorizedLead,can,id,now,hasAdminPermissions} from './crm';
 import {AD_PLATFORMS} from './advertising';
 import {AD_ACCOUNT_PLATFORMS} from './operations';
 import {SOURCE_KINDS,LOSS_REASONS,QUALITY_STATES} from './attribution';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 function required(value:any,label:string,max=2000){if(typeof value!=='string'||!value.trim()||value.trim().length>max)fail('请填写'+label);return value.trim();}
-function admin(user:any,actor:any){if(user.role!=='admin'||actor.role!=='admin')fail('只有管理员可以确认归因',403);}
+function admin(user:any,actor:any){if(!hasAdminPermissions(user)||!hasAdminPermissions(actor))fail('只有管理员可以确认归因',403);}
 const mappings:any={lead:{table:'crm_attribution_leads',key:'lead_id'},deal:{table:'crm_attribution_deals',key:'deal_id'},spend:{table:'crm_attribution_spend',key:'ad_id'}};
 function audit(db:D1Database,actor:any,kind:string,entity:string,payload:any,condition='1',args:any[]=[]){return db.prepare('INSERT INTO crm_attribution_events(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE '+condition).bind(id(),kind,entity,JSON.stringify(payload),now(),actor.id,...args);}
 async function leadAccess(db:D1Database,user:any,key:string){const row:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(key).first();if(!row||!authorizedLead(user,row))fail('咨询不存在或无权查看',404);return row;}
@@ -119,5 +119,5 @@ async function report(db:D1Database,user:any,url:URL){
  const monthlyContracts=operations?await rows('SELECT deal_id,currency,total_minor FROM crm_workflow_contracts'):[];
  const dashboard=operations?acquisitionDashboard({report:operations,leads:decorated,campaigns,subjects,deals,receipts,outcomes,notes:await rows('SELECT lead_id,created FROM crm_notes'),assignments:await rows('SELECT lead_id,created FROM crm_assignments'),contracts:monthlyContracts,refunds:await rows('SELECT receipt_id,amount_minor,refunded_date FROM crm_workflow_refunds')}):null;
  const monthly=operations?crmMonthlyCohort({report:operationsReport({leads:monthlyAcquiredLeads(decorated.filter(l=>!pendingIds.has(l.id)),intakeIds),campaigns,attrs,quality,subjects,deals,summary:[],from:'',to:'',asOf:operations.as_of,spendRecorded:[]}),leads:monthlyAcquiredLeads(decorated.filter(l=>!pendingIds.has(l.id)),intakeIds),campaigns,subjects,deals,contracts:monthlyContracts}):null;
- return {operations,dashboard,monthly,changes:await customerChanges(db,user,all),from,to,campaigns:campaigns.map(c=>adView?c:{id:c.id,code:c.code,name:c.name,platform:c.platform,currency:c.currency}),leads:decorated,deals:visibleDeals.map(d=>({...d,source_options:leads.filter(l=>isRelated(d.lead_id,l.id)).map(l=>l.id)})),ads:ads.map(a=>({...a,attribution:spend.find(s=>s.ad_id===a.id)||null})),accounts:adView?await rows('SELECT id,name,platform,currency,active FROM crm_operation_accounts'):[],requests,summary:totals.map(b=>adView?{...b,roas:all?b.roas:null}:{...b,spent_minor:null,roas:null}),pending_spend:pendingSpend,events:user.role==='admin'?await rows('SELECT e.*,u.name AS actor_name FROM crm_attribution_events e JOIN crm_users u ON u.id=e.created_by ORDER BY e.created DESC LIMIT 200'):[],can_edit:can(user,'customers_edit'),can_ad_edit:can(user,'advertising_edit'),full_scope:all,ad_view:adView};
+ return {operations,dashboard,monthly,changes:await customerChanges(db,user,all),from,to,campaigns:campaigns.map(c=>adView?c:{id:c.id,code:c.code,name:c.name,platform:c.platform,currency:c.currency}),leads:decorated,deals:visibleDeals.map(d=>({...d,source_options:leads.filter(l=>isRelated(d.lead_id,l.id)).map(l=>l.id)})),ads:ads.map(a=>({...a,attribution:spend.find(s=>s.ad_id===a.id)||null})),accounts:adView?await rows('SELECT id,name,platform,currency,active FROM crm_operation_accounts'):[],requests,summary:totals.map(b=>adView?{...b,roas:all?b.roas:null}:{...b,spent_minor:null,roas:null}),pending_spend:pendingSpend,events:hasAdminPermissions(user)?await rows('SELECT e.*,u.name AS actor_name FROM crm_attribution_events e JOIN crm_users u ON u.id=e.created_by ORDER BY e.created DESC LIMIT 200'):[],can_edit:can(user,'customers_edit'),can_ad_edit:can(user,'advertising_edit'),full_scope:all,ad_view:adView};
 }

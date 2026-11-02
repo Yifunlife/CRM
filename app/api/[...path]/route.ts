@@ -68,8 +68,7 @@ async function execute(req: Request,trace:RequestTrace) {
   const managementWrite=!domesticImport&&write&&(managementSettingPath(path)||path==='import'&&(body.allocation_management===true||body.allocate!==false));
   const managementAllowed=canSetManagement(actor)&&canSetManagement(user)&&actor.id===user.id;
   if(managementWrite&&!managementAllowed)throw new Problem('只有 Winnie、CEO、徐泽贵可以设置分配管理、业绩目标及智能监控',403);
-  const personalCeo=actor.role==='ceo'&&user.personal_business&&user.id===actor.id&&user.role==='sales';
-  if(!managementWrite&&((!personalCeo&&!ceoRequestAllowed(actor,path,req.method))||!ceoRequestAllowed(user,path,req.method)))throw new Problem('CEO拥有全部查看权限，不能修改业务数据或系统设置',403);
+  if(!ceoRequestAllowed(actor,path,req.method)||!ceoRequestAllowed(user,path,req.method))throw new Problem('CEO可以管理业务数据和账号权限，系统功能配置仅限管理员修改',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
   if((path==='assign'||path==='allocation/distribute')&&!managementAllowed)permissionDenied('leads_allocate');

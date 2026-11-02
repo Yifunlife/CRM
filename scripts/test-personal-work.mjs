@@ -15,7 +15,7 @@ const post=(path,body,user=sales)=>handle(db,user,user,'personal-work/'+path,'PO
 const base={id:'mine',type:'后续跟进',result:'客户已回复',note:'',next_action:'跟进客户回复',next_date:today,status:'正在沟通',method:'WhatsApp',at};
 await assert.rejects(get('customer?id=foreign'),e=>e.status===404);
 await assert.rejects(post('record',{...base,id:'foreign'}),e=>e.status===404);
-await assert.rejects(post('record',base,ceo),e=>e.status===403);
+await assert.rejects(post('record',{...base,result:'其他'},ceo),/备注/);
 await assert.rejects(post('record',{...base,result:'其他'}),/备注/);
 await assert.rejects(post('record',{...base,result:'设计已下单'}),/出方案/);
 await assert.rejects(post('record',{...base,status:'已成交'}),/成交单/);

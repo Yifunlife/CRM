@@ -31,16 +31,17 @@ export const PERMISSION_FIELDS = [
 ] as const;
 export type PermissionKey=typeof PERMISSION_FIELDS[number][0];
 export function permissionDefaults(role:string):Record<PermissionKey,boolean>{
- const admin=role==='admin',operations=role==='operations',leadership=['ceo','management'].includes(role);
+ const admin=['admin','ceo'].includes(role),operations=role==='operations',leadership=['ceo','management'].includes(role);
  return {customers_all:admin||operations||leadership,customers_edit:admin||operations||role==='sales',leads_allocate:admin||operations||role==='management',performance_view:admin||operations||leadership,followup_all:admin||leadership,followup_edit:admin||role==='followup',advertising_view:admin||operations||role==='ceo',advertising_edit:admin||operations};
 }
 export function permissionOverrides(user:any):Partial<Record<PermissionKey,boolean>>{try{const p=typeof user.permissions==='string'?JSON.parse(user.permissions):user.permissions;return p&&typeof p==='object'&&!Array.isArray(p)?p:{};}catch{return {};}}
 export const SALES_PERSONAL_ONLY:readonly PermissionKey[]=['customers_all','leads_allocate','performance_view','advertising_view','advertising_edit'];
-export function ceoRequestAllowed(user:any,path:string,method:string){return user?.role!=='ceo'||method==='GET'||method==='POST'&&['logout','password','profile','service/conversation','role-workspace/templates/generate'].includes(path);}
-export function can(user:any,key:PermissionKey){if(key==='leads_allocate')return canSetManagement(user);if(user?.role==='ceo')return permissionDefaults('ceo')[key];if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
+export function hasAdminPermissions(user:any){return user?.active!==0&&['admin','ceo'].includes(user?.role);}
+export function ceoRequestAllowed(user:any,path:string,method:string){return user?.role!=='ceo'||method==='GET'||!(path.startsWith('google/')||['cloud/settings','cloud/limit','service/settings','workbench/bridge','workbench/snapshot','linked/connect','linked/disconnect'].includes(path));}
+export function can(user:any,key:PermissionKey){if(user?.role==='ceo')return true;if(key==='leads_allocate')return canSetManagement(user);if(user?.role==='followup'&&key!=='followup_edit')return false;if(user?.role==='sales'&&SALES_PERSONAL_ONLY.includes(key))return false;return user?.role==='admin'||(permissionOverrides(user||{})[key]??permissionDefaults(user?.role||'')[key]);}
 
 // Stable identities keep settings access independent of editable names and usernames.
-export function canSetManagement(user:any){return user?.active!==0&&['ceo','management','admin'].includes(user?.role)&&['b7e34925-ec83-4f4e-ad42-04be344dc82b','b9bde8d1-8f87-4981-956b-128423cd6651','588a2047-59ad-49f8-ad38-f963df003046'].includes(user?.id);}
+export function canSetManagement(user:any){return user?.active!==0&&(user?.role==='ceo'||['ceo','management','admin'].includes(user?.role)&&['b7e34925-ec83-4f4e-ad42-04be344dc82b','b9bde8d1-8f87-4981-956b-128423cd6651','588a2047-59ad-49f8-ad38-f963df003046'].includes(user?.id));}
 export function canViewAllMarkets(user:any){return user?.active!==0&&(user?.role==='admin'||canSetManagement(user));}
 export function boardMarkets(user:any):string[]{
  if(canViewAllMarkets(user))return ['内贸','外贸'];

@@ -20,7 +20,7 @@ await assert.rejects(call('/preview','POST',{ids:['review'],recipients:['a']}),e
 await assert.rejects(call('/preview','POST',{ids:['l1'],recipients:['disabled']}),e=>e.status===409);
 await assert.rejects(call('/preview','POST',{ids:['l1','l1'],recipients:['a']}));
 await assert.rejects(call('', 'GET',{},sales),e=>e.status===403);
-await call('','GET',{},ceo);await assert.rejects(call('/preview','POST',{ids:['l1'],recipients:['a']},ceo),e=>e.status===403);
+await call('','GET',{},ceo);assert.equal((await call('/preview','POST',{ids:['l1'],recipients:['a']},ceo)).rows.length,1);
 await assert.rejects(call('/preview','POST',{ids:['l1'],recipients:['a']},admin,ceo),e=>e.status===403);
 await assert.rejects(call('/confirm','POST',{ids:['l1','l2','l3'],recipients:['a','b'],token:'stale'}),e=>e.status===409);assert.equal(snapshot(),before);
 const result=await call('/confirm','POST',{ids:['l1','l2','l3'],recipients:['a','b'],token:plan.token});assert.equal(result.assigned,3);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,3);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_workflow_audit').get().n,1);

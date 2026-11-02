@@ -1,10 +1,10 @@
 import {AllocationError} from './allocation-server';
-import {authorizedLead,can} from './crm';
+import {authorizedLead,can,hasAdminPermissions} from './crm';
 const kind='合同文件归档';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const parse=(s:string)=>{try{return JSON.parse(s);}catch{return {};}};
 async function access(db:D1Database,user:any,id:string){const lead:any=await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE id=?').bind(id).first();if(!lead||!authorizedLead(user,lead))fail('客户不存在或无权查看',404);return lead;}
-const editable=(user:any,lead:any)=>can(user,'customers_edit')&&(user.role==='admin'||user.role==='sales'&&lead.owner_id===user.id);
+const editable=(user:any,lead:any)=>can(user,'customers_edit')&&(hasAdminPermissions(user)||user.role==='sales'&&lead.owner_id===user.id);
 export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|undefined,user:any,actor:any){
  if(!['admin','sales','ceo','management'].includes(user.role))fail('没有合同文件访问权限',403);
  const url=new URL(req.url),path=url.pathname.slice(5),json=(data:any)=>Response.json(data,{headers:{'Cache-Control':'private, no-store'}});

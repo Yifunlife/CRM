@@ -21,7 +21,7 @@ export async function operationsEndpoint(db:D1Database,user:any,path:string,meth
   const name=clean(body.name,100),platform=clean(body.platform,40) as OpPlatform,owner=clean(body.owner_id,80),accountRef=clean(body.account_ref,200),notes=clean(body.notes);
   if(!name||!Object.hasOwn(OP_PLATFORMS,platform))throw new AllocationError('请填写运营账号名称并选择平台');
   if(existing&&existing.platform!==platform)throw new AllocationError('已保存账号不能更换平台，请新建另一个账号');
-  if(!await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('admin','operations')").bind(owner).first())throw new AllocationError('请选择有效的运营负责人');
+  if(!await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('admin','ceo','operations')").bind(owner).first())throw new AllocationError('请选择有效的运营负责人');
   if(await db.prepare('SELECT id FROM crm_operation_accounts WHERE platform=? AND name=? AND id<>?').bind(platform,name,recordId).first())throw new AllocationError('此平台已有同名运营账号，请使用已有账号');
   const active=body.active===undefined?1:Number(body.active);if(![0,1].includes(active))throw new AllocationError('账号状态无效');
   if(existing)return save('UPDATE crm_operation_accounts SET name=?,account_ref=?,owner_id=?,notes=?,active=?,updated=?,updated_by=?,version=version+1 WHERE id=? AND version=?',[name,accountRef,owner,notes,active,time,user.id,recordId,existing.version]);

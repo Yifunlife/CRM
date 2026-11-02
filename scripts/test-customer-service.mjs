@@ -64,6 +64,6 @@ const ceoContact=ceoInbox.contacts[0];
 assert.ok(Array.isArray((await call('conversation',{id:ceoContact.id},ceo)).messages));
 const beforeCeo=sql.prepare('SELECT total_changes() n').get().n;
 await assert.rejects(call('settings',{enabled:false,reply:''},ceo),e=>e.status===403);
-await assert.rejects(call('register',{id:ceoContact.id},ceo),e=>e.status===403);
+await assert.rejects(call('register',{id:ceoContact.id},ceo),e=>e.status===409);
 assert.equal(sql.prepare('SELECT total_changes() n').get().n,beforeCeo);
-console.log('PASS: CEO reads company service records and conversations but cannot modify settings or register customers in management view.');
+console.log('PASS: CEO reads company service records and conversations but cannot modify system settings; customer registration reaches version validation.');

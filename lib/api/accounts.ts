@@ -1,5 +1,5 @@
 import { editAccount,resetAccountPassword,validateTradeScopes,accountEmail,saveAccountProfile } from '../account-edit';
-import { can,clean,digest,id,now,passwordHash,verifyPassword } from '../crm';
+import { can,clean,digest,id,now,passwordHash,verifyPassword,hasAdminPermissions} from '../crm';
 import { initializeEmployeeLogin } from '../employee-login';
 import { followupManager } from '../order-followup-server';
 import { workflowAudit } from '../workflow-server';
@@ -24,8 +24,9 @@ export async function accountRecords({db,req,path,write,body,user,actor,token}:A
   if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
   if (path === "users") {
    if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,email,role,permissions,trade_scopes,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
-   if (user.role !== "admin") throw new Problem("只有管理员可以管理账号",403);
+   if (!hasAdminPermissions(user)) throw new Problem("只有管理员可以管理账号",403);
    if (req.method === "POST") {
+    if(user.role==='ceo'&&body.role==='admin')throw new Problem('系统配置管理员仅限管理员创建',403);
     const username = clean(body.username,80).toLowerCase(), name = clean(body.name,80);
     if (!/^[a-z0-9._-]{3,80}$/.test(username) || !name) throw new Problem("请输入姓名及至少3位英文或数字用户名");
     if (!["admin","operations","sales","ceo","management","followup"].includes(body.role) || clean(body.password,200).length < 8) throw new Problem("请选择角色，密码至少8位");
@@ -40,6 +41,7 @@ export async function accountRecords({db,req,path,write,body,user,actor,token}:A
     await db.batch(statements);return json({ok:true});
    }
    if (req.method === "PATCH") {
+    if(user.role==='ceo'&&(await db.prepare('SELECT role FROM crm_users WHERE id=?').bind(body.id).first<any>())?.role==='admin')throw new Problem('管理员系统配置账号仅限管理员维护',403);
     if ('name' in body || 'username' in body) return json(await editAccount(db,user,body));
     if (body.id === user.id) throw new Problem("不能停用当前登录账号");if (![0,1].includes(body.active)) throw new Problem("账号状态无效");
     await db.batch([db.prepare("UPDATE crm_users SET active=? WHERE id=?").bind(body.active,body.id),db.prepare("DELETE FROM crm_sessions WHERE user_id=?").bind(body.id),workflowAudit(db,actor,body.active?'启用账号':'停用账号待交接',body.id,{active:body.active})]);return json({ok:true});

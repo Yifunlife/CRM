@@ -16,7 +16,7 @@ const before=sql.prepare('SELECT * FROM crm_leads ORDER BY id').all();
 const first=await (await upload()).json()as any;assert.ok(first.id);assert.equal(objects.size,1);
 const detail=await (await call(users.sales,'contract-files?lead_id=lead')).json()as any;assert.equal(detail.items.length,1);assert.equal(detail.items[0].status,'已签署');assert.equal(detail.items[0].project_id,'project');assert.ok(!JSON.stringify(detail).includes('object_key'));assert.equal(detail.can_upload,true);
 const download=await call(users.sales,'contract-files/'+first.id);assert.equal(await download.text(),'%PDF-test');assert.ok(download.headers.get('content-disposition')!.includes(encodeURIComponent('已签署合同.pdf')));
-await assert.rejects(()=>call(users.other,'contract-files/'+first.id),/无权/);await assert.rejects(()=>upload(users.ceo),/只有/);await assert.rejects(()=>upload(users.other),/无权/);
+await assert.rejects(()=>call(users.other,'contract-files/'+first.id),/无权/);await assert.rejects(()=>upload(users.other),/无权/);
 await assert.rejects(()=>call(users.sales,'contract-files?lead_id=lead&name=test.exe&status='+encodeURIComponent('已填写'),'PUT','bad'),/PDF/);
 await assert.rejects(()=>call(users.sales,'contract-files?lead_id=lead&name=test.pdf&status='+encodeURIComponent('已填写')+'&project_id=wrong','PUT','test'),/项目/);
 await assert.rejects(()=>call(users.sales,'contract-files?lead_id=lead&name=test.pdf&status='+encodeURIComponent('已填写'),'PUT','test',101*1024*1024),/100MB/);
@@ -26,5 +26,6 @@ const count=sql.prepare("SELECT count(*) n FROM crm_sales_events WHERE kind='合
 hook=()=>sql.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='lead'").run();await assert.rejects(()=>upload(),/无权|权限/);hook=undefined;sql.prepare("UPDATE crm_leads SET owner_id='sales' WHERE id='lead'").run();assert.equal(objects.size,2);assert.equal((sql.prepare("SELECT count(*) n FROM crm_sales_events WHERE kind='合同文件归档'").get()as any).n,count.n);
 hook=()=>sql.prepare("UPDATE crm_sales_projects SET lead_id='foreign' WHERE project_id='project'").run();await assert.rejects(()=>upload(),/已变化/);hook=undefined;sql.prepare("UPDATE crm_sales_projects SET lead_id='lead' WHERE project_id='project'").run();assert.equal(objects.size,2);
 assert.deepEqual(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all(),before);assert.equal((sql.prepare('SELECT count(*) n FROM crm_deals').get()as any).n,0);assert.equal((sql.prepare('SELECT count(*) n FROM crm_receipts').get()as any).n,0);
-const hidden=await (await call(users.ceo,'contract-files?lead_id=lead')).json()as any;assert.equal(hidden.can_upload,false);assert.equal(hidden.items.length,2);
+const hidden=await (await call(users.ceo,'contract-files?lead_id=lead')).json()as any;assert.equal(hidden.can_upload,true);assert.equal(hidden.items.length,2);
+assert.equal((await upload(users.ceo)).status,200);assert.equal(objects.size,3);
 console.log('PASS: upload/download bytes, customer/project association, isolation, role permissions, validation, append preservation, revoked ownership and project races clean storage, no deal/receipt changes.');
