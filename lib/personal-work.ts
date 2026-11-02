@@ -8,6 +8,7 @@ export const day=(at=new Date().toISOString())=>new Intl.DateTimeFormat('sv-SE',
 export const addDays=(date:string,n:number)=>new Date(Date.parse(date+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
 export const daysBetween=(a:string,b:string)=>Math.round((Date.parse(a+'T00:00:00Z')-Date.parse(b+'T00:00:00Z'))/86400000);
 export const validDate=(v:any):v is string=>typeof v==='string'&&/^20\d\d-\d\d-\d\d$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&addDays(v,0)===v;
+export const personalTodoDue=(date:string,today=day())=>validDate(date)&&date<=today;
 export function openingSchedule(p:OpeningPlan,today=day()){
  const latest=OPENING_STAGES.map((name,j)=>{const finish=addDays(p.opening,-p.buffer-p.days.slice(j+1).reduce((a,b)=>a+b,0));return {name,start:addDays(finish,-p.days[j]),finish};});
  const remaining=p.remaining+p.days.slice(p.phase+1).reduce((a,b)=>a+b,0),ready=addDays(today,remaining),late=daysBetween(ready,p.opening),slack=daysBetween(addDays(p.opening,-p.buffer),ready),due=daysBetween(latest[p.phase].finish,today);
