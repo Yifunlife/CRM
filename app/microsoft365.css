@@ -1,0 +1,212 @@
+/* Microsoft 365 / Fluent web direction for the existing CRM.
+   FIRST VIEWPORT: full-width white masthead, pale navigation, blue active rail,
+   quiet gray canvas and white work surfaces. Preserve all business content.
+   INTERACTION: navigation and tabs use the same blue selection; hover is a
+   120ms surface change, with visible keyboard focus and reduced-motion support.
+   FINISH: verify desktop/mobile, record review findings and the built system.
+   Segoe web fonts use the public Microsoft CDN documented by Microsoft App Camp. */
+@font-face {
+  font-family: "Segoe UI Web";
+  src: local("Segoe UI"), url("https://res-1.cdn.office.net/files/fabric/assets/fonts/segoeui-westeuropean/segoeui-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Segoe UI Web";
+  src: local("Segoe UI Semibold"), url("https://res-1.cdn.office.net/files/fabric/assets/fonts/segoeui-westeuropean/segoeui-semibold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: swap;
+}
+
+:root,
+.office-app {
+  --ink: #242424;
+  --muted: #616161;
+  --green: #0f6cbd;
+  --line: #e0e0e0;
+  --canvas: #f5f5f5;
+  --white: #fff;
+  --crm-font: "Segoe UI Web", "Segoe UI", -apple-system, BlinkMacSystemFont, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+body,
+.office-app {
+  font-family: var(--crm-font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--canvas);
+}
+::selection { background: #cfe4fa; color: #242424; }
+:focus-visible { outline: 2px solid #0f6cbd; outline-offset: 2px; }
+::-webkit-scrollbar-thumb { background: #bdbdbd; border: 2px solid #f5f5f5; border-radius: 8px; }
+
+/* The masthead and navigation share one continuous, light application shell. */
+.office-app > aside {
+  top: 56px;
+  width: 224px;
+  padding: 20px 12px 16px;
+  background: #f5f5f5;
+  border-right: 1px solid var(--line);
+  color: var(--ink);
+  z-index: 30;
+}
+.office-app > aside .brand-sub {
+  display: block;
+  padding: 0 12px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.office-app > aside > nav { margin-top: 0; gap: 4px; }
+.office-app > aside > nav button {
+  position: relative;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: #424242;
+  font-weight: 400;
+  background: transparent;
+  box-shadow: none;
+}
+.office-app > aside > nav button:hover { background: #ebebeb; color: var(--ink); }
+.office-app > aside > nav button.active {
+  color: #0f548c;
+  background: #e1ecf7;
+  box-shadow: inset 2px 0 #0f6cbd;
+  font-weight: 600;
+}
+.office-app > aside > nav svg { width: 18px; height: 18px; stroke-width: 1.5; }
+.office-app > aside .nav-submenu { margin: 4px 0 8px; gap: 2px; }
+.office-app > aside .nav-submenu button { padding-left: 38px; min-height: 34px; font-size: 13px; }
+.office-app > aside > nav .nav-submenu button.active {
+  color: #0f548c;
+  background: #e1ecf7;
+  box-shadow: inset 2px 0 #0f6cbd;
+}
+.office-app > aside .profile { border-color: var(--line); padding: 12px 0 0; gap: 8px; }
+.office-app > aside .profile button { color: var(--ink); }
+.office-app > aside .profile .small { color: var(--muted); }
+.office-app > aside .profile .profile-trigger { padding: 4px; border-radius: 4px; }
+.office-app > aside .profile .profile-trigger:hover { background: #ebebeb; }
+.office-app > aside .avatar { width: 32px; height: 32px; color: #0f548c; background: #dce9f5; font-weight: 600; }
+.office-app > aside .profile strong { font-size: 13px; font-weight: 600; }
+.office-app > aside .profile-dropdown { border-radius: 4px; }
+.office-app .workspace { margin: 56px 0 0 224px; width: calc(100% - 224px); }
+.office-app .workspace:has(.sales-chat-shell) { height: calc(100dvh - 56px); }
+.office-app .workspace > header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 35;
+  display: flex;
+  flex-wrap: nowrap;
+  height: 56px;
+  min-height: 56px;
+  padding: 0 24px 0 16px;
+  gap: 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.office-app .workspace-brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 208px;
+  gap: 12px;
+  min-width: 0;
+}
+.office-app .workspace-brand img { width: 110px; height: 32px; object-fit: contain; }
+.office-app .workspace-brand span { padding-left: 12px; border-left: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.office-app .workspace-breadcrumb { font-size: 13px; color: var(--ink); }
+.office-app .workspace > header .followup-actions { flex-shrink: 0; }
+.office-app .workspace > header .followup-actions > button { color: #424242; font-size: 12px; background: transparent; }
+.office-app .workspace > header .followup-actions > button:hover { background: #f0f0f0; }
+.office-app .workspace .content { padding: 24px 28px; }
+
+/* Fluent's web type ramp: 14/20 body, 16/22 section, 24/32 page title. */
+.office-app .workspace h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: 0; }
+.office-app .workspace h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
+.office-app .workspace h3 { font-size: 14px; line-height: 20px; font-weight: 600; }
+.office-app .workspace .page-heading { margin-bottom: 20px; }
+.office-app .workspace .page-heading p { font-size: 13px; line-height: 20px; margin-top: 6px; }
+.office-app .workspace .panel { border-radius: 8px; border-color: var(--line); padding: 16px; margin-bottom: 16px; }
+.office-app .workspace .panel .panel { border-radius: 0; }
+.office-app .workspace .section-heading { margin-bottom: 12px; }
+.office-app button,
+.login button { border-radius: 4px; font-weight: 400; transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out; }
+.office-app button:hover,
+.login button:hover { background: #f0f0f0; }
+.office-app button.primary,
+.login button.primary { color: #fff; background: #0f6cbd; border-color: #0f6cbd; font-weight: 600; }
+.office-app button.primary:hover,
+.login button.primary:hover { background: #115ea3; border-color: #115ea3; }
+.office-app button.text:hover { color: #0c3b5e; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.office-app button:disabled { cursor: not-allowed; }
+.office-app .workspace button { min-height: 32px; }
+.office-app .workspace :is(input, select, textarea),
+.login :is(input, select, textarea) { border-color: #d1d1d1; border-radius: 4px; }
+.office-app .workspace input:where(:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]):not([type=color])),
+.office-app .workspace select:where(:not([multiple]):not([size])) { height: 34px; min-height: 34px; border-bottom-color: #707070; }
+.office-app .workspace :is(input, select, textarea):focus { border-bottom-color: #0f6cbd; }
+.office-app :is(input, textarea)::placeholder,
+.login :is(input, textarea)::placeholder { color: #707070; }
+.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) { gap: 24px; }
+.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) button { color: #616161; border-radius: 0; }
+.office-app .workspace :is(.tabs,.customer-detail-tabs,.followup-tabs) :is(button.selected,button.active,[aria-selected=true]) { color: #0f548c; box-shadow: inset 0 -2px #0f6cbd; font-weight: 600; }
+.office-app .workspace .table-wrap { border-radius: 4px; border-color: var(--line); }
+.office-app .workspace th { background: #fafafa; color: #424242; font-size: 12px; font-weight: 600; }
+.office-app .workspace td { border-color: #ebebeb; font-size: 13px; }
+.office-app .workspace tr:hover td { background: #f5f5f5; }
+.office-app .workspace .badge:not(.warn) { background: #ebf3fc; color: #0f548c; border-radius: 4px; }
+.office-app .workspace :is(.so-metric,.so-person,.personal-metrics > div) { border-color: var(--line); border-radius: 8px; }
+.office-app .workspace .so-metric[aria-pressed=true] { background: #ebf3fc; box-shadow: inset 0 2px #0f6cbd; }
+.office-app .workspace .so-person:hover { background: #fafafa; border-color: #bdbdbd; }
+.office-app .workspace .so-metric > strong { font-weight: 600; }
+.office-app .workspace .notice { border-radius: 4px; }
+
+.login { font-family: var(--crm-font); }
+.login-story { background: #f0f4f8; color: #242424; }
+.login-story :is(p,.login-channels) { color: #616161; }
+.login-story h1 { font-size: 36px; font-weight: 600; line-height: 1.4; }
+.login-story .brand img { background: transparent; padding: 0; }
+.login-form h2 { font-weight: 600; }
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .office-app > aside { width: 200px; }
+  .office-app .workspace { margin-left: 200px; width: calc(100% - 200px); }
+  .office-app .workspace-brand { flex-basis: 184px; }
+  .office-app .workspace .content { padding: 20px; }
+  .office-app .workspace > header { gap: 16px; padding-right: 16px; }
+  .office-app .workspace > header .followup-actions > .small { display: none; }
+}
+@media (max-width: 720px) {
+  .office-app .workspace { margin: 56px 0 0; width: 100%; }
+  .office-app .workspace > header { gap: 12px; padding: 0 12px; }
+  .office-app .workspace-brand { flex: 0 0 auto; }
+  .office-app .workspace-brand img { width: 88px; height: 28px; }
+  .office-app .workspace-brand span,
+  .office-app .workspace-breadcrumb,
+  .office-app .workspace > header .followup-actions > .small { display: none; }
+  .office-app .workspace > header .followup-actions { margin-left: auto; min-width: 0; }
+  .office-app .workspace > header .followup-actions > button { min-height: 44px; }
+  .office-app > aside { inset: 0 auto 0 0; width: min(280px, 85vw); height: 100dvh; padding: 24px 12px 16px; z-index: 50; }
+  .office-app > aside .brand-sub { padding: 8px 12px 20px; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .office-app > aside .mobile-nav-close { top: 24px; color: #424242; }
+  .office-app > aside > nav button,
+  .office-app > aside .nav-submenu button { min-height: 44px; }
+  .office-app .navigation-backdrop { background: rgb(0 0 0 / 28%); }
+  .office-app .workspace .content { padding: 16px 12px; }
+  .office-app .workspace h1 { font-size: 24px; line-height: 32px; }
+  .office-app .workspace .page-heading { margin-bottom: 16px; }
+  .office-app .workspace .panel { padding: 12px; }
+  .office-app .workspace button { min-height: 44px; }
+  .office-app .workspace :is(input, select, textarea) { font-size: 16px; }
+  .office-app .workspace input:where(:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]):not([type=color])),
+  .office-app .workspace select:where(:not([multiple]):not([size])) { height: 44px; min-height: 44px; }
+  .office-app .workspace .sales-overview .so-metric { border-radius: 0; }
+  .office-app .workspace .sales-overview .so-person { border-radius: 0; }
+  .login-story h1 { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-app button,
+  .login button { transition: none; }
+}

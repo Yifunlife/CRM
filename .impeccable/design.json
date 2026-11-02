@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T09:17:15.819893+00:00",
+  "title": "Design System: 亦玩客资管理 · Microsoft 365",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Fluent 操作蓝",
+        "tonalRamp": [
+          "oklch(15% 0.1493 251.63)",
+          "oklch(26% 0.1493 251.63)",
+          "oklch(38% 0.1493 251.63)",
+          "oklch(49% 0.1493 251.63)",
+          "oklch(61% 0.1493 251.63)",
+          "oklch(72% 0.1493 251.63)",
+          "oklch(84% 0.1493 251.63)",
+          "oklch(95% 0.1493 251.63)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "操作悬停蓝",
+        "tonalRamp": [
+          "oklch(15% 0.1310 251.42)",
+          "oklch(26% 0.1310 251.42)",
+          "oklch(38% 0.1310 251.42)",
+          "oklch(49% 0.1310 251.42)",
+          "oklch(61% 0.1310 251.42)",
+          "oklch(72% 0.1310 251.42)",
+          "oklch(84% 0.1310 251.42)",
+          "oklch(95% 0.1310 251.42)"
+        ]
+      },
+      "selected-ink": {
+        "role": "primary",
+        "displayName": "选中文字蓝",
+        "tonalRamp": [
+          "oklch(15% 0.1123 249.12)",
+          "oklch(26% 0.1123 249.12)",
+          "oklch(38% 0.1123 249.12)",
+          "oklch(49% 0.1123 249.12)",
+          "oklch(61% 0.1123 249.12)",
+          "oklch(72% 0.1123 249.12)",
+          "oklch(84% 0.1123 249.12)",
+          "oklch(95% 0.1123 249.12)"
+        ]
+      },
+      "selected-surface": {
+        "role": "primary",
+        "displayName": "浅蓝选择面",
+        "tonalRamp": [
+          "oklch(15% 0.0190 248.03)",
+          "oklch(26% 0.0190 248.03)",
+          "oklch(38% 0.0190 248.03)",
+          "oklch(49% 0.0190 248.03)",
+          "oklch(61% 0.0190 248.03)",
+          "oklch(72% 0.0190 248.03)",
+          "oklch(84% 0.0190 248.03)",
+          "oklch(95% 0.0190 248.03)"
+        ]
+      },
+      "badge-surface": {
+        "role": "primary",
+        "displayName": "浅蓝提示面",
+        "tonalRamp": [
+          "oklch(15% 0.0148 251.16)",
+          "oklch(26% 0.0148 251.16)",
+          "oklch(38% 0.0148 251.16)",
+          "oklch(49% 0.0148 251.16)",
+          "oklch(61% 0.0148 251.16)",
+          "oklch(72% 0.0148 251.16)",
+          "oklch(84% 0.0148 251.16)",
+          "oklch(95% 0.0148 251.16)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "工作台灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "工作面白",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-hover": {
+        "role": "neutral",
+        "displayName": "控件悬停灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "navigation-hover": {
+        "role": "neutral",
+        "displayName": "导航悬停灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "table-heading": {
+        "role": "neutral",
+        "displayName": "表头浅灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "正文炭灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "secondary-ink": {
+        "role": "neutral",
+        "displayName": "次要深灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "提示灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "分隔灰",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "字段边线",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "field-bottom": {
+        "role": "neutral",
+        "displayName": "字段底线",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "页面标题",
+        "purpose": "常规业务页标题；桌面与手机均使用 24px / 32px。"
+      },
+      "title": {
+        "displayName": "分区标题",
+        "purpose": "工作面板与业务分区。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "业务内容；中文由系统字体回退。"
+      },
+      "label": {
+        "displayName": "紧凑标签",
+        "purpose": "表头与辅助信息。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "selection-rail",
+        "value": "inset 2px 0 #0f6cbd",
+        "purpose": "当前导航选择轨道，不作容器投影。"
+      },
+      {
+        "name": "selection-underline",
+        "value": "inset 0 -2px #0f6cbd",
+        "purpose": "当前页签底线。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-state",
+        "value": "background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out",
+        "purpose": "按钮状态变化；prefers-reduced-motion 时取消。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile-max",
+        "value": "720px"
+      },
+      {
+        "name": "compact-desktop-min",
+        "value": "721px"
+      },
+      {
+        "name": "compact-desktop-max",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主操作按钮",
+      "kind": "button",
+      "description": "继承业务操作和禁用状态的紧凑按钮。",
+      "html": "<button class=\"ds-btn-primary\">保存联系结果</button>",
+      "css": ".ds-btn-primary{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;color:#fff;background:var(--green,#0f6cbd);border:1px solid var(--green,#0f6cbd);font-weight:600;min-height:32px;padding:5px 10px;border-radius:4px;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-btn-primary:hover{background:#115ea3;border-color:#115ea3;}.ds-btn-primary:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}.ds-btn-primary:disabled{opacity:.5;cursor:not-allowed;}@media(prefers-reduced-motion:reduce){.ds-btn-primary{transition:none;}}",
+      "refersTo": "button-primary"
+    },
+    {
+      "name": "普通按钮",
+      "kind": "button",
+      "description": "继承业务操作和禁用状态的紧凑按钮。",
+      "html": "<button class=\"ds-btn-secondary\">刷新</button>",
+      "css": ".ds-btn-secondary{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;color:var(--ink,#242424);background:var(--white,#fff);border:1px solid var(--line,#e0e0e0);font-weight:400;min-height:32px;padding:5px 10px;border-radius:4px;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-btn-secondary:hover{background:#f0f0f0;}.ds-btn-secondary:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}.ds-btn-secondary:disabled{opacity:.5;cursor:not-allowed;}@media(prefers-reduced-motion:reduce){.ds-btn-secondary{transition:none;}}",
+      "refersTo": "button-secondary"
+    },
+    {
+      "name": "单行字段",
+      "kind": "input",
+      "description": "常规字段保留较深底线和可见蓝色焦点。",
+      "html": "<label class=\"ds-label\">客户名称<input class=\"ds-input\" placeholder=\"请输入客户名称\" /></label>",
+      "css": ".ds-label{display:grid;gap:4px;font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;color:var(--ink,#242424);font-size:13px;}.ds-input{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;height:34px;padding:0 10px;border:1px solid #d1d1d1;border-bottom-color:#707070;border-radius:4px;background:var(--white,#fff);color:var(--ink,#242424);}.ds-input::placeholder{color:#707070;}.ds-input:focus{border-bottom-color:var(--green,#0f6cbd);}.ds-input:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}"
+    },
+    {
+      "name": "当前导航",
+      "kind": "nav",
+      "description": "浅色导航通过文字、面色和蓝轨表达当前位置。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"功能导航\"><button class=\"ds-nav-item ds-nav-active\" aria-current=\"page\">客户管理</button><button class=\"ds-nav-item\">项目管理</button></nav>",
+      "css": ".ds-nav{display:grid;gap:4px;background:var(--canvas,#f5f5f5);padding:12px;}.ds-nav-item{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;position:relative;min-height:38px;padding:8px 12px;border:0;border-radius:4px;text-align:left;color:#424242;background:transparent;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-nav-item:hover{background:#ebebeb;color:var(--ink,#242424);}.ds-nav-active{background:#e1ecf7;color:#0f548c;box-shadow:inset 2px 0 #0f6cbd;font-weight:600;}.ds-nav-item:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none;}}",
+      "refersTo": "navigation-active"
+    },
+    {
+      "name": "状态徽标",
+      "kind": "chip",
+      "description": "普通状态示例，警告及阶段语义仍由原业务样式负责。",
+      "html": "<span class=\"ds-badge\">正在沟通</span>",
+      "css": ".ds-badge{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;display:inline-flex;padding:3px 9px;border-radius:4px;background:#ebf3fc;color:#0f548c;font-size:12px;white-space:nowrap;}",
+      "refersTo": "badge"
+    },
+    {
+      "name": "工作面板",
+      "kind": "card",
+      "description": "平放的白色工作容器，不添加装饰性阴影。",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-title\">客户资料</h2><p class=\"ds-copy\">客户与下一步跟进信息</p></section>",
+      "css": ".ds-panel{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;padding:16px;border:1px solid var(--line,#e0e0e0);border-radius:8px;background:var(--white,#fff);color:var(--ink,#242424);}.ds-title{font-size:16px;line-height:22px;font-weight:600;margin:0 0 12px;}.ds-copy{margin:0;color:var(--muted,#616161);}",
+      "refersTo": "panel"
+    },
+    {
+      "name": "内容页签",
+      "kind": "nav",
+      "description": "文字与底部蓝线共同表达当前内容分区。",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"客户详情\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">跟进</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">客户资料</button></div>",
+      "css": ".ds-tabs{display:flex;gap:24px;}.ds-tab{font-family:\"Segoe UI Web\", \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif;font-size:14px;min-height:34px;padding:7px 0;border:0;border-radius:0;background:transparent;color:#616161;transition:background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;}.ds-tab[aria-selected=true]{color:#0f548c;font-weight:600;box-shadow:inset 0 -2px #0f6cbd;}.ds-tab:hover{background:#f0f0f0;}.ds-tab:focus-visible{outline:2px solid var(--green,#0f6cbd);outline-offset:2px;}@media(prefers-reduced-motion:reduce){.ds-tab{transition:none;}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Microsoft 365 浅色工作台",
+    "overview": "按用户明确指定的 Microsoft 365 UI 与字体方向，现有 CRM 使用浅色 Fluent 视觉：白色通栏、浅灰导航、蓝色选中提示及白色工作面板。原版 YIFUN LIFE Logo 保留；Microsoft 365 是界面参考，不替换公司身份。\n\n本文件提取本地实现，视觉来源是最后加载的 `app/microsoft365.css` 及其继承的基础控件样式。它取代先前深蓝导航与金黄色选中标记的视觉约定；业务模块、权限及资料约束继续按现有实现。当前仅为本地预览，不能据此认定已生产部署或完成真实账号验收。",
+    "keyCharacteristics": [
+      "连续的浅色应用外壳，内容优先。",
+      "Segoe UI 字体、紧凑字阶与清晰中文回退。",
+      "蓝色轨道与文字共同表达选择，状态保留文字。"
+    ],
+    "rules": [
+      {
+        "name": "The Selection Rule",
+        "body": "当前选择同时保留文字及蓝色边轨或底线；业务状态继续使用现有文字和语义色，不能只靠颜色解释。",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "**Do** 保留原版 YIFUN LIFE Logo、业务入口、资料与权限边界。",
+      "**Do** 以 `app/microsoft365.css` 的最终覆盖值解释全站外壳；旧表面文档中的深蓝与金黄不再定义全局导航。",
+      "**Do** 保留可见键盘焦点、状态文字及手机触控尺寸。",
+      "**Do** 分开记录本地预览、生产发布和真实账号验收。"
+    ],
+    "donts": [
+      "**Don't** 将公司 Logo 替换为 Microsoft 品牌图案，或把界面方向当作 Microsoft 365 服务接入。",
+      "**Don't** 恢复深蓝侧栏与金黄色选中轨道作为当前全局视觉。",
+      "**Don't** 为视觉改版修改业务统计、数据归属或访问权限。"
+    ]
+  }
+}
