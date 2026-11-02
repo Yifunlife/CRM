@@ -1,3 +1,4 @@
+import {customerInquiry} from './customer-inquiry';
 import {customerMarket} from './operations-dashboard';
 import {customerSource,customerSourceSQL,PLATFORM_PENDING} from './customer-source';
 import {can} from './crm';
@@ -52,5 +53,5 @@ export async function customerPage(db:D1Database,user:any,url:URL,options:{unass
  const sources:Record<string,number>={},platform_sources:Record<string,number>={},grades:Record<string,number>={};let overall=pending.length;
  for(const g of groups.results){platform_sources[g.display_source]=(platform_sources[g.display_source]||0)+g.total;sources[g.source]=(sources[g.source]||0)+g.total;grades[g.grade]=(grades[g.grade]||0)+g.total;overall+=g.total;}
  for(const r of pending){const label=r.display_source||customerSource(r);platform_sources[label]=(platform_sources[label]||0)+1;sources[r.source]=(sources[r.source]||0)+1;grades['']=(grades['']||0)+1;}
- return {rows:[...head,...records.map(r=>({...r,...customerOrigin(r,originalByLead.get(r.id)),status:r.display_status,assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)}))],total,page,pages,overall,sources,platform_sources,grades};
+ return {rows:[...head.map(r=>({...r,original_inquiry:customerInquiry(r)})),...records.map(r=>({...r,...customerOrigin(r,originalByLead.get(r.id)),original_inquiry:customerInquiry(r,originalByLead.get(r.id)),status:r.display_status,assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)}))],total,page,pages,overall,sources,platform_sources,grades};
 }

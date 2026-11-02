@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useId,useState,type ReactNode} from 'react';
 import {Pencil,ArrowRight} from 'lucide-react';
+import CustomerInquiry from './customer-inquiry';
 import ContractFiles from './contract-files';
 import {customerSource} from '../lib/customer-source';
 import {salesCompanyName} from '../lib/account-classification';
@@ -8,6 +9,7 @@ import {can,GRADES} from '../lib/crm';
 import {customerProfile,CUSTOMER_PROJECT_STAGES,CUSTOMER_PROJECT_STATUSES,CUSTOMER_FOLLOW_STATUSES} from '../lib/customer-profile';
 import './customer-profile.css';
 type Props={lead:any;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>;onSaved:()=>Promise<void>;tab:string;onTab:(tab:string)=>void;followup:ReactNode;project:ReactNode;original:ReactNode;onEditingChange?:(editing:boolean)=>void};
+const customerTypes=['商户','集团公司','开发商','其他'];
 const tabs=[['客户资料','基本资料'],['成交与收款','项目与成交'],['跟进','跟进安排'],['文件归档','文件归档']];
 const date=(value:string)=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):value||'待补充';
 export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followup,project,original,onEditingChange}:Props){
@@ -37,11 +39,11 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
   {error&&<p role="alert" className="notice error">{error}</p>}{message&&<p role="status" className="notice success">{message}</p>}
   <div className="dossier-layout"><div className="dossier-main">
    {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading"><h2>基本客户资料</h2><span className="small muted">{editing?'编辑客户资料':'客户档案'}</span></div>
-    <form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
+    <CustomerInquiry lead={lead}/><form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
      {field('name','客户姓名 *',lead.name)}{field('customer_id','客户 ID',detail._workbench?.desktop_id||lead.id,'text',true)}
      {field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
      {field('phone','电话 / WhatsApp',lead.phone)}{field('email','Email',lead.email,'email')}
-     {field('source_display','客户来源',customerSource(lead),'text',true)}{field('profile_customerType','客户类型',profile.customerType)}
+     {field('source_display','客户来源',customerSource(lead),'text',true)}{select('profile_customerType','客户类型',profile.customerType,customerTypes)}
      {select('grade','客户等级',lead.grade,GRADES)}{field('owner_display','负责人',owner,'text',true)}
     </div><hr/><h3>补充信息</h3><div className="dossier-grid">
      {field('profile_organization','公司 / 机构',profile.organization)}{field('profile_city','城市',profile.city)}

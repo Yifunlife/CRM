@@ -1,0 +1,11 @@
+.customer-original-inquiry{padding:12px 0;margin:0 0 12px;border-bottom:1px solid var(--line)}
+.customer-original-inquiry>h3{margin:0 0 8px;font-size:14px}
+.customer-original-inquiry>dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 16px;margin:0}
+.customer-original-inquiry>dl>div{min-width:0;display:block}
+.customer-original-inquiry dt{font-size:12px;color:var(--muted)}
+.customer-original-inquiry dd{margin:4px 0 0;overflow-wrap:anywhere}
+.inquiry-content{margin-top:6px}
+.inquiry-content>summary{cursor:pointer;color:var(--blue);padding:4px 0}
+.inquiry-content>p{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
+.mw-original-inquiry{min-width:190px;max-width:280px;white-space:normal}
+@media(max-width:720px){.customer-original-inquiry>dl{grid-template-columns:1fr;gap:8px}.inquiry-content>summary{min-height:36px}}
