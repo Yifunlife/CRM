@@ -1,5 +1,6 @@
 import {allocationManagementEndpoint} from '../allocation-management';
 import {salesWorkflowEndpoint} from '../sales-workflow-server';
+import {followupScheduleEndpoint} from '../followup-schedule-server';
 import {salesMonitor} from '../sales-monitor';
 import {salesManagementEndpoint} from '../sales-management-server';
 import {roleWorkspaceEndpoint as roleDashboardEndpoint} from '../role-workspace-server';
@@ -36,7 +37,8 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
  const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);
  const monitor=await salesMonitor(db,env.QUOTE_DB,user,path,req.method,url);if(monitor!==undefined)return json(monitor);
  const template=await contractTemplateEndpoint(user,path,req.method,body);if(template!==undefined)return template instanceof Response?template:json(template);
- const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined)return json(dashboard);
+ const schedule=await followupScheduleEndpoint(db,user,actor,path,req.method,body);if(schedule!==undefined){if(req.method==='POST'&&'id' in schedule)await afterWorkflowWrite(db,env.QUOTE_DB,schedule,{order:schedule.id});return json(schedule);}
+ const dashboard=await roleDashboardEndpoint(db,user,actor,path,req.method,body,url,env.QUOTE_DB);if(dashboard!==undefined){if(req.method==='POST'&&path.endsWith('/business-process')&&'id' in dashboard)await afterWorkflowWrite(db,env.QUOTE_DB,dashboard,{order:dashboard.id});return json(dashboard);}
   const workspace=await roleWorkspaceEndpoint(db,user,path,req.method,url);if(workspace!==undefined)return json(workspace);
   const alignment=await historicalAlignment(db,user,actor,path,req.method,body);if(alignment!==undefined)return json(alignment);
   const confirmation=await confirmedWorkflow(db,env.QUOTE_DB,user,actor,path,req.method,body,url,{source:env.QUOTE_BUCKET,destination:env.BUCKET});if(confirmation!==undefined){if(req.method==='POST'&&path==='confirmations/quote'&&'id' in confirmation)await afterWorkflowWrite(db,env.QUOTE_DB,confirmation,{project:confirmation.id});return json(confirmation);}
