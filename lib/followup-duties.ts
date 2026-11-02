@@ -24,6 +24,7 @@ export function readCustomerFollowup(input:any,previous:any,page:string,today:st
  const value:any={status:input?.status||'待同步客户',money_related:['费用对账','跟进收款'].includes(page)||input?.money_related===true,has_inspection_photos:input?.has_inspection_photos===true};
  for(const field of fields){if(input?.[field]!==undefined&&typeof input[field]!=='string')return {error:'客户跟进内容须为文字'};value[field]=(input?.[field]||'').trim();if(value[field].length>2000)return {error:'客户跟进内容不能超过2000字'};}
  if(!CUSTOMER_FOLLOWUP_STATES.includes(value.status))return {error:'请选择有效的客户同步状态'};
+ if(value.content.split('\n').includes('尚未同步')&&(value.status!=='待同步客户'||value.content!=='尚未同步'))return {error:'尚未同步不能与已同步内容同时选择，请核对客户同步状态及内容'};
  for(const key of ['date','next_date'])if(value[key]&&(!/^\d{4}-\d{2}-\d{2}$/.test(value[key])||!Number.isFinite(Date.parse(value[key]))||new Date(value[key]).toISOString().slice(0,10)!==value[key]))return {error:'请填写有效的客户跟进日期'};
  if(value.status!=='待同步客户'){
   if(!value.date||value.date>today)return {error:'请填写已实际发生的客户同步日期'};
