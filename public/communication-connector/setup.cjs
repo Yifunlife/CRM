@@ -3708,11 +3708,93 @@ function startCrmAccountSync(){let snapshot,byClient;
     }
     function patchRenderer2(source) {
       const prior = "const grades=['VIP','A','B','C','D','Yifun Staff'];", next = "const grades=['VIP','A','B','C','D','Yifun Staff','\u672A\u5206\u7C7B'];";
-      if (source.includes(next)) return source;
-      if (!source.includes(prior) || !source.includes("list.filter(c=>c.grade===grade)")) throw Error("\u5BA2\u6237\u5206\u7EC4\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
-      return source.replace(prior, next).replace("list.filter(c=>c.grade===grade)", "list.filter(c=>(c.grade||'\u672A\u5206\u7C7B')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])", "new Set(['VIP','A','B','C','whatsapp-groups','\u672A\u5206\u7C7B'])");
+      if (!source.includes(next)) {
+        if (!source.includes(prior) || !source.includes("list.filter(c=>c.grade===grade)")) throw Error("\u5BA2\u6237\u5206\u7EC4\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
+        source = source.replace(prior, next).replace("list.filter(c=>c.grade===grade)", "list.filter(c=>(c.grade||'\u672A\u5206\u7C7B')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])", "new Set(['VIP','A','B','C','whatsapp-groups','\u672A\u5206\u7C7B'])");
+      }
+      return source.includes("crm-connection-renderer.js") ? source : source + "\n(()=>{const script=document.createElement('script');script.src='../crm-connection-renderer.js';document.head.appendChild(script)})();\n";
     }
-    module2.exports = { patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2 };
+    function patchConnectionPreload2(source) {
+      return source.includes("exposeInMainWorld('crmConnection'") ? source : source + "\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";
+    }
+    function patchConnectionMain2(source) {
+      const create = source.indexOf("ipcMain.handle('clients:create'");
+      if (create >= 0) {
+        const end = source.indexOf("\n", create), part = source.slice(create, end < 0 ? source.length : end);
+        source = source.replace(part, part.replace("owner:'Winnie'", "owner:crmBridgeOwner()"));
+      }
+      source = source.replace("owner:'Winnie',lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'", "owner:crmBridgeOwner(),lostReason:'',notes:'\u56FD\u5BB6\u3001\u9879\u76EE\u53CA\u5BA2\u6237\u7B49\u7EA7\u8BF7\u4EBA\u5DE5\u786E\u8BA4\u3002'");
+      source = source.replace("require('./crm-connection-settings')", "require('./crm-connection-settings.cjs')");
+      if (source.includes("require('./crm-connection-settings.cjs')")) return source;
+      return source + `
+const crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
+ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
+ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));
+`;
+    }
+    function patchFirstContactMain2(source) {
+      source = source.replace("mailSender.send(client,'first',check)", "mailSender.send(client,'first',check,{automaticFirstContact:true})");
+      source = source.replace("material:()=>reception.approvedFile(receptionConfig(),'company'),guard:", "material:()=>{const value=receptionConfig(root);return reception.approvedFile({...value,files:{...value.files,company:'(Compressed)Yifunlife Company Profile.pdf'}},'company')},guard:");
+      if (source.includes("require('./crm-first-contact')")) return source;
+      const anchor = " const management=require('./crm-client-management');";
+      if (!source.includes(anchor)) throw Error("\u6B64\u5DE5\u4F5C\u53F0\u7248\u672C\u4E0D\u652F\u6301\u81EA\u52A8\u9996\u8054\uFF0C\u672A\u4FEE\u6539");
+      source = source.replace(anchor, anchor + `
+ if(p.auto_first_contact){
+  const config=readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{});
+  const mailSender=createOutlookOutreach({read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),write:(name,value)=>writeJson(path.join(root,'.workbench',name),value),token:()=>backgroundOutlookToken(true),fetch:(...args)=>net.fetch(...args),material:()=>{const value=receptionConfig(root);return reception.approvedFile({...value,files:{...value.files,company:'(Compressed)Yifunlife Company Profile.pdf'}},'company')},guard:()=>root===workspaceRoot&&!app.isQuitting});
+  return require('./crm-first-contact').firstContact({phonePolicy:require('./outreach-policy'),command,config,getClient,clients:()=>bootstrapClients().clients,read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),draft:loadDraft,archive:client=>saveCustomerArchive(client).messages,active:()=>root===workspaceRoot&&!app.isQuitting,
+   whatsappHistory:async phone=>{const jid=phone+'@s.whatsapp.net',names=whatsappContactNames(),aliases=[jid,...(names.aliases.get(jid)||[])].filter(value=>/^\\d+@(s\\.whatsapp\\.net|lid)$/.test(value));return (await readWhatsAppDatabase("SELECT id FROM messages WHERE is_from_me=1 AND chat_jid IN ("+aliases.map(value=>"'"+value+"'").join(',')+") LIMIT 1")).length>0;},
+   normalizePhone:(clientId,phone)=>{const state=bootstrapClients(),client=state.clients.find(c=>c.id===clientId);client.whatsapp=phone;saveClients(state);},
+   sendWhatsApp:(client,text,guard)=>sendReception(client.id,{kind:'lead-welcome',text},{manual:true,requestId:command.id,guard}),sendEmail:(client,check)=>mailSender.send(client,'first',check,{automaticFirstContact:true})});
+ }
+
+`);
+      const status = "reception:receptionConfig().enabled,error:crmAccountSync?.error()";
+      if (!source.includes(status)) throw Error("\u5DE5\u4F5C\u53F0\u72B6\u6001\u4E0A\u62A5\u7248\u672C\u4E0D\u517C\u5BB9\uFF0C\u672A\u4FEE\u6539");
+      return source.replace(status, "reception:receptionConfig().enabled,autoFirstContact:!!readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{}).autoFirstContact,error:crmAccountSync?.error()");
+    }
+    function patchFirstContactMail2(source) {
+      source = source.replace("const {approvedFirstMail}=require('./crm-first-contact-mail');", "const {approvedFirstMail,sameFirstDraft}=require('./crm-first-contact-mail');");
+      source = source.replace("if((await list('drafts',row.recipient)).some(m=>matches(m,row.recipient)&&m.id!==row.messageId))", "if(!await sameFirstDraft((await list('drafts',row.recipient)).filter(m=>matches(m,row.recipient)),row.messageId,graph))");
+      source = source.replace("if(latestDrafts.some(m=>m.id!==draft.id))", "if(row.automaticFirstContact?!await sameFirstDraft(latestDrafts,draft.id,graph):latestDrafts.some(m=>m.id!==draft.id))");
+      if (source.includes("async function resumeFirst(")) return source;
+      source = "const {approvedFirstMail,sameFirstDraft}=require('./crm-first-contact-mail');\n" + source;
+      source = source.replace("async function send(client,kind,check=async()=>{})", "async function send(client,kind,check=async()=>{},options={})");
+      const prior = "if(existing)return{status:'skipped',reason:'\u5DF2\u6709\u90AE\u4EF6\u8BB0\u5F55\uFF1A'+existing.status};";
+      if (!source.includes(prior)) throw Error("\u9996\u8054\u90AE\u4EF6\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
+      source = source.replace(prior, "if(existing){if(options.automaticFirstContact===true&&existing.automaticFirstContact===true&&existing.status==='preparing'&&!existing.sendRequestedAt)return resumeFirst(existing,client,check);return{status:'skipped',reason:'\u5DF2\u6709\u90AE\u4EF6\u8BB0\u5F55\uFF1A'+existing.status};}");
+      source = source.replace("kind,status:'preparing'", "kind,automaticFirstContact:options.automaticFirstContact===true,status:'preparing'");
+      source = source.replace("!finalDraft.body.content.includes(signature)||!message.body.split('\\n').filter(Boolean).every(line=>finalDraft.body.content.includes(escape(line)))", "(row.automaticFirstContact?!approvedFirstMail(finalDraft.body.content,row):!finalDraft.body.content.includes(signature)||!message.body.split('\\n').filter(Boolean).every(line=>finalDraft.body.content.includes(escape(line))))");
+      const before = "if(!row.body||!row.signatureHtml||!row.attachmentSha256||!row.inlineHashes||!row.body.split('\\n').filter(Boolean).every(line=>html.replace(/\\s+/g,' ').includes(escape(line).replace(/\\s+/g,' ')))||!html.includes(row.signatureHtml))";
+      const after = "if(!row.body||!row.signatureHtml||!row.attachmentSha256||!row.inlineHashes||(row.automaticFirstContact?!approvedFirstMail(html,row):!row.body.split('\\n').filter(Boolean).every(line=>html.replace(/\\s+/g,' ').includes(escape(line).replace(/\\s+/g,' ')))||!row.automaticFirstContact&&!html.includes(row.signatureHtml)))";
+      if (!source.includes(before)) throw Error("\u90AE\u4EF6\u56DE\u6267\u6821\u9A8C\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
+      source = source.replace(before, after);
+      source = source.replace("if(latestDrafts.some(m=>m.id!==draft.id))", "if(row.automaticFirstContact?!await sameFirstDraft(latestDrafts,draft.id,graph):latestDrafts.some(m=>m.id!==draft.id))");
+      return source.replace(" async function send(", ` async function resumeFirst(row,client,check){
+  if(row.kind!=='first'||row.status!=='preparing'||row.sendRequestedAt||!row.messageId||!row.automaticFirstContact||row.recipient!==emailKey(client.email)||row.body!==contact.firstContact({...client,name:client.emailFirstName||client.name}).body)throw Error('\u539F\u9996\u8054\u8349\u7A3F\u4E0D\u7B26\u5408\u7EED\u53D1\u6761\u4EF6');
+  const rows=load(),stored=rows.find(r=>r.requestId===row.requestId),route='/me/messages/'+encodeURIComponent(row.messageId);
+  const profile=await graph('/me?$select=mail,userPrincipalName');if(![profile.mail,profile.userPrincipalName].some(x=>emailKey(x)===sender))throw Error('Outlook\u53D1\u4EF6\u8D26\u53F7\u4E0D\u5339\u914D');
+  const source=rows.findLast(x=>x.status==='sent'&&x.signatureVerified&&x.attachmentVerified&&x.messageId);if(!source)throw Error('\u7F3A\u5C11\u5DF2\u6279\u51C6\u539F\u7B7E\u540D\u7684\u6210\u529F\u90AE\u4EF6');
+  const original=await graph('/me/messages/'+encodeURIComponent(source.messageId)+'?$select=body,subject'),originalHtml=original.body?.content||'',start=originalHtml.indexOf('<div id="Signature"');
+  const signature=originalHtml.slice(start).replace(/<\\/body>[\\s\\S]*$/i,'');
+  if(start<0||original.subject!==subject||signature.replace(/ data-outlook-trace="[^"]*"/g,'')!==row.signatureHtml.replace(/ data-outlook-trace="[^"]*"/g,''))throw Error('\u539F\u9996\u8054\u7B7E\u540D\u5DF2\u53D8\u5316\uFF0C\u672A\u53D1\u9001');
+  const file=material();if(!file||path.basename(file.path)!==row.attachment||crypto.createHash('sha256').update(fs.readFileSync(file.path)).digest('hex')!==row.attachmentSha256)throw Error('\u539F\u9996\u8054\u9644\u4EF6\u5DF2\u53D8\u5316\uFF0C\u672A\u53D1\u9001');
+  await verifyAttachments(row);await check();
+  if((await list('sentitems',row.recipient)).some(m=>matches(m,row.recipient)))throw Error('\u5DF2\u53D1\u9001\u9879\u5DF2\u6709\u6B64\u5BA2\u6237\u90AE\u4EF6\uFF0C\u4E0D\u91CD\u590D\u53D1\u9001');
+  if(!await sameFirstDraft((await list('drafts',row.recipient)).filter(m=>matches(m,row.recipient)),row.messageId,graph))throw Error('\u5B58\u5728\u5176\u4ED6\u4EBA\u5DE5\u6216\u5386\u53F2\u8349\u7A3F\uFF0C\u672A\u53D1\u9001');
+  const draft=await graph(route+'?$select=isDraft,body,subject,toRecipients');
+  if(!guard()||!draft.isDraft||draft.subject!==subject||draft.toRecipients?.length!==1||!matches(draft,row.recipient)||!approvedFirstMail(draft.body?.content,row))throw Error('\u539F\u9996\u8054\u8349\u7A3F\u53D1\u751F\u5B9E\u9645\u53D8\u5316\uFF0C\u672A\u53D1\u9001');
+  await check();stored.status='uncertain';stored.sendRequestedAt=now().toISOString();save(rows);
+  try{
+   await graph(route+'/send','POST');
+   for(let i=0;i<10;i++){const receipt=await graph(route+'?$select=isDraft,sentDateTime,toRecipients,subject,body');if(!receipt.isDraft&&receipt.sentDateTime){await verify(stored,receipt);stored.status='sent';stored.sentAt=receipt.sentDateTime;stored.signatureVerified=true;stored.attachmentVerified=true;save(rows);return stored;}await sleep(1000);}
+   throw Error('Outlook\u53D1\u9001\u7ED3\u679C\u5F85\u6838\u5B9E');
+  }catch(error){stored.detail=error.message;save(rows);throw error;}
+ }
+ async function send(`);
+    }
+    module2.exports = { patchFirstContactMail: patchFirstContactMail2, patchFirstContactMain: patchFirstContactMain2, patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2, patchConnectionPreload: patchConnectionPreload2, patchConnectionMain: patchConnectionMain2 };
   }
 });
 
@@ -3724,7 +3806,7 @@ var os = require("node:os");
 var cp = require("node:child_process");
 var crypto = require("node:crypto");
 var asar = require_asar();
-var { patchMain, patchManagement, patchBridge, patchRenderer } = require_patch_app();
+var { patchFirstContactMail, patchFirstContactMain, patchMain, patchManagement, patchBridge, patchRenderer, patchConnectionMain, patchConnectionPreload } = require_patch_app();
 var run = (bin, args) => cp.execFileSync(bin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 var dialog = (script) => run("/usr/bin/osascript", ["-e", script]).trim();
 var digest = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
@@ -3753,26 +3835,29 @@ async function prepare(app, output) {
   const folder = path.join(output, "source"), candidate = path.join(output, "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app");
   asar.extractAll(archive, folder);
   run("/usr/bin/ditto", [app, candidate]);
-  for (const [name, patch] of [["main.js", patchMain], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
+  for (const [name, patch] of [["main.js", (source) => patchFirstContactMain(patchConnectionMain(patchMain(source)))], ["outlook-outreach.js", patchFirstContactMail], ["preload.js", patchConnectionPreload], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
     const file = path.join(folder, name);
     fs.writeFileSync(file, patch(fs.readFileSync(file, "utf8")));
   }
   fs.copyFileSync(path.join(__dirname, "crm-account-sync.cjs"), path.join(folder, "crm-account-sync.js"));
   fs.copyFileSync(path.join(__dirname, "crm-history-sync.cjs"), path.join(folder, "crm-history-sync.cjs"));
-  for (const name of ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"]) {
+  fs.copyFileSync(path.join(__dirname, "crm-first-contact.cjs"), path.join(folder, "crm-first-contact.js"));
+  fs.copyFileSync(path.join(__dirname, "crm-first-contact-mail.cjs"), path.join(folder, "crm-first-contact-mail.js"));
+  for (const [file, name] of [["crm-connection-settings.cjs", "crm-connection-settings.cjs"], ["crm-connection-renderer.js", "crm-connection-renderer.js"]]) fs.copyFileSync(path.join(__dirname, file), path.join(folder, name));
+  for (const name of ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"]) {
     const script = fs.readFileSync(path.join(folder, name), "utf8");
     new (require("node:vm")).Script(script, { filename: name });
   }
   const files = entries(before.tree), unpacked = files.filter((f) => f.unpacked).map((f) => path.join(folder, f.name));
   await asar.createPackageWithOptions(folder, candidate + "/Contents/Resources/app.asar", unpacked.length ? { unpack: unpacked.length === 1 ? unpacked[0] : "{" + unpacked.join(",") + "}" } : {});
-  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"];
+  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"];
   for (const file of files) {
     if (file.link) continue;
     const original = asar.extractFile(archive, file.name), updated = asar.extractFile(next, file.name);
     if (!allowed.includes(file.name) && digest(original) !== digest(updated)) throw Error("\u65E0\u5173\u5E94\u7528\u6587\u4EF6\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u5B89\u88C5\uFF1A" + file.name);
   }
   for (const file of entries(after.tree)) {
-    if (!files.some((f) => f.name === file.name) && !["crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
+    if (!files.some((f) => f.name === file.name) && !["crm-first-contact-mail.js", "crm-first-contact.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
   }
   run("/usr/libexec/PlistBuddy", ["-c", "Set :ElectronAsarIntegrity:Resources/app.asar:hash " + after.hash, candidate + "/Contents/Info.plist"]);
   const ent = run("/usr/bin/codesign", ["-d", "--entitlements", ":-", app]);
@@ -3788,6 +3873,34 @@ async function install() {
   if (test >= 0) {
     const output2 = fs.mkdtempSync(path.join(os.tmpdir(), "yifun-crm-verify-"));
     console.log(JSON.stringify(await prepare(process.argv[test + 1], output2)));
+    return;
+  }
+  if (process.argv.includes("--add-connection-ui")) {
+    const app2 = "/Applications/\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app";
+    closed(app2);
+    const dir2 = path.join(os.homedir(), "Library", "Application Support", "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0"), settings2 = fs.existsSync(path.join(dir2, "settings.json")) ? JSON.parse(fs.readFileSync(path.join(dir2, "settings.json"), "utf8")) : {}, workspace2 = settings2.workspace || path.join(os.homedir(), "Documents", "Yifun Sales Workbench V1");
+    const backup2 = fs.mkdtempSync(path.join(os.homedir(), "Documents", "CRM\u8FDE\u63A5\u529F\u80FD\u5347\u7EA7\u5907\u4EFD-")), output2 = fs.mkdtempSync(path.join(path.dirname(app2), ".crm-connector-update-")), hashes = {};
+    for (const file of [path.join(dir2, "crm-bridge.json"), path.join(dir2, "settings.json"), ...["crm.json", "crm-account-sync.json", "drafts.json"].map((name) => path.join(workspace2, ".workbench", name))]) if (fs.existsSync(file)) {
+      hashes[file] = digest(fs.readFileSync(file));
+      fs.copyFileSync(file, path.join(backup2, path.basename(file)));
+      fs.chmodSync(path.join(backup2, path.basename(file)), 384);
+    }
+    const result2 = await prepare(app2, output2);
+    closed(app2);
+    for (const [file, hash] of Object.entries(hashes)) if (digest(fs.readFileSync(file)) !== hash) throw Error("\u5347\u7EA7\u671F\u95F4\u8D44\u6599\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u8986\u76D6\u5E94\u7528");
+    const previous = path.join(backup2, "previous-installed.app");
+    fs.renameSync(app2, previous);
+    try {
+      fs.renameSync(result2.candidate, app2);
+      run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app2]);
+    } catch (error) {
+      if (fs.existsSync(app2)) fs.renameSync(app2, path.join(output2, "failed.app"));
+      fs.renameSync(previous, app2);
+      throw error;
+    }
+    fs.writeFileSync(path.join(backup2, "verification.json"), JSON.stringify({ ...result2, businessFilesUnchanged: true }, null, 2), { mode: 384 });
+    run("/usr/bin/open", [app2]);
+    dialog('display dialog "\u8FDE\u63A5\u529F\u80FD\u5DF2\u5347\u7EA7\u3002\u8BF7\u6253\u5F00\u5DE5\u4F5C\u53F0\u53F3\u4E0A\u89D2\u7684CRM\u8FDE\u63A5\uFF0C\u586B\u5199CRM\u5730\u5740\u548C\u672C\u4EBA\u8FDE\u63A5\u7801\u3002\u539F\u8D44\u6599\u548C\u539F\u8FDE\u63A5\u914D\u7F6E\u4FDD\u7559\u3002" buttons {"\u5B8C\u6210"} default button "\u5B8C\u6210"');
     return;
   }
   const config = JSON.parse(fs.readFileSync(path.join(__dirname, "account.json"), "utf8"));
@@ -3828,7 +3941,7 @@ async function install() {
     fs.renameSync(result.candidate, app);
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, pullOnly: old.owner_id === config.owner_id && old.pullOnly === true, uploadNewLeads: old.owner_id === config.owner_id && old.uploadNewLeads === true, workspace, localOwner }, null, 2), { mode: 384 });
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, ...old.owner_id === config.owner_id && old.autoFirstContact ? { autoFirstContact: old.autoFirstContact } : {}, enabled: true, accountSync: true, fullHistory: true, historyOnly: false, pullOnly: true, uploadNewLeads: true, workspace, localOwner }, null, 2), { mode: 384 });
     fs.chmodSync(configFile, 384);
     fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, workspace }, null, 2), { mode: 384 });
   } catch (e) {

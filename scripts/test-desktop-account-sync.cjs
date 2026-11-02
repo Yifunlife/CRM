@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),vm=require('node:vm');
-const {patchMain,patchManagement,patchRenderer}=require('./desktop-sync/patch-app.cjs'),{createAccountSync}=require('./desktop-sync/account-sync.cjs');
+const {patchMain,patchManagement,patchRenderer,patchConnectionMain}=require('./desktop-sync/patch-app.cjs'),{createAccountSync}=require('./desktop-sync/account-sync.cjs');
 (async()=>{
  const root='/Users/jingwu/Desktop/Yifun Life/Yifun-V1-macOS-USB/workbench-v1',dir=fs.mkdtempSync(path.join(os.tmpdir(),'mark-sync-test-'));
  const configFile=path.join(dir,'config.json');fs.writeFileSync(configFile,JSON.stringify({accountSync:true,enabled:true,origin:'https://yifun-crm.yifunlife.workers.dev',owner_id:'mark',token:'fixture',workspace:dir,localOwner:'Winnie'}));
@@ -12,7 +12,7 @@ const {patchMain,patchManagement,patchRenderer}=require('./desktop-sync/patch-ap
  fs.writeFileSync(configFile,JSON.stringify({accountSync:true,enabled:true,origin:'https://yifun-crm.yifunlife.workers.dev',owner_id:'mark',token:'fixture',workspace:dir,localOwner:'Winnie',pullOnly:true}));await sync.tick();assert.deepEqual(sent.sync.bindings,[]);await sync.tick();assert.deepEqual(sent.sync.bindings,[],'pull-only never reports a writable baseline on subsequent rounds');assert.equal(data.clients[0].name,preservedName,'pull-only does not overwrite an existing value even with an older writable baseline');
  const before=JSON.stringify(data);fs.writeFileSync(configFile,JSON.stringify({accountSync:true,enabled:true,origin:'https://evil.invalid',workspace:dir}));await sync.tick();assert.equal(JSON.stringify(data),before);assert.match(sync.error(),/不匹配/);
  const handlers={},managementModule={exports:{}};vm.runInNewContext(patchManagement(fs.readFileSync(path.join(root,'crm-client-management.js'),'utf8')),{module:managementModule,require});
- const source=patchMain(fs.readFileSync(path.join(root,'main.js'),'utf8'));
+ const connected=patchConnectionMain(patchMain(fs.readFileSync(path.join(root,'main.js'),'utf8'))),source=connected.slice(0,connected.indexOf('\nconst crmConnectionSettings='));
  new vm.Script(source);
  const renderer=patchRenderer(fs.readFileSync(path.join(root,'renderer','renderer.js'),'utf8'));assert.equal(patchRenderer(renderer),renderer);new vm.Script(renderer);
  const panel={innerHTML:''},groupContext={indexClientOverview(){},clientIncomingTime:()=>0,clientUnread:()=>0,renderAStages:()=>'',renderClientRow:c=>'customer:'+c.id,renderGroupChats:()=>'',unreadLabel:()=>'',collapsedGroups:new Set(),groupsMarkup:'',document:{querySelectorAll:()=>[]},$:()=>panel};const groups=renderer.slice(renderer.indexOf('function renderGroups('),renderer.indexOf('\nfunction unreadLabel(',renderer.indexOf('function renderGroups(')));vm.runInNewContext(groups+";renderGroups([{id:'imported-only',grade:''}]);",groupContext);assert.ok(panel.innerHTML.includes('未分类 客户'));assert.ok(panel.innerHTML.includes('customer:imported-only'));
@@ -26,6 +26,7 @@ const {patchMain,patchManagement,patchRenderer}=require('./desktop-sync/patch-ap
  const revision=directory.clients[0].revision;
  await run(`executeCrmCommand({desktop_id:'mark-only',kind:'client-update',payload:{changes:[{id:'mark-only',revision:${JSON.stringify(revision)},patch:{grade:'VIP'}}]}})`);
  run("channelMessages=()=>[{speaker:'Winnie Wu',text:'mine'}];whatsappRecipient=()=>({});whatsappDelivery=()=>({})");assert.equal(run("crmBridgeConversation('mark-only','whatsapp').messages[0].outgoing"),true);
+ const newOwn=await handlers['clients:create']({}, {name:'New own client',country:'Australia',grade:'B'});assert.equal(newOwn.owner,'Mark');
  assert.equal(run("getClient('mark-only').grade"),'VIP');assert.equal(run("getClient('mark-only').notes"),'retained');await assert.rejects(run("executeCrmCommand({desktop_id:'winnie-only',kind:'directory',payload:{}})"),/客户不存在/);
  run("let fakeSends=0;sendReception=async(id,action,options)=>{if(!options.guard())throw Error('guard denied');fakeSends++;return {status:'sent',messageId:'fixture-only'}}");
  await run("executeCrmCommand({id:'fixture-send',desktop_id:'mark-only',kind:'send',payload:{channel:'whatsapp',text:'Hello',revision:''}})");assert.equal(run('fakeSends'),1);

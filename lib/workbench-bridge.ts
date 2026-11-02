@@ -1,3 +1,4 @@
+import {queueFirstContacts,autoContactAllowed} from './auto-first-contact';
 import {readJson,storeJson} from './object-storage';
 import {digest,id,clean,phoneKey,emailKey,now,can} from './crm';
 import {AllocationError} from './allocation-server';
@@ -61,18 +62,20 @@ export async function ownedDesktop(db:D1Database,ownerId:string,desktopId:string
 }
 export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const bearer=req.headers.get('authorization')?.replace(/^Bearer /,'')||'';
- const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
+ const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions,u.username,u.name FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
  if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
+ if(body.connect===true)return {owner_id:device.owner_id,username:device.username,name:device.name,protocol:2,can_import:device.role!=='sales'||can(device,'customers_edit')};
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
- if(body.sync)return synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});
+ if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
- if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,error:clean(s.error,300)}),device.owner_id).run();}
+ if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
   const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
   if(!completed)return {ok:true};
   if(completed.state==='done'&&(r.state!=='done'||JSON.stringify(await readJson(completed.result))!==JSON.stringify(r.value||{})))return {ok:true};
+  if(JSON.parse(completed.payload).auto_first_contact&&r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&!r.value.messageId){r.state='uncertain';r.value={status:'uncertain',detail:'自动首联未收到可核对的发送回执，不会自动重发'};}
   await db.prepare("UPDATE crm_workbench_commands SET state=?,result=?,updated=? WHERE id=? AND owner_id=? AND state='running'").bind(r.state,await storeJson(r.value||{},`results/${device.owner_id}`),timestamp,r.id,device.owner_id).run();
   if(r.state==='done'&&Array.isArray(r.value?.clients)){
    const job:any=await db.prepare('SELECT kind FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(r.id,device.owner_id).first();
@@ -86,7 +89,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
    if(leadId&&r.value.clients?.some((c:any)=>c.id===r.value.created_id))await db.prepare('INSERT OR IGNORE INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) SELECT id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?').bind(r.value.created_id,new Date(timestamp).toISOString(),completed.actor_id,leadId,device.owner_id).run();
   }
   if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&['send','material'].includes(completed.kind)){
-   await recordOnlineContact(db,device.owner_id,completed.desktop_id,r.value.messageId?'message:'+JSON.parse(completed.payload).channel+':'+r.value.messageId:'command:'+completed.id,JSON.parse(completed.payload).channel,JSON.parse(completed.payload).text||'已发送客户资料',false,timestamp);
+   await recordOnlineContact(db,device.owner_id,completed.desktop_id,r.value.messageId?'message:'+JSON.parse(completed.payload).channel+':'+r.value.messageId:'command:'+completed.id,JSON.parse(completed.payload).channel,(JSON.parse(completed.payload).auto_first_contact?r.value.text:JSON.parse(completed.payload).text)||'已发送客户资料',false,timestamp);
   }
   if(r.state==='done'&&completed.kind==='conversation'&&Array.isArray(r.value?.messages)){
    const prior:any=await db.prepare("SELECT result FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind='conversation' AND state='done' AND id<>? AND json_extract(payload,'$.channel')=? ORDER BY updated DESC LIMIT 1").bind(device.owner_id,completed.desktop_id,completed.id,JSON.parse(completed.payload).channel).first();
@@ -99,13 +102,14 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
    if(sent){const p=JSON.parse(sent.payload);await db.prepare("UPDATE crm_workbench_drafts SET content='',updated=?,updated_by=? WHERE owner_id=? AND channel=? AND content=? AND lead_id IN (SELECT w.lead_id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? AND w.desktop_id=? AND l.owner_id=w.owner_id)").bind(new Date(timestamp).toISOString(),sent.actor_id,device.owner_id,p.channel==='email'?'邮件':'WhatsApp',p.text,device.owner_id,sent.desktop_id).run();}
   }
  }
- await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE owner_id=? AND state='queued' AND created<?").bind(JSON.stringify({error:'操作等待超时，未执行，请重新确认'}),timestamp,device.owner_id,timestamp-60000).run();
+ await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE owner_id=? AND state='queued' AND COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 AND created<?").bind(JSON.stringify({error:'操作等待超时，未执行，请重新确认'}),timestamp,device.owner_id,timestamp-60000).run();
  // Running work is never automatically reclaimed: a lost receipt must not cause a duplicate send.
  await db.prepare("UPDATE crm_workbench_commands SET state='uncertain',result=?,updated=? WHERE owner_id=? AND state='running' AND updated<?").bind(JSON.stringify({error:'执行结果待核实，不会自动重发'}),timestamp,device.owner_id,timestamp-300000).run();
+ if(body.heartbeat&&body.status?.autoFirstContact)await queueFirstContacts(db,device.owner_id);
  if(body.heartbeat||body.result)return {ok:true};
  const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 1").bind(device.owner_id).first();
  if(!next)return {command:null};
- try{await ownedDesktop(db,device.owner_id,next.desktop_id);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch{await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
+ try{await ownedDesktop(db,device.owner_id,next.desktop_id);const automatic=JSON.parse(next.payload);if(automatic.auto_first_contact&&!await autoContactAllowed(db,device.owner_id,automatic))throw new AllocationError('自动首联条件已变化',409);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch{await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
  const claimed:any=await db.prepare("UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' RETURNING id").bind(timestamp,next.id).first();
  return {command:claimed?{id:next.id,desktop_id:next.desktop_id,kind:next.kind,payload:JSON.parse(next.payload)}:null};
 }
