@@ -1,3 +1,4 @@
+import {reportAcquiredDay} from './report-acquired-day';
 import {accountTradeScopes,isSalesPerson,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
 import {projectFinancials} from './personal-work';
 import {reportPeriod,inReportPeriod} from './report-period';
@@ -27,7 +28,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const branch=salesCompanyName(url.searchParams.get('branch'));if(!['',...SALES_COMPANIES].some(c=>c===branch)||branch&&market!=='外贸')fail('分公司选择无效');
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
-   list(db,`SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.created,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_leads l WHERE ${where}`,args),
+   list(db,`SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.entered,l.created,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_leads l WHERE ${where}`,args),
    list(db,`SELECT p.*,l.name AS customer_name,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
    list(db,`SELECT d.*,l.name AS customer_name,l.country,l.source,l.detail AS lead_detail,l.business_scope AS lead_scope,c.currency,c.total_minor FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args),
    list(db,`SELECT q.*,p.lead_id,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
@@ -40,7 +41,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const companyFor=(row:any)=>salesCompanyName(accountSalesCompany({id:row.owner_id||row.commercial_id||''})||parse(row.lead_detail)._sales_company);
   const classify=(row:any)=>companyFor(row)?'外贸':customerMarket({...row,business_scope:row.business_scope||row.lead_scope});
   const pick=(rows:any[])=>rows.filter(r=>(!activeOnly||activeOwners.has(r.owner_id||r.commercial_id))&&(market==='全部'?(canViewAllMarkets(u)||allowedMarkets.includes(classify(r))):classify(r)===market)&&(!branch||companyFor(r)===branch));
-  const leads=pick(rawLeads).filter(l=>inReportPeriod(l.created,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
+  const leads=pick(rawLeads).filter(l=>inReportPeriod(reportAcquiredDay(l.entered)||reportAcquiredDay(l.created)||undefined,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
   const ps=projects.map(p=>({...p,company:companyFor(p),market:classify(p),details:parse(p.details)})),os=orders.map(o=>({...o,company:companyFor(o),market:classify(o),details:parse(o.details),steps:parse(o.steps)})).map(o=>({...o,delivery_stage:deliveryStage(o)}));
   const monthly=deals.filter(d=>inReportPeriod(d.deal_date,period)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,company:companyFor(d),market:classify(d),received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
   let qrows=pick(rawQuotes).map(q=>({...q,summary:parse(q.summary)})).filter(q=>q.summary.available);

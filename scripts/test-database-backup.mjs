@@ -22,6 +22,10 @@ const tables=original.prepare("SELECT name FROM sqlite_master WHERE type='table'
 const transient=new Set(['crm_login_attempts','crm_sessions','crm_google_oauth','crm_cloud_auth']);
 assert.deepEqual(tables.filter(t=>!transient.has(t)&&!backupTables.includes(t)),[],'Every persistent CRM table must be included in backups');
 original.exec("INSERT INTO crm_cloud_messages(id,owner_id,phone_id,lead_id,peer,direction,content,status,created) VALUES('msg','admin','phone','lead','peer','in','历史聊天测试','received','2026-10-30'); INSERT INTO crm_ai_limits VALUES('admin',1000,'2026-10-30','admin'); INSERT INTO crm_cloud_receipts VALUES('receipt','phone','delivered');");
+original.exec(`INSERT INTO crm_sales_targets(owner_id,currency,period,period_start,amount_minor,updated,updated_by) VALUES('admin','USD','month','2026-11-01',250000,'2026-11-02','admin');
+INSERT INTO crm_service_settings VALUES('admin',0,'测试接待内容','2026-11-02');
+INSERT INTO crm_service_contacts(id,owner_id,peer,first_message,created,lead_id) VALUES('service-contact','admin','test-peer','测试来信','2026-11-02','lead');
+INSERT INTO crm_service_replies(id,owner_id,peer,content,created,updated) VALUES('service-contact','admin','test-peer','测试回复',1,1);`);
 const before=Object.fromEntries(tables.map(table=>[table,rows(original,table)]));
 const reads=[];
 const response=databaseBackup({prepare(sql){return {bind(...args){return {async all(){reads.push(sql);return {results:original.prepare(sql).all(...args)};}};}};}});
