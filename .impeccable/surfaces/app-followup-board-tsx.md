@@ -35,4 +35,4 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","lib/f
 
 **Reviewer disposition: ship — fix scope only.** 最终复核将状态继承、保存已落库但读取失败时的重试与填写备份、负责人及通知隔离三项列举修复均判为 resolved；结论仅覆盖这三项，不扩展为整站无问题或真实业务验收。2026-11-02 程序已发布，公开入口、新资源及未登录接口保护已核对；真实账号生产验收与通知送达尚未核实，本地合成数据证据不代表线上验收。没有待选视觉方向；部署及真实账号验收另行记录。
 
-后续按用户提出的“隐藏前面无排期的过去月份／页面空白过大”修正范围与布局。合成 React 数据的桌面图表顶部由363px移至260px；1440／1024／390px截图为 `.impeccable/review/timeline-density/{desktop,intermediate,mobile}.png`。主任务记录布局检测前后均为 `[]`，范围、视口及几何检查通过；独立新上下文 `timeline_density_finish_review` 给出 **ship**，在这两项修正范围内没有实质性修复要求。原业务、日期、提醒及权限行为沿用。本次跟进改动已准备部署，尚未完成生产验证；此前发布记录不构成本次修正的生产验收。
+后续按用户提出的“隐藏前面无排期的过去月份／页面空白过大”修正范围与布局。合成 React 数据的桌面图表顶部由363px移至260px；1440／1024／390px截图为 `.impeccable/review/timeline-density/{desktop,intermediate,mobile}.png`。主任务记录布局检测前后均为 `[]`，范围、视口及几何检查通过；独立新上下文 `timeline_density_finish_review` 给出 **ship**，在这两项修正范围内没有实质性修复要求。原业务、日期、提醒及权限行为沿用。本次跟进改动于2026-11-02发布，公开入口、新版资源及未登录接口保护已核对；真实账号通知验收仍按用户要求暂停。
