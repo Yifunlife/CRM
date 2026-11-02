@@ -156,3 +156,19 @@ const canadaSource=snapshot(),canada=await branchGet('加拿大分公司'),legac
 assert.equal(canada.branch,'北美分公司');assert.equal(canada.summary.customers,1);assert.deepEqual(canada.summary,legacyCanada.summary);assert(canada.deals.every(d=>d.company==='北美分公司'));assert.equal(snapshot(),canadaSource,'renaming the displayed company never rewrites historical data');
 sqlite.prepare("UPDATE crm_leads SET detail=? WHERE id='foreign'").run(savedForeign);assert.equal(snapshot(),canadaBefore);
 console.log('PASS: North American display, Canada alias compatibility, identical totals and no source mutations.');
+
+// Followup-owned leads remain assigned and visible in their own read-only group.
+const followupBefore=snapshot();
+sqlite.prepare("INSERT INTO crm_leads(id,name,source,country,owner_id,fingerprint,detail,created) VALUES('followup-lead','跟单原有客户','Meta','美国','follow','followup-lead','{}','2026-10-01')").run();
+const withFollowup=snapshot(),followupReport=await get(ceo,'2026-10','全部');
+assert.deepEqual(followupReport.followup_people,[{id:'follow',name:'follow',total_customers:1}]);
+assert(!followupReport.people.some(p=>p.id==='follow'),'followup staff never enter the salesperson roster');
+assert(followupReport.all_customers.some(c=>c.id==='followup-lead'&&c.owner_id==='follow'),'ownership and company totals remain intact');
+assert.equal((await get(sales,'2026-10','全部')).followup_people.length,0,'personal report cannot expose other owners');
+assert.equal((await get(ceo,'2026-10','内贸')).followup_people.length,0,'followup group follows market permissions');
+assert.equal(snapshot(),withFollowup,'report grouping never mutates source records');
+sqlite.exec("UPDATE crm_users SET active=0 WHERE id='follow'");
+const inactiveFollowup=await call(db,ceo,ceo,'role-workspace/report','GET',{},new URL('http://test/?month=2026-10&market='+encodeURIComponent('全部')+'&active=1'));
+assert.equal(inactiveFollowup.followup_people.length,0,'disabled followup staff stay hidden');
+sqlite.exec("UPDATE crm_users SET active=1 WHERE id='follow'; DELETE FROM crm_leads WHERE id='followup-lead'");assert.equal(snapshot(),followupBefore);
+console.log('PASS followup grouping, preserved ownership, sales roster isolation, market/personal permissions and inactive filtering.');
