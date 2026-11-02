@@ -1,5 +1,5 @@
 import {boardLeadVisible} from './market-access';
-import {canSetManagement,boardMarkets,can,id,now} from './crm';
+import {canViewAllMarkets,canSetManagement,boardMarkets,can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {suiteDay} from './sales-suite';
 import {salesManagementReport} from './sales-management';
@@ -22,9 +22,9 @@ export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,p
   ]);
   const markets=boardMarkets(user),currencies=markets.map(m=>m==='内贸'?'CNY':'USD');
   const visibleLeads=leads.filter(l=>boardLeadVisible(user,l)),leadIds=new Set(visibleLeads.map(l=>l.id));
-  const visiblePeople=people.filter(p=>canSetManagement(user)||accountTradeScopes(p).some(v=>markets.includes(v==='domestic'?'内贸':'外贸'))||visibleLeads.some(l=>l.owner_id===p.id)),personIds=new Set(visiblePeople.map(p=>p.id));
-  const visibleDeals=deals.filter(d=>canSetManagement(user)||leadIds.has(d.lead_id)&&currencies.includes(d.currency)),dealIds=new Set(visibleDeals.map(d=>d.id));
-  try{const report=salesManagementReport({people:visiblePeople,leads:visibleLeads,links:links.filter(l=>leadIds.has(l.lead_id)),deals:visibleDeals,receipts:receipts.filter(r=>dealIds.has(r.deal_id)),targets:targets.filter(t=>personIds.has(t.owner_id)&&(canSetManagement(user)||currencies.includes(t.currency)))},url.searchParams,suiteDay());return {...report,rows:report.rows.filter((r:any)=>canSetManagement(user)||currencies.includes(r.currency)),details:report.details.filter((d:any)=>canSetManagement(user)||currencies.includes(d.group_currency)),can_edit:canEdit,allowed_currencies:currencies};}catch(e){return fail((e as Error).message);}
+  const visiblePeople=people.filter(p=>canViewAllMarkets(user)||accountTradeScopes(p).some(v=>markets.includes(v==='domestic'?'内贸':'外贸'))||visibleLeads.some(l=>l.owner_id===p.id)),personIds=new Set(visiblePeople.map(p=>p.id));
+  const visibleDeals=deals.filter(d=>canViewAllMarkets(user)||leadIds.has(d.lead_id)&&currencies.includes(d.currency)),dealIds=new Set(visibleDeals.map(d=>d.id));
+  try{const report=salesManagementReport({people:visiblePeople,leads:visibleLeads,links:links.filter(l=>leadIds.has(l.lead_id)),deals:visibleDeals,receipts:receipts.filter(r=>dealIds.has(r.deal_id)),targets:targets.filter(t=>personIds.has(t.owner_id)&&(canViewAllMarkets(user)||currencies.includes(t.currency)))},url.searchParams,suiteDay());return {...report,rows:report.rows.filter((r:any)=>canViewAllMarkets(user)||currencies.includes(r.currency)),details:report.details.filter((d:any)=>canViewAllMarkets(user)||currencies.includes(d.group_currency)),can_edit:canEdit,allowed_currencies:currencies};}catch(e){return fail((e as Error).message);}
  }
  if(path!=='sales-management/targets'||method!=='POST')fail('操作不存在',405);
  if(!canEdit)fail('只有 Winnie、CEO、徐泽贵可以设置业绩目标',403);

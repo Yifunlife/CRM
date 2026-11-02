@@ -1,8 +1,8 @@
-import {boardMarkets,canSetManagement} from './crm';
+import {boardMarkets,canViewAllMarkets} from './crm';
 import {accountSalesCompany} from './account-classification';
 import {customerMarket} from './operations-dashboard';
 export function boardLeadVisible(user:any,lead:any){
- if(canSetManagement(user))return true;
+ if(canViewAllMarkets(user))return true;
  const detail=typeof lead.detail==='string'?JSON.parse(lead.detail||'{}'):lead.detail||{};
  const market=accountSalesCompany({id:lead.owner_id||''})||detail._sales_company||lead.sales_company?'外贸':customerMarket(lead);
  return boardMarkets(user).includes(market);

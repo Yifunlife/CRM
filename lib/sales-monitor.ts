@@ -1,6 +1,6 @@
 import {boardLeadIds} from './market-access';
 import {customerEntryMonitor} from './customer-entry-monitor';
-import {canSetManagement,can,now} from './crm';
+import {canViewAllMarkets,can,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {assignmentReminders} from './assignment-reminders';
 export type MonitorItem={id:string;stage:string;level:'异常'|'待确认'|'待处理'|'到期提醒'|'历史对齐';title:string;evidence:string;suggestion:string;owner_id:string;owner_name:string;lead_id?:string;project_id?:string;order_id?:string;page:string;count:number};
@@ -26,7 +26,7 @@ export async function salesMonitor(db:D1Database,source:D1Database|undefined,u:a
   customerEntryMonitor(db,u)
  ]);
  const visibleIds=await boardLeadIds(db,u);
- if(!canSetManagement(u)){
+ if(!canViewAllMarkets(u)){
  const ownerIds=new Set((await list(db,'SELECT id,owner_id FROM crm_leads')).filter(l=>visibleIds.has(l.id)).map(l=>l.owner_id));
  for(const rows of [projects,quotes,orders,salesNotices])for(let i=rows.length-1;i>=0;i--)if(!visibleIds.has(rows[i].lead_id))rows.splice(i,1);
  const orderIds=new Set(orders.map(o=>o.id)),projectIds=new Set(projects.map(p=>p.project_id));

@@ -27,7 +27,7 @@ try{
   const data=await res.json();assert.equal(res.status,status,actor+' '+path+' '+JSON.stringify(data));return data;
  }
  const month=suiteDay().slice(0,7),target={owner_id:'sales',currency:'USD',items:[{period:'month',period_start:month+'-01',amount:'100',version:0}]};
- for(const [id,role,scopes] of people){assert.equal(canSetManagement({id,role}),authorized.includes(id));assert.equal(can({id,role,permissions:{leads_allocate:true}},'leads_allocate'),authorized.includes(id));assert.deepEqual(boardMarkets({id,role,trade_scopes:JSON.stringify(scopes)}),authorized.includes(id)?['内贸','外贸']:scopes.map(s=>s==='domestic'?'内贸':'外贸'));}
+ for(const [id,role,scopes] of people){assert.equal(canSetManagement({id,role}),authorized.includes(id));assert.equal(can({id,role,permissions:{leads_allocate:true}},'leads_allocate'),authorized.includes(id));assert.deepEqual(boardMarkets({id,role,trade_scopes:JSON.stringify(scopes)}),(authorized.includes(id)||role==='admin')?['内贸','外贸']:scopes.map(s=>s==='domestic'?'内贸':'外贸'));}
  for(const id of ['other-admin','foreign-manager','domestic-manager','dual-manager','unscoped','sales']){
   const changes=sql.prepare('SELECT total_changes() AS n').get().n;
   for(const path of ['allocation/config','allocation/distribute','allocation/management/preview','allocation/management/confirm','sales-management/targets','sales-monitor','customer-pool/retry'])await request(id,path,{},403);
@@ -55,6 +55,9 @@ try{
   const monitor=await request(actor,'sales-monitor');assert(monitor.items.every(i=>!i.lead_id||i.lead_id!==(denied==='内贸'?'domestic-lead':'foreign-lead')));
   await request(actor,'allocation/management');
  }
+ const adminReport=await request('other-admin','sales-management/report?period=month&month='+month);assert.equal(adminReport.can_edit,false);assert.deepEqual(adminReport.allowed_currencies,['CNY','USD']);
+ for(const market of ['内贸','外贸','全部','待确认'])await request('other-admin','role-workspace/report?month='+month+'&market='+encodeURIComponent(market));
+ const adminAll=await request('other-admin','role-workspace/report?month='+month+'&market='+encodeURIComponent('全部'));assert(adminAll.all_customers.some(l=>l.id==='foreign-lead'));assert(adminAll.all_customers.some(l=>l.id==='domestic-lead'));
  await request('unscoped','role-workspace/report?month='+month,undefined,403);
  for(const market of ['内贸','外贸'])await request('dual-manager','role-workspace/report?month='+month+'&market='+encodeURIComponent(market));
  const previewFixtures={};
