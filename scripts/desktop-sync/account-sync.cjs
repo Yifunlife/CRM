@@ -17,13 +17,13 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    const snapshot=clients.map(c=>({...profile(c),messages:(config.fullHistory?[]:readArchive(c).slice(-10)).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
    let bytes=Buffer.byteLength(JSON.stringify(snapshot.map(c=>({...c,messages:[]}))));
    for(const client of snapshot){const size=Buffer.byteLength(JSON.stringify(client.messages));if(bytes+size>1100000)client.messages=[];else bytes+=size;}
-   const response=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({sync:{clients:snapshot,bindings:journal.bindings,scenes:scenes(),full_history:config.fullHistory===true,catalog_only:config.historyOnly===true}}),signal:AbortSignal.timeout(30000)});
+   const response=await request(origin+'/api/bridge/poll',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify({sync:{clients:snapshot,bindings:config.pullOnly===true?[]:journal.bindings,scenes:scenes(),full_history:config.fullHistory===true,catalog_only:config.historyOnly===true}}),signal:AbortSignal.timeout(30000)});
    if(!response.ok){let error;try{error=(await response.json()).error;}catch{}throw Error(error||'CRM同步失败（'+response.status+'）');}
    const result=await response.json();
    if(root()!==workspace||result.owner_id!==config.owner_id)throw Error('工作区或账号发生变化，未写入本地');
    const current=state(),bindings=[],conflicts=[...(result.conflicts||[])];let modified=false;
    for(const update of result.updates){
-    let c=current.clients.find(c=>c.id===update.desktop_id),before=clients.find(c=>c.id===update.desktop_id),old=journal.bindings.find(b=>b.lead_id===update.lead_id),base={};
+    let c=current.clients.find(c=>c.id===update.desktop_id),before=clients.find(c=>c.id===update.desktop_id),old=config.pullOnly===true?undefined:journal.bindings.find(b=>b.lead_id===update.lead_id),base={};
     if(c?.deleted){conflicts.push({lead_id:update.lead_id,reason:'本地客户已删除，未重新建立'});continue;}
     if(!c){if(!update.create){conflicts.push({lead_id:update.lead_id,reason:'本地客户已变化'});continue;}c={id:update.desktop_id,...update.values,project:'',stage:1,projectStatus:'交涉中',source:update.source||'CRM',customerType:'',nextAction:'',followStatus:'未安排',closeDate:'',amount:'',owner:config.localOwner,lostReason:'',notes:'',createdAt:new Date().toISOString().slice(0,10),lastContact:'',markdownFile:'',deleted:false,replyGradeRule:false};current.clients.push(c);modified=true;}
     if(String(c.owner||'').toLowerCase()!==String(config.localOwner).toLowerCase()){conflicts.push({lead_id:update.lead_id,reason:'本地归属不匹配'});continue;}

@@ -3706,7 +3706,13 @@ function startCrmAccountSync(){let snapshot,byClient;
       if (source.includes("u.origin!=='https://yifun-crm.yifunlife.workers.dev'")) return source;
       return source.replace("u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&", "u.origin!=='https://yifun-crm.yifunlife.workers.dev'&&u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&");
     }
-    module2.exports = { patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2 };
+    function patchRenderer2(source) {
+      const prior = "const grades=['VIP','A','B','C','D','Yifun Staff'];", next = "const grades=['VIP','A','B','C','D','Yifun Staff','\u672A\u5206\u7C7B'];";
+      if (source.includes(next)) return source;
+      if (!source.includes(prior) || !source.includes("list.filter(c=>c.grade===grade)")) throw Error("\u5BA2\u6237\u5206\u7EC4\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
+      return source.replace(prior, next).replace("list.filter(c=>c.grade===grade)", "list.filter(c=>(c.grade||'\u672A\u5206\u7C7B')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])", "new Set(['VIP','A','B','C','whatsapp-groups','\u672A\u5206\u7C7B'])");
+    }
+    module2.exports = { patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2 };
   }
 });
 
@@ -3718,7 +3724,7 @@ var os = require("node:os");
 var cp = require("node:child_process");
 var crypto = require("node:crypto");
 var asar = require_asar();
-var { patchMain, patchManagement, patchBridge } = require_patch_app();
+var { patchMain, patchManagement, patchBridge, patchRenderer } = require_patch_app();
 var run = (bin, args) => cp.execFileSync(bin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 var dialog = (script) => run("/usr/bin/osascript", ["-e", script]).trim();
 var digest = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
@@ -3747,26 +3753,26 @@ async function prepare(app, output) {
   const folder = path.join(output, "source"), candidate = path.join(output, "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app");
   asar.extractAll(archive, folder);
   run("/usr/bin/ditto", [app, candidate]);
-  for (const [name, patch] of [["main.js", patchMain], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge]]) {
+  for (const [name, patch] of [["main.js", patchMain], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
     const file = path.join(folder, name);
     fs.writeFileSync(file, patch(fs.readFileSync(file, "utf8")));
   }
   fs.copyFileSync(path.join(__dirname, "crm-account-sync.cjs"), path.join(folder, "crm-account-sync.js"));
   fs.copyFileSync(path.join(__dirname, "crm-history-sync.cjs"), path.join(folder, "crm-history-sync.cjs"));
-  for (const name of ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs"]) {
+  for (const name of ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"]) {
     const script = fs.readFileSync(path.join(folder, name), "utf8");
     new (require("node:vm")).Script(script, { filename: name });
   }
   const files = entries(before.tree), unpacked = files.filter((f) => f.unpacked).map((f) => path.join(folder, f.name));
   await asar.createPackageWithOptions(folder, candidate + "/Contents/Resources/app.asar", unpacked.length ? { unpack: unpacked.length === 1 ? unpacked[0] : "{" + unpacked.join(",") + "}" } : {});
-  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs"];
+  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"];
   for (const file of files) {
     if (file.link) continue;
     const original = asar.extractFile(archive, file.name), updated = asar.extractFile(next, file.name);
     if (!allowed.includes(file.name) && digest(original) !== digest(updated)) throw Error("\u65E0\u5173\u5E94\u7528\u6587\u4EF6\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u5B89\u88C5\uFF1A" + file.name);
   }
   for (const file of entries(after.tree)) {
-    if (!files.some((f) => f.name === file.name) && !["crm-account-sync.js", "crm-history-sync.cjs"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
+    if (!files.some((f) => f.name === file.name) && !["crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
   }
   run("/usr/libexec/PlistBuddy", ["-c", "Set :ElectronAsarIntegrity:Resources/app.asar:hash " + after.hash, candidate + "/Contents/Info.plist"]);
   const ent = run("/usr/bin/codesign", ["-d", "--entitlements", ":-", app]);
@@ -3822,7 +3828,7 @@ async function install() {
     fs.renameSync(result.candidate, app);
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, workspace, localOwner }, null, 2), { mode: 384 });
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, enabled: true, accountSync: true, fullHistory: true, historyOnly: old.owner_id === config.owner_id && old.historyOnly === true, pullOnly: old.owner_id === config.owner_id && old.pullOnly === true, workspace, localOwner }, null, 2), { mode: 384 });
     fs.chmodSync(configFile, 384);
     fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, workspace }, null, 2), { mode: 384 });
   } catch (e) {

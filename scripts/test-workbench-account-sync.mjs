@@ -18,6 +18,8 @@ const run=sync=>bridgeDeviceEndpoint(db,req,{sync});
 const local={id:'native-one',name:'mark-lead',whatsapp:'61400000001',country:'Australia',email:'',grade:'A',nextContact:'2026-11-10',messages:[{channel:'whatsapp',speaker:'Winnie Wu',text:'old history',outgoing:true}]};
 let r=await run({clients:[local],bindings:[],scenes:[]});
 assert.equal(r.owner_id,'mark');assert.equal(r.updates.length,2);assert.equal(r.updates.some(x=>x.lead_id==='other-lead'),false);assert.equal(r.updates.find(x=>x.lead_id==='mark-lead').desktop_id,'native-one');assert.equal(r.updates.find(x=>x.lead_id==='new-mark').desktop_id,'crm-new-mark');assert.equal(sqlite.prepare("SELECT count(*) n FROM crm_leads").get().n,3);assert.equal(sqlite.prepare('SELECT count(*) n FROM crm_notes').get().n,0,'historical data never becomes new follow-up');
+for(let attempt=0;attempt<2;attempt++)await run({clients:[local],bindings:[],scenes:[]});
+assert.equal(sqlite.prepare("SELECT country FROM crm_leads WHERE id='mark-lead'").get().country,'');assert.equal(sqlite.prepare("SELECT grade FROM crm_leads WHERE id='mark-lead'").get().grade,'','pull-only keeps empty online fields unchanged across repeated pulls');
 const base=Object.fromEntries(Object.keys(r.updates[0].values).map(k=>[k,String(r.updates.find(x=>x.lead_id==='mark-lead').values[k]||'')]));
 r=await run({clients:[local],bindings:[{lead_id:'mark-lead',desktop_id:'native-one',base}],scenes:[]});
 assert.equal(sqlite.prepare("SELECT country FROM crm_leads WHERE id='mark-lead'").get().country,'Australia');

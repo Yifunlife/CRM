@@ -27,4 +27,10 @@ function patchManagement(source){
  return source.replace('function update(state,changes)','function update(state,changes,owner=\'Winnie\')').replace("String(c.owner).toLowerCase()==='winnie'","String(c.owner).toLowerCase()===owner.toLowerCase()");
 }
 function patchBridge(source){if(source.includes("u.origin!=='https://yifun-crm.yifunlife.workers.dev'"))return source;return source.replace("u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&","u.origin!=='https://yifun-crm.yifunlife.workers.dev'&&u.origin!=='https://yifun-life-crm.enquiry150941.chatgpt.site'&&");}
-module.exports={patchMain,patchManagement,patchBridge};
+function patchRenderer(source){
+ const prior="const grades=['VIP','A','B','C','D','Yifun Staff'];",next="const grades=['VIP','A','B','C','D','Yifun Staff','未分类'];";
+ if(source.includes(next))return source;
+ if(!source.includes(prior)||!source.includes('list.filter(c=>c.grade===grade)'))throw Error('客户分组组件版本不兼容');
+ return source.replace(prior,next).replace('list.filter(c=>c.grade===grade)',"list.filter(c=>(c.grade||'未分类')===grade)").replace("new Set(['VIP','A','B','C','whatsapp-groups'])","new Set(['VIP','A','B','C','whatsapp-groups','未分类'])");
+}
+module.exports={patchMain,patchManagement,patchBridge,patchRenderer};
