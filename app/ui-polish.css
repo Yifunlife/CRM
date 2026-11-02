@@ -1,0 +1,119 @@
+/* Refined with unslop by Damir Sokolovsky (@heydamir), CC BY 4.0.
+   Retain YIFUN LIFE branding and the current production workflows. */
+.office-app { --line:#e2e6ec; --canvas:#f7f8fa; background:var(--canvas); font-variant-numeric:tabular-nums; }
+.office-app > aside > nav { gap:4px; margin-top:16px; }
+.office-app > aside > nav button { min-height:36px; padding-block:8px; }
+.office-app > aside > nav svg { width:18px; height:18px; stroke-width:1.5; flex-shrink:0; }
+.office-app .workspace h1 { font-weight:500; }
+.office-app .workspace .panel { border-radius:8px; }
+.office-app .workspace .section-heading h2 { margin-bottom:0; }
+.office-app .workspace th { background:#f7f8fa; font-weight:500; }
+.office-app .workspace td { border-top-color:var(--line); }
+.office-app .workspace > header .followup-actions > button { border-color:transparent; }
+.office-app button { transition:color 160ms ease-out, background-color 160ms ease-out, border-color 160ms ease-out; }
+.office-app .workspace .so-metric { background:#fff; color:var(--ink); border-color:var(--line); box-shadow:none; }
+.office-app .workspace .so-metric > span { color:var(--muted); font-weight:400; }
+.office-app .workspace .so-metric > strong { font-weight:500; }
+.office-app .workspace .so-metric > small { border:0; color:var(--muted); padding-top:0; }
+.office-app .workspace .so-metric[aria-pressed=true] { background:#edf2f8; box-shadow:inset 0 2px var(--green); }
+.office-app .workspace .so-person { box-shadow:none; border-color:var(--line); }
+.office-app .workspace .so-person strong { font-weight:500; }
+.office-app .workspace .ui-currencies { display:grid; gap:4px; }
+.office-app .workspace .ui-currencies > span { display:block; white-space:nowrap; }
+.office-app .ui-team, .office-app .so-statistics, .office-app .ui-filter-options, .office-app .ui-filter-grid { display:contents; }
+.office-app .ui-more-metrics, .office-app .ui-mobile-views, .office-app .ui-person-key,
+.office-app .ui-filter-toggle, .office-app .ui-next-date, .office-app .ui-personal-more { display:none; }
+
+@media(max-width:720px) {
+  .office-app > aside > nav button { min-height:44px; }
+  .office-app .workspace h1 { font-size:20px; font-weight:600; }
+  .office-app .workspace .page-heading p { line-height:1.5; }
+  .office-app .workspace :is(.sales-overview,.customer-management) > .page-heading > div:first-child > p { display:none; }
+  .office-app .workspace .sales-overview { position:relative; }
+  .office-app .workspace .sales-overview > .page-heading { align-items:stretch; }
+  .office-app .workspace .sales-overview .so-period { display:flex; align-items:end; gap:8px; width:100%; }
+  .office-app .workspace .sales-overview .so-period label { min-width:0; flex:1; }
+  .office-app .workspace .sales-overview .so-period > div { flex:1; min-width:0; }
+  .office-app .workspace .sales-overview .so-period p { font-size:12px; margin:0; }
+  .office-app .workspace .sales-overview .so-period select { width:100%; font-size:16px; }
+  .office-app .workspace .sales-overview .so-caption { display:none; }
+  .office-app .workspace .sales-overview .ui-more-metrics { display:flex; position:absolute; top:-8px; right:0; padding:0 4px; border:0; background:transparent; color:var(--muted); font-size:12px; }
+  .office-app .workspace .sales-overview .so-statistics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:12px 0 8px; }
+  .office-app .workspace .sales-overview .so-metrics { display:contents; }
+  .office-app .workspace .sales-overview:not(.ui-expanded-metrics) .so-metric[data-mobile-key=false] { display:none; }
+  .office-app .workspace .sales-overview .so-metric { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:12px; min-height:76px; border:0; border-radius:0; box-shadow:1px 0 var(--line),0 1px var(--line); }
+  .office-app .workspace .sales-overview .so-metric > span { font-size:12px; }
+  .office-app .workspace .sales-overview .so-metric > strong { font-size:22px; line-height:1.4; margin:4px 0 0; }
+  .office-app .workspace .sales-overview .so-metric .ui-currencies { font-size:16px; }
+  .office-app .workspace .sales-overview .so-metric > small { display:none; }
+  .office-app .workspace .sales-overview.ui-expanded-metrics .so-metric > small,
+  .office-app .workspace .sales-overview .so-metric[data-warning=true] > small { display:block; margin-top:4px; }
+  .office-app .workspace .sales-overview .ui-mobile-views { display:flex; gap:24px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .office-app .workspace .sales-overview .ui-mobile-views button { padding:0 4px; border:0; border-radius:0; background:transparent; color:var(--muted); }
+  .office-app .workspace .sales-overview .ui-mobile-views button[aria-pressed=true] { color:var(--green); box-shadow:inset 0 -2px var(--green); font-weight:600; }
+  .office-app .workspace .sales-overview .so-split { display:contents; }
+  .office-app .workspace .sales-overview[data-mobile-view=people] [data-mobile-panel]:not([data-mobile-panel=people]),
+  .office-app .workspace .sales-overview[data-mobile-view=reminders] [data-mobile-panel]:not([data-mobile-panel=reminders]),
+  .office-app .workspace .sales-overview[data-mobile-view=projects] [data-mobile-panel]:not([data-mobile-panel=projects]),
+  .office-app .workspace .sales-overview[data-mobile-view=goals] [data-mobile-panel]:not([data-mobile-panel=goals]) { display:none; }
+  .office-app .workspace .sales-overview .ui-team { display:block; }
+  .office-app .workspace .sales-overview .ui-team > .section-heading > span,
+  .office-app .workspace .sales-overview .so-market-heading > span,
+  .office-app .workspace .sales-overview .ui-footnote { display:none; }
+  .office-app .workspace .sales-overview .so-market-heading { margin:12px 0 8px; }
+  .office-app .workspace .sales-overview .so-people { display:grid; grid-template-columns:minmax(0,1fr); gap:0; border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
+  .office-app .workspace .sales-overview .so-person { width:100%; min-width:0; text-align:left; padding:12px; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; }
+  .office-app .workspace .sales-overview .so-person:last-child { border-bottom:0; }
+  .office-app .workspace .sales-overview .so-person > :not(.so-person-name):not(.ui-person-key) { display:none; }
+  .office-app .workspace .sales-overview .so-person-name { margin:0 0 4px; }
+  .office-app .workspace .sales-overview .so-person-name > strong { font-size:15px; font-weight:600; }
+  .office-app .workspace .sales-overview .so-rank { background:transparent; padding:0; color:var(--muted); font-size:11px; }
+  .office-app .workspace .sales-overview .ui-person-key { display:flex; align-items:baseline; justify-content:space-between; gap:8px; color:var(--muted); font-size:12px; }
+  .office-app .workspace .sales-overview .ui-person-key strong { margin:0; color:var(--ink); font-size:13px; overflow-wrap:anywhere; }
+  .office-app .workspace .sales-overview #sales-project-details .mw-scroll-cue { display:none; }
+  .office-app .workspace .sales-overview .ui-project-table table { min-width:0; white-space:normal; }
+  .office-app .workspace .sales-overview .ui-project-table thead { display:none; }
+  .office-app .workspace .sales-overview .ui-project-table tbody { display:block; }
+  .office-app .workspace .sales-overview .ui-project-table tbody tr { position:relative; display:block; padding:12px 0; border-top:1px solid var(--line); }
+  .office-app .workspace .sales-overview .ui-project-table tbody td { display:none; padding:0; border:0; }
+  .office-app .workspace .sales-overview .ui-project-table .ui-project-identity { display:block; padding-right:64px; max-width:none; }
+  .office-app .workspace .sales-overview .ui-project-identity strong { font-size:15px; font-weight:600; }
+  .office-app .workspace .sales-overview .ui-project-identity small { display:block; color:var(--muted); }
+  .office-app .workspace .sales-overview .ui-project-table .ui-project-status { display:block; margin-top:8px; }
+  .office-app .workspace .sales-overview .ui-project-table .ui-project-action { display:block; position:absolute; right:0; top:8px; }
+  .office-app .workspace .sales-overview .ui-project-table tfoot { display:table; width:100%; font-size:12px; }
+
+  /* Phone archive: name, current state and next date; the detail action retains all fields. */
+  .office-app .workspace .customer-management > .page-heading { flex-direction:row; align-items:center; }
+  .office-app .workspace .customer-management > .page-heading .primary { white-space:nowrap; }
+  .office-app .workspace .customer-management .ui-customer-list { padding:0; border:0; background:transparent; }
+  .office-app .workspace .customer-management .filters { display:flex; align-items:end; gap:8px; }
+  .office-app .workspace .customer-management .filters > label { flex:1; min-width:0; margin:0; }
+  .office-app .workspace .customer-management .filters input { font-size:16px; width:100%; }
+  .office-app .workspace .customer-management .ui-filter-options { display:block; }
+  .office-app .workspace .customer-management .ui-filter-toggle { display:flex; min-width:104px; min-height:44px; font-size:13px; }
+  .office-app .workspace .customer-management .ui-filter-grid { display:none; }
+  .office-app .workspace .customer-management .is-open { display:contents; }
+  .office-app .workspace .customer-management .is-open .ui-filter-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; flex-basis:100%; }
+  .office-app .workspace .customer-management .ui-table-help { display:none; }
+  .office-app .workspace .customer-management .ui-customer-table { border:1px solid var(--line); border-radius:8px; background:#fff; padding:0 12px; }
+  .office-app .workspace .customer-management .ui-customer-table table { min-width:0; width:100%; white-space:normal; }
+  .office-app .workspace .customer-management .ui-customer-table thead { display:none; }
+  .office-app .workspace .customer-management .ui-customer-table tbody { display:block; }
+  .office-app .workspace .customer-management .ui-customer-table tr { position:relative; display:block; padding:12px 0; border-top:1px solid var(--line); min-height:96px; }
+  .office-app .workspace .customer-management .ui-customer-table tr:first-child { border-top:0; }
+  .office-app .workspace .customer-management .ui-customer-table td { display:none; border:0; padding:0; }
+  .office-app .workspace .customer-management .ui-customer-table .ui-customer-identity { display:block; padding-right:64px; }
+  .office-app .workspace .customer-management .ui-customer-identity > button { font-size:15px; font-weight:600; line-height:1.5; min-height:32px; }
+  .office-app .workspace .customer-management .ui-customer-identity > small { display:none; }
+  .office-app .workspace .customer-management .ui-next-date { position:absolute; right:0; bottom:12px; display:block; text-align:right; font-size:13px; }
+  .office-app .workspace .customer-management .ui-next-date small { color:var(--muted); font-size:11px; margin:0; }
+  .office-app .workspace .customer-management .ui-customer-table .ui-customer-status { display:block; margin-top:8px; padding-right:100px; }
+  .office-app .workspace .customer-management .ui-customer-status .crm-status { padding:0; background:transparent; font-size:13px; font-weight:400; }
+  .office-app .workspace .customer-management .ui-customer-table .ui-customer-action { display:block; position:absolute; right:0; top:8px; }
+  .office-app .workspace .customer-management .ui-customer-action button { font-size:12px; background:transparent; border:0; color:var(--green); padding:0; }
+  .office-app .workspace .customer-management .ui-customer-table tr:hover td { background:transparent; }
+  .office-app .workspace .ui-personal-more { display:flex; font-size:12px; border:0; background:transparent; color:var(--muted); }
+  .office-app .workspace .ui-personal-dashboard:not(.ui-expanded-metrics) .personal-metrics > [data-mobile-key=false] { display:none; }
+}
+@media(prefers-reduced-motion:reduce) { .office-app button { transition:none; } }
