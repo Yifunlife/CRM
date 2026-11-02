@@ -9,7 +9,7 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","app/f
 
 ## Scope and direction
 
-`app/followup-board.tsx` 的既有 Operate 界面扩展，面向在权限内查看、排期和跟进订单的管理者、商务及跟单人员。延续根 `DESIGN.md` 的深蓝导航、蓝色操作、白色办公面板与文字状态；沿用现有字体及密度，不建立新视觉身份。搜索、范围、数量与视图切换合并为一行并按需换行；取消重复的时间轴标题，年份、年度／月份选择、图例及“录入 / 编辑项目排期”紧接图表上方。主操作进入独立视图，表单不常驻时间轴。根 `PRODUCT.md`、`DESIGN.md` 继续作为全局权威。
+`app/followup-board.tsx` 的既有 Operate 界面扩展，面向在权限内查看、排期和跟进订单的管理者、商务及跟单人员。延续根 `DESIGN.md` 的深蓝导航、蓝色操作、白色办公面板与文字状态；沿用现有字体及密度，不建立新视觉身份。标题旁嵌入“时间轴／流程表”分段切换，右侧工具使用简短标签；搜索、订单范围、数量、年份、年度／月份与“项目排期”合并为桌面单行、可换行工具栏。年份／范围等视觉标签收起，控件保留明确可访问名称，“项目排期”保留完整可访问名称“录入 / 编辑项目排期”；图例移至图表下方。筛选在排期编辑及节点视图仍保留，返回时延续月份选择；表单独立打开，不常驻时间轴。根 `PRODUCT.md`、`DESIGN.md` 继续作为全局权威。
 
 ## Timeline and schedule
 
@@ -41,6 +41,8 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","app/f
 
 双向节点的元信息与客户基础字段在桌面为四列，390px为两列，360px及以下单列；手机的对内／对客说明与沟通文本框纵向排列。沿用紧凑字号、蓝色折叠入口和文字状态，不将节点说明扩大成总览常驻内容。
 
+紧凑工具栏控件桌面高36px、手机高44px；搜索允许缩窄，空间不足时按DOM与焦点顺序换行。标题、视图切换与短工具入口共用标题行，避免顶部按钮占用三层；图表区域继续自行横向滚动，页面不横向溢出。
+
 本地合成 API 数据截图位于 `.impeccable/review/`：`desktop.png`、`mobile.png`、`editor-desktop.png`、`editor-mobile.png`、`node-desktop.png`、`recovery-desktop.png`。主任务验证记录为机械检测 `[]`、生产构建及针对本次变更的后端／浏览器检查通过；全模块的三项既有失败已在基线 `08bc18d` 复现，不在本次范围。本文档步骤读取源码，未另行执行这些检查。
 
 **Reviewer disposition: ship — fix scope only.** 最终复核将状态继承、保存已落库但读取失败时的重试与填写备份、负责人及通知隔离三项列举修复均判为 resolved；结论仅覆盖这三项，不扩展为整站无问题或真实业务验收。2026-11-02 程序已发布，公开入口、新资源及未登录接口保护已核对；真实账号生产验收与通知送达尚未核实，本地合成数据证据不代表线上验收。没有待选视觉方向；部署及真实账号验收另行记录。
@@ -48,3 +50,5 @@ related_targets: ["app/followup-timeline.tsx","app/followup-timeline.css","app/f
 后续按用户提出的“隐藏前面无排期的过去月份／页面空白过大”修正范围与布局。合成 React 数据的桌面图表顶部由363px移至260px；1440／1024／390px截图为 `.impeccable/review/timeline-density/{desktop,intermediate,mobile}.png`。主任务记录布局检测前后均为 `[]`，范围、视口及几何检查通过；独立新上下文 `timeline_density_finish_review` 给出 **ship**，在这两项修正范围内没有实质性修复要求。原业务、日期、提醒及权限行为沿用。本次跟进改动于2026-11-02发布，公开入口、新版资源及未登录接口保护已核对；真实账号通知验收仍按用户要求暂停。
 
 双向跟进证据在 `.impeccable/review/followup-dual/`：`overview/node/money` 各桌面与手机截图、`handover-desktop.png` 及 `shipping-desktop/mobile.png`。主任务记录源码检测 `[]`，先后合并已部署基线 `39b0176`、`a404007` 以保留其他已授权工作；合并后的跟单双向／排期／权限／一期／订单／合同确认、内外贸权限及模块边界专项通过，类型与生产构建通过。旧全模块套件40／43通过的三项既有失败保留；合并后旧角色看板夹具缺少内外贸范围，在已部署 `a404007` 也复现，不放宽真实权限迎合旧夹具。新上下文 `followup_dual_finish_reviewer` 首轮要求修复一项P1验货照片问题，最终给出 **ship — fix scope only**，该项判为 resolved；结论仅覆盖该修复。本次双向跟进已于2026-11-02发布，版本 `be3f15a9-2f8d-45f4-8c3a-0ca7eb51ffb0` 承担100%流量；公开入口200、新版跟单资源与构建校验一致、未登录写接口401。真实账号及实际通知送达验收按用户要求暂停，公开资源检查不代表登录后业务验收。沿用原合同、附件、历史、归属与权限，不迁移或批量改写数据；本文档步骤未重跑检查。
+
+顶部工具栏按用户指出的三层按钮占位再次收紧。证据为 `.impeccable/review/followup-toolbar/{desktop,intermediate,mobile,empty}.png`：桌面／中间宽度图表顶部从260px移至157px，手机从454px移至277px。主任务记录编辑筛选与月份保留、视图／范围切换、空态“查看示例”入口及无溢出检查通过，布局检测前后 `[]`，类型检查与生产构建通过；审阅后仅对齐空态入口文案，最终重建通过。独立 `toolbar_compact_finish_reviewer` 给出 **ship — compact-header scope**，该范围无实质性发现。已整合当前生产基线 `44447d9b`（源码 `2d55caa`）；本次工具栏已发布，版本 `7afd0cb0-af57-44d0-b19c-dd0439f07ab7` 承担100%流量；公开入口200、新跟单资源与构建一致、未登录接口401，已在Safari真实登录会话确认紧凑工具栏（当前在办空态），实拍位于 `outputs/followup-toolbar-20261102/safari-production.png`。原职责规范、双向记录及权限边界沿用，真实账号及实际通知送达验收继续暂停。
