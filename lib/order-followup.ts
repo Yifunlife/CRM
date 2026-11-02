@@ -43,12 +43,21 @@ export function processActivityDay(order:any,page:string){
  const dates=[Object.hasOwn(saved,'confirmed_at')?saved.confirmed_at:saved.at,...(node?.execution||[]).flatMap(k=>[order.details?.execution?.stages?.[k]?.at,order.details?.execution?.stages?.[k]?.values?.contact_date]),...(node?.legacy||[]).map(k=>order.steps?.[k]?.at),...(page==='生产跟进'?[order.details?.execution?.last_factory_at]:[])];
  return dates.filter((d:any)=>d&&Number.isFinite(Date.parse(d))).map((d:string)=>d.includes('T')?new Date(d).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):d).sort().at(-1)||'';
 }
+export function customerSyncState(saved:any){
+ const record=saved?.customer_followup;
+ if(!saved?.dual_tracking&&!record)return '';
+ if(saved.customer_needs_sync===true||!record||!record.recorded_at||saved.customer_pending_at&&saved.customer_pending_at>record.recorded_at)return '待同步客户';
+ return record.status||'待同步客户';
+}
 export function orderReminders(order:any,tasks:any[],today=orderToday()){
  if(order.archived)return [];
  const out:{key:string;title:string;due:string;overdue:boolean;owner_id?:string;page?:string}[]=[];
  for(const [page,node] of Object.entries(order.details?.business_process||{}) as [string,any][]){
-  const status=processNodeStatus(order,page);if(['已完成','不适用'].includes(status))continue;
   const owner_id=node.owner_id||order.logistics_id,due=node.due||'';
+  const customer=customerSyncState(node),record=node.customer_followup;
+  if(customer==='待同步客户'){const at=node.customer_pending_at||node.at;const day=at?new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):today;out.push({key:'customer-sync-'+page,title:page+' · 待同步客户',due:day,overdue:day<today,owner_id,page});}
+  if(customer==='已同步，待回复'&&record.next_date&&record.next_date<=today)out.push({key:'customer-reply-'+page,title:page+' · 跟进客户回复',due:record.next_date,overdue:record.next_date<today,owner_id,page});
+  const status=processNodeStatus(order,page);if(['已完成','不适用'].includes(status))continue;
   if(due&&due<=shiftOrderDay(today,3))out.push({key:'process-due-'+page,title:page+(due<today?' · 已逾期':due===today?' · 今天到期':' · 即将到期'),due,overdue:due<today,owner_id,page});
   if(node.problem)out.push({key:'process-problem-'+page,title:page+' · 异常待处理',due:node.confirmed_at?.slice(0,10)||today,overdue:true,owner_id,page});
   const checked=processActivityDay(order,page);

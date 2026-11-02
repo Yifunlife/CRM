@@ -93,7 +93,7 @@ sqlite.exec("INSERT INTO crm_followup_tasks(id,order_id,kind,step,title,impact,c
 await assert.rejects(()=>post(follow,'followup/orders/order/business-process',processBody({status:'已完成'})),/未解决待办/);
 sqlite.exec("UPDATE crm_followup_tasks SET status='已解决' WHERE id='board-pending'");
 const priorSteps=sqlite.prepare("SELECT steps FROM crm_followup_orders WHERE id='order'").get().steps;
-await post(follow,'followup/orders/order/business-process',processBody({status:'已完成'}));
+await post(follow,'followup/orders/order/business-process',processBody({status:'已完成',customer_followup:{status:'已同步，无需回复',date:'2026-11-01',method:'邮件',content:'已完工',evidence:'测试邮件记录'}}));
 const doneOrder=sqlite.prepare("SELECT * FROM crm_followup_orders WHERE id='order'").get(),doneDetails=JSON.parse(doneOrder.details);
 assert.equal(doneDetails.business_process['生产跟进'].status,'已完成');assert.equal(doneDetails.business_process['生产跟进'].owner_id,'follow');assert.equal(doneOrder.steps,priorSteps);assert.deepEqual(doneDetails.contract_source,oldDetails.contract_source);assert.equal(doneOrder.archived,0);
 const {FOLLOWUP_NODES,processSummary}=await import(moduleURL('lib/followup-board.ts'));
@@ -111,7 +111,7 @@ sqlite.exec("INSERT INTO crm_receipts(id,reference,deal_id,amount_minor,currency
 const mixed=(await get(sales)).deals.find(d=>d.id==='deal');assert.equal(mixed.received_minor,null);assert.equal(mixed.outstanding_minor,null);assert.equal(mixed.receipt_currency_mismatch,true);
 console.log('PASS: workflow-cell status, pending-task gate, archive gate, active owner, dates, legacy preservation, receipt refunds/cancellations/currency mismatch and sales isolation.');
 const {PROCESS_FIELDS}=await import(role);
-const flowArchive={...processBody({page:'跟进收款',archive:true,archive_checks:[0,1,2,3],values:Object.fromEntries(PROCESS_FIELDS['跟进收款'].map(k=>[k,'已核对：'+k]))})};
+const flowArchive={...processBody({page:'跟进收款',customer_followup:{status:'客户已确认',date:'2026-11-01',method:'邮件',content:'商务已同步收款，客户已验收',reply:'确认',evidence:'邮件记录',commercial_notice:'商务确认记录'},archive:true,archive_checks:[0,1,2,3],values:Object.fromEntries(PROCESS_FIELDS['跟进收款'].map(k=>[k,'已核对：'+k]))})};
 await assert.rejects(()=>post(follow,'followup/orders/order/business-process',flowArchive),/全部环节/);
 const archiveDetails=JSON.parse(sqlite.prepare("SELECT details FROM crm_followup_orders WHERE id='order'").get().details);
 for(const n of FOLLOWUP_NODES.slice(0,-1))archiveDetails.business_process[n.page]={status:'已完成',owner_id:'follow',next:'已核对并留存资料',values:Object.fromEntries(PROCESS_FIELDS[n.page].map(k=>[k,'已核对资料']))};

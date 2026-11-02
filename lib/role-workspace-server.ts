@@ -9,6 +9,8 @@ import {quoteAccount} from './sales-quote-source';
 import {suiteDay,CLOSED_STAGES} from './sales-suite';
 import {deliveryStage,sumCurrencies,PROCESS_FIELDS,DELIVERY_STAGES} from './role-workspace';
 import {followupOrder,writeFollowup} from './order-followup-server';
+import {readCustomerFollowup} from './followup-duties';
+import {customerSyncState} from './order-followup';
 const list=async(db:D1Database,sql:string,args:any[]=[]) => (await db.prepare(sql).bind(...args).all<any>()).results;
 const parse=(s:string)=>JSON.parse(s||'{}');
 const fail=(s:string,status=400):never=>{throw new AllocationError(s,status);};
@@ -68,7 +70,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
  }
  const match=path.match(/^followup\/orders\/([^/]+)\/business-process$/);
  if(match&&method==='POST'){
-  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.role==='ceo')fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
+  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.role==='ceo'||u.id!==actor.id)fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
   const fields=PROCESS_FIELDS[body.page];if(!fields)fail('流程节点无效');const values:Record<string,string>={};for(const key of fields)values[key]=text(body.values?.[key]||'');
   const next=text(body.next);if(!next)fail('请填写下一步与处理安排');if(!['project','toy'].includes(body.purchase_kind))fail('请选择项目下单或玩具下单');
   const businessStage=body.business_stage||row.details.business_stage||deliveryStage(row);if(!DELIVERY_STAGES.includes(businessStage)||businessStage==='已完成'&&deliveryStage(row)!=='已完成')fail('完成状态由交付及归档流程确认');
@@ -102,7 +104,15 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    const node=FOLLOWUP_NODES.find(n=>n.page===body.page)!;
    if(await db.prepare("SELECT id FROM crm_followup_tasks WHERE order_id=? AND step=? AND status='待处理' LIMIT 1").bind(row.id,node.step).first())fail('本环节仍有未解决待办，请先处理');
   }
-  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:{...previous,...dates,values,next,status,schedule_only:false,owner_id:ownerId,due,original_start:previous.original_start||previous.start||dates.start,original_due:previous.original_due||previous.due||due,confirmed_at:now(),...(status==='已完成'?{problem:''}:{}),...(archiving?{archive_checks:body.archive_checks}:{}),at:now(),by:actor.id}}};
+  const at=now(),internalChanged=status!==(previous.status||'进行中')||next!==(previous.next||'')||ownerId!==(previous.owner_id||row.logistics_id)||due!==(previous.due||'')||Object.entries(dates).some(([k,v])=>v!==(previous[k]||''))||fields.some(k=>values[k]!==(previous.values?.[k]||''));
+  const checked=body.customer_followup===undefined?{value:previous.customer_followup,error:''}:readCustomerFollowup(body.customer_followup,previous.customer_followup,body.page,suiteDay(),at);
+  if(checked.error)fail(checked.error);
+  if(body.page==='出货交付'&&status==='已完成'&&row.details.execution?.profile?.inspection===true&&(!checked.value?.has_inspection_photos||!checked.value?.inspection_photos))fail('完成出货前，请记录责任部门提供的验货照片及发送依据');
+  const updated={...previous,...dates,values,next,status,schedule_only:false,owner_id:ownerId,due,original_start:previous.original_start||previous.start||dates.start,original_due:previous.original_due||previous.due||due,dual_tracking:true,customer_needs_sync:body.customer_followup!==undefined?checked.value?.status==='待同步客户':internalChanged||previous.customer_needs_sync===true,customer_pending_at:internalChanged?at:previous.customer_pending_at||at,customer_followup:checked.value,confirmed_at:internalChanged?at:previous.confirmed_at??previous.at??'',...(status==='已完成'?{problem:''}:{}),...(archiving?{archive_checks:body.archive_checks}:{}),at,by:actor.id};
+  if(['已完成','不适用'].includes(status)&&customerSyncState(updated)==='待同步客户')fail('完成本环节前，请同步客户并记录沟通依据；由商务沟通的事项也需记录转达结果');
+  if(archiving&&FOLLOWUP_NODES.slice(0,-1).some(n=>['待同步客户','已同步，待回复'].includes(customerSyncState(row.details.business_process?.[n.page]))))fail('仍有待同步客户或待回复事项，请先跟进处理再归档');
+  if(archiving&&customerSyncState(updated)==='已同步，待回复')fail('仍待客户回复，请先跟进处理再归档');
+  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:updated}};
   return writeFollowup(db,row,body,actor,archiving?'订单归档':'更新'+body.page,{page:body.page,mode:archiving?'流程总表':undefined,before:row.details.business_process?.[body.page]||null,after:details.business_process[body.page],business_stage:businessStage,purchase_kind:body.purchase_kind},()=>[],{...row,details,archived:archiving?1:row.archived});
  }
  return undefined;
