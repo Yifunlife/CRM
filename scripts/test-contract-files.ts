@@ -29,3 +29,10 @@ assert.deepEqual(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all(),before
 const hidden=await (await call(users.ceo,'contract-files?lead_id=lead')).json()as any;assert.equal(hidden.can_upload,true);assert.equal(hidden.items.length,2);
 assert.equal((await upload(users.ceo)).status,200);assert.equal(objects.size,3);
 console.log('PASS: upload/download bytes, customer/project association, isolation, role permissions, validation, append preservation, revoked ownership and project races clean storage, no deal/receipt changes.');
+const attachment=await (await call(users.sales,'contract-files?lead_id=lead&category=attachment&name=site.dwg','PUT','CAD-example')).json()as any;
+assert.equal(objects.size,4);assert.equal(await (await call(users.sales,'contract-files/'+attachment.id)).text(),'CAD-example');
+const attachments=await (await call(users.sales,'contract-files?lead_id=lead&category=attachment')).json()as any;assert.equal(attachments.items.length,1);assert.equal(attachments.items[0].name,'site.dwg');
+assert.equal((await (await call(users.sales,'contract-files?lead_id=lead')).json()as any).items.length,3,'ordinary attachments do not appear as contracts');
+await assert.rejects(()=>call(users.other,'contract-files/'+attachment.id),/无权/);await assert.rejects(()=>call(users.sales,'contract-files?lead_id=lead&category=attachment&name=unsafe.exe','PUT','test'),/支持|PDF/);
+assert.deepEqual(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all(),before);assert.equal((sql.prepare('SELECT count(*) n FROM crm_deals').get()as any).n,0);assert.equal((sql.prepare('SELECT count(*) n FROM crm_receipts').get()as any).n,0);
+console.log('PASS: customer attachments append independently, support CAD, retain contract listings, authenticate downloads, reject unsupported files and preserve existing business records.');

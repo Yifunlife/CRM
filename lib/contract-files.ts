@@ -1,6 +1,5 @@
 import {AllocationError} from './allocation-server';
 import {authorizedLead,can,hasAdminPermissions} from './crm';
-const kind='合同文件归档';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const parse=(s:string)=>{try{return JSON.parse(s);}catch{return {};}};
 async function access(db:D1Database,user:any,id:string){const lead:any=await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE id=?').bind(id).first();if(!lead||!authorizedLead(user,lead))fail('客户不存在或无权查看',404);return lead;}
@@ -8,6 +7,7 @@ const editable=(user:any,lead:any)=>can(user,'customers_edit')&&(hasAdminPermiss
 export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|undefined,user:any,actor:any){
  if(!['admin','sales','ceo','management'].includes(user.role))fail('没有合同文件访问权限',403);
  const url=new URL(req.url),path=url.pathname.slice(5),json=(data:any)=>Response.json(data,{headers:{'Cache-Control':'private, no-store'}});
+ const attachment=url.searchParams.get('category')==='attachment',kind=attachment?'客户附件归档':'合同文件归档';
  if(path==='contract-files/customers'&&req.method==='GET'){
   const q=(url.searchParams.get('q')||'').trim().slice(0,100),all=can(user,'customers_all');
   const args:any[]=[];let where='1=1';if(!all){where+=' AND owner_id=?';args.push(user.id);}if(q){where+=" AND (name LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\')";const pattern='%'+q.replace(/[\\%_]/g,c=>'\\'+c)+'%';args.push(pattern,pattern);}
@@ -15,7 +15,7 @@ export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|un
  }
  const fileId=/^contract-files\/([a-z0-9-]+)$/.exec(path)?.[1];
  if(fileId&&req.method==='GET'){
-  const row:any=await db.prepare('SELECT lead_id,payload FROM crm_sales_events WHERE id=? AND kind=?').bind(fileId,kind).first();if(!row)fail('合同文件不存在',404);await access(db,user,row.lead_id);const file=parse(row.payload),object=await bucket?.get(file.object_key);if(!object)return fail('文件暂不可用',404);
+  const row:any=await db.prepare("SELECT lead_id,payload FROM crm_sales_events WHERE id=? AND kind IN ('合同文件归档','客户附件归档')").bind(fileId).first();if(!row)fail('客户文件不存在',404);await access(db,user,row.lead_id);const file=parse(row.payload),object=await bucket?.get(file.object_key);if(!object)return fail('文件暂不可用',404);
   return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Length':String(object.size),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(file.name),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
  }
  if(path!=='contract-files')fail('合同文件操作不存在',404);
@@ -27,9 +27,9 @@ export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|un
  }
  if(req.method!=='PUT')fail('不支持此合同操作',405);if(!editable(user,lead))fail('只有客户所属业务员或管理员可以上传合同',403);if(!bucket)return fail('文件存储尚未连接',503);
  const name=(url.searchParams.get('name')||'').replace(/[\x00-\x1f/\\]/g,'_').slice(0,200),size=Number(req.headers.get('content-length')),status=url.searchParams.get('status')||'',projectId=url.searchParams.get('project_id')||null;
- if(!/\.(pdf|docx?|xlsx?|png|jpe?g|webp)$/i.test(name))fail('请选择 PDF、Word、Excel 或图片合同');if(!['已填写','已签署'].includes(status))fail('请选择合同状态');if(!Number.isSafeInteger(size)||size<=0||size>100*1024*1024||!req.body)fail('请选择不超过100MB的合同文件',413);
+ if(!(attachment?/\.(pdf|docx?|xlsx?|csv|pptx?|png|jpe?g|webp|dwg|dxf|zip|txt)$/i:/\.(pdf|docx?|xlsx?|png|jpe?g|webp)$/i).test(name))fail('请选择 PDF、文档、图片或支持的项目文件');if(!attachment&&!['已填写','已签署'].includes(status))fail('请选择合同状态');if(!Number.isSafeInteger(size)||size<=0||size>100*1024*1024||!req.body)fail('请选择不超过100MB的客户文件',413);
  if(projectId&&!await db.prepare('SELECT project_id FROM crm_sales_projects WHERE project_id=? AND lead_id=?').bind(projectId,leadId).first())fail('项目不属于所选客户');
- const id=crypto.randomUUID(),key='customer-contracts/'+leadId+'/'+id,time=new Date().toISOString();
+ const id=crypto.randomUUID(),key=(attachment?'customer-attachments/':'customer-contracts/')+leadId+'/'+id,time=new Date().toISOString();
  try{
   const object=await bucket.put(key,req.body,{httpMetadata:{contentType:'application/octet-stream'}});if(!object||object.size!==size)fail('上传长度不一致，请重试');
   const latest=await access(db,user,leadId);if(!editable(user,latest))fail('客户上传权限已变化，请刷新重试',403);

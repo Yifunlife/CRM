@@ -12,6 +12,7 @@ import {deliveryStage,sumCurrencies,PROCESS_FIELDS,DELIVERY_STAGES} from './role
 import {followupOrder,writeFollowup} from './order-followup-server';
 import {readCustomerFollowup} from './followup-duties';
 import {customerSyncState} from './order-followup';
+import {validateCustomerProfile} from './customer-profile';
 const list=async(db:D1Database,sql:string,args:any[]=[]) => (await db.prepare(sql).bind(...args).all<any>()).results;
 const parse=(s:string)=>JSON.parse(s||'{}');
 const fail=(s:string,status=400):never=>{throw new AllocationError(s,status);};
@@ -64,12 +65,20 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   if(!can(u,'customers_edit'))fail('没有客户维护权限',403);
   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(body.id).first();if(!lead||!authorizedLead(u,lead))fail('客户不存在或无权维护',404);
   const before=parse(lead.detail);if(body.revision!==(before._profile_revision||0))fail('客户资料已变化，请刷新',409);
+  if(body.profile&&(!body.base||['name','country','phone','email','grade','next_date'].some(key=>body.base[key]!==lead[key])))fail('客户资料已变化，请刷新后再保存',409);
   if(!Array.isArray(body.contacts)||body.contacts.length>30)fail('联系人最多30位');
   const contacts=body.contacts.map((c:any)=>({name:text(c.name,200),role:text(c.role||'',200),phone:text(c.phone||'',100),email:text(c.email||'',200)}));if(contacts.some((c:any)=>!c.name))fail('请填写联系人姓名');
   const country=text(body.country,100),method=text(body.method,100),sourceNote=text(body.source_note||'',1000);
   const company=salesCompanyName(body.company??before._sales_company);if(!['',...SALES_COMPANIES].some(c=>c===company))fail('分公司选择无效');
-  const after={...before,_sales_company:company,_profile_revision:(before._profile_revision||0)+1,_contacts:contacts,'偏好联系方式':method,'客户来源说明':sourceNote};
-  const results=await db.batch([db.prepare('UPDATE crm_leads SET country=?,detail=? WHERE id=? AND detail=? AND owner_id IS ?').bind(country,JSON.stringify(after),lead.id,lead.detail,lead.owner_id),db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),'更新客户档案',lead.id,JSON.stringify({before:{company:before._sales_company||'',country:lead.country,contacts:before._contacts,method:before['偏好联系方式'],source_note:before['客户来源说明']},after:{company,country,contacts,method,source_note:sourceNote}}),now(),actor.id)]);
+  const name=body.name===undefined?lead.name:text(body.name,200),phone=body.phone===undefined?lead.phone:text(body.phone,100),email=body.email===undefined?lead.email:text(body.email,200),grade=body.grade===undefined?lead.grade:text(body.grade,10),nextDate=body.next_date===undefined?lead.next_date:text(body.next_date,10);
+  if(!name)fail('请填写客户姓名');if(grade!==lead.grade&&grade&&!GRADES.includes(grade))fail('客户等级无效');
+  if(email!==lead.email&&email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('邮箱格式无效');
+  if(nextDate!==lead.next_date&&nextDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)||!Number.isFinite(Date.parse(nextDate))||new Date(nextDate).toISOString().slice(0,10)!==nextDate))fail('下次联系日期无效');
+  let profile:any;try{profile=body.profile===undefined?undefined:validateCustomerProfile(body.profile);}catch(e){fail((e as Error).message);}
+  const after={...before,_sales_company:company,_profile_revision:(before._profile_revision||0)+1,_contacts:contacts,'偏好联系方式':method,'客户来源说明':sourceNote,...(profile?{_customer_profile:{...before._customer_profile,...profile,...(Object.hasOwn(profile,'nextAction')?{nextActionAt:now()}:{})}}:{})};
+  const previous={name:lead.name,country:lead.country,phone:lead.phone,email:lead.email,grade:lead.grade,next_date:lead.next_date,company:before._sales_company||'',contacts:before._contacts,method:before['偏好联系方式'],source_note:before['客户来源说明'],profile:before._customer_profile};
+  const updated={name,country,phone,email,grade,next_date:nextDate,company,contacts,method,source_note:sourceNote,profile:after._customer_profile};
+  const results=await db.batch([db.prepare('UPDATE crm_leads SET name=?,country=?,phone=?,email=?,grade=?,next_date=?,detail=? WHERE id=? AND detail=? AND owner_id IS ? AND name=? AND country=? AND phone=? AND email=? AND grade=? AND next_date=?').bind(name,country,phone,email,grade,nextDate,JSON.stringify(after),lead.id,lead.detail,lead.owner_id,lead.name,lead.country,lead.phone,lead.email,lead.grade,lead.next_date),db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),'更新客户档案',lead.id,JSON.stringify({before:previous,after:updated}),now(),actor.id)]);
   if(!results[0].meta.changes)fail('客户资料或归属已变化，请刷新',409);return {ok:true};
  }
  const match=path.match(/^followup\/orders\/([^/]+)\/business-process$/);
