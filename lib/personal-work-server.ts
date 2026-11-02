@@ -16,7 +16,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
  if(!path.startsWith('personal-work/'))return undefined;
  if(u.role!=='sales'&&!can(u,'customers_all'))fail('无权访问个人业务工作',403);
  if(!['GET','POST'].includes(method))fail('不支持此操作',405);
- if(method==='POST'&&(!can(u,'customers_edit')||u.role==='ceo'||!body||typeof body!=='object'))fail('没有客户维护权限',403);
+ if(method==='POST'&&(!can(u,'customers_edit')||!body||typeof body!=='object'))fail('没有客户维护权限',403);
  if(path==='personal-work/customer'&&method==='GET'){
   const lead=await customer(db,u,url.searchParams.get('id')),events=await entries(db,u,lead.id),metadata=new Map(events.filter(e=>e.kind==='业务员跟进记录').map(e=>[e.payload.note_id,e.payload]));
   const notes=(await list(db,'SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE n.lead_id=? ORDER BY n.created DESC,n.rowid DESC',[lead.id])).map(n=>({...n,meta:metadata.get(n.id),type:noteType({...n,meta:metadata.get(n.id)})}));

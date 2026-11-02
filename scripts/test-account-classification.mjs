@@ -37,7 +37,8 @@ try{
  await request('users',{id:'sales',name:'sales',username:'sales',email:'sales@example.test'});
  assert.deepEqual(JSON.parse((await request('users')).find(u=>u.id==='sales').trade_scopes),['domestic','foreign']);
  for(const invalid of [['unknown'],['domestic','domestic'],['__proto__'],'domestic',null])await request('users',update(invalid),'admin',400);
- for(const role of ['ceo','management','sales','followup','operations'])await request('users',update(['domestic']),role,403);
+ await request('users',update(['domestic','foreign']),'ceo');
+ for(const role of ['management','sales','followup','operations'])await request('users',update(['domestic']),role,403);
  for(const scopes of [['domestic'],['foreign'],['domestic','foreign'],[]]){
   await request('users',{id:'management',name:'management',username:'management',trade_scopes:scopes});
   const user=(await request('users')).find(u=>u.id==='management');assert.deepEqual(JSON.parse(user.trade_scopes),scopes);

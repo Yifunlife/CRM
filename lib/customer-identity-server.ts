@@ -1,17 +1,17 @@
 import {AllocationError} from './allocation-server';
-import {id,now,clean,can,authorizedLead} from './crm';
+import {id,now,clean,can,authorizedLead,hasAdminPermissions} from './crm';
 import {followupManager} from './order-followup-server';
 import {identityHints} from './customer-identity';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const required=(v:any,label:string,max=2000)=>{if(typeof v!=='string'||!v.trim()||v.trim().length>max)fail('请填写'+label+'（不超过'+max+'字）');return v.trim();};
-const admin=(user:any,actor:any)=>{if(user.role!=='admin'||actor.role!=='admin')fail('只有管理员可以确认客户主体及关联',403);};
+const admin=(user:any,actor:any)=>{if(!hasAdminPermissions(user)||!hasAdminPermissions(actor))fail('只有管理员可以确认客户主体及关联',403);};
 const tables:Record<string,{table:string;key:string;source:string}>={lead:{table:'crm_customer_project_leads',key:'lead_id',source:'crm_leads'},deal:{table:'crm_customer_project_deals',key:'deal_id',source:'crm_deals'},order:{table:'crm_customer_project_orders',key:'order_id',source:'crm_followup_orders'}};
 const messages=['原主体关联仍存在，请先人工解除，不自动合并','请先人工解除该咨询及订单的项目关联','咨询和项目必须属于同一已确认客户主体','成交和项目必须属于同一已确认客户主体','跟单和项目必须属于同一已确认客户主体','成交与对应跟单须关联同一项目'];
 function event(db:D1Database,actor:any,subject:string|null,kind:string,payload:any,conditional=true){return db.prepare('INSERT INTO crm_customer_identity_events(id,subject_id,kind,payload,created,created_by) SELECT ?,?,?,?,?,?'+(conditional?' WHERE changes()>0':'')).bind(id(),subject,kind,JSON.stringify(payload),now(),actor.id);}
 async function lead(db:D1Database,user:any,key:any){const row:any=typeof key==='string'?await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(key).first():null;if(!row||!authorizedLead(user,row))fail('咨询不存在或无权查看',404);return row;}
-async function subject(db:D1Database,user:any,key:any){const row:any=typeof key==='string'?await db.prepare('SELECT * FROM crm_customer_subjects WHERE id=?').bind(key).first():null;if(!row||user.role!=='admin'&&!await db.prepare('SELECT 1 FROM crm_customer_subject_links s JOIN crm_leads l ON l.id=s.lead_id WHERE s.subject_id=?'+(can(user,'customers_all')?'':' AND l.owner_id=?')+' LIMIT 1').bind(key,...(can(user,'customers_all')?[]:[user.id])).first())fail('客户主体不存在或无权查看',404);return row;}
+async function subject(db:D1Database,user:any,key:any){const row:any=typeof key==='string'?await db.prepare('SELECT * FROM crm_customer_subjects WHERE id=?').bind(key).first():null;if(!row||!hasAdminPermissions(user)&&!await db.prepare('SELECT 1 FROM crm_customer_subject_links s JOIN crm_leads l ON l.id=s.lead_id WHERE s.subject_id=?'+(can(user,'customers_all')?'':' AND l.owner_id=?')+' LIMIT 1').bind(key,...(can(user,'customers_all')?[]:[user.id])).first())fail('客户主体不存在或无权查看',404);return row;}
 async function report(db:D1Database,user:any){
- const all=can(user,'customers_all'),where=all?'':' WHERE l.owner_id=?',args=all?[]:[user.id],isAdmin=user.role==='admin';
+ const all=can(user,'customers_all'),where=all?'':' WHERE l.owner_id=?',args=all?[]:[user.id],isAdmin=hasAdminPermissions(user);
  const leads=(await db.prepare('SELECT l.id,l.name,l.country,l.phone,l.email,l.detail,l.source,l.original_owner,l.owner_id,u.name AS owner_name,l.status,s.subject_id FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id LEFT JOIN crm_customer_subject_links s ON s.lead_id=l.id'+where+' ORDER BY l.created DESC,l.id').bind(...args).all<any>()).results.map(l=>({...l,detail:JSON.parse(l.detail)}));
  const leadIds=new Set(leads.map(l=>l.id)),subjectIds=new Set(leads.map(l=>l.subject_id).filter(Boolean));
  const deals=(await db.prepare('SELECT d.id,d.order_number,d.lead_id,d.cancelled,d.deal_date,u.name AS owner_name FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_users u ON u.id=d.owner_id'+where).bind(...args).all<any>()).results;

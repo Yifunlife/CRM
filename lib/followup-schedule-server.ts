@@ -17,7 +17,7 @@ async function owners(db:D1Database,user:any,row:any){
 export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  const match=/^followup\/orders\/([^/]+)\/(schedule|progress)$/.exec(path);if(!match)return undefined;
  const {row,manager}=await followupOrder(db,user,match[1]);
- if(!manager||user.role==='ceo'||actor.id!==user.id)fail('没有本订单的跟单维护权限',403);
+ if(!manager||actor.id!==user.id)fail('没有本订单的跟单维护权限',403);
  if(method==='GET'&&match[2]==='schedule')return {order:row,owners:await owners(db,user,row)};
  if(method!=='POST')fail('此操作仅支持保存',405);
  if(!body||typeof body!=='object'||Array.isArray(body))fail('排期请求格式无效');

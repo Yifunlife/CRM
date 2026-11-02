@@ -1,4 +1,5 @@
 'use client';
+import {hasAdminPermissions} from '../lib/crm';
 import {useEffect,useState} from 'react';
 const money=(n:number)=>((n||0)/100).toFixed(2);
 const values=(form:HTMLFormElement)=>Object.fromEntries(new FormData(form));
@@ -6,7 +7,7 @@ type WorkflowIssue={kind:string;entity_id:string;name:string;owner:string;issue:
 type Props={api:(path:string,body?:any,method?:string)=>Promise<any>;user:any;section:'待核查'|'应收与放行'|'人员交接'|'操作记录';leadId?:string;orderId?:string;personal?:boolean;compact?:boolean;openLead?:(id:string)=>void;openOrder?:(id:string)=>void;manageHandovers?:()=>void;onSaved?:()=>Promise<void>};
 export default function Workflow({api,user,section:tab,leadId,orderId,personal=false,compact=false,openLead,openOrder,manageHandovers,onSaved}:Props){
  const [data,D]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[query,Q]=useState(''),[dealId,S]=useState(''),[page,P]=useState(1);
- const admin=user.role==='admin';
+ const admin=hasAdminPermissions(user);
  const load=async()=>{const result=await api('workflow/report');
   const order=orderId?result.orders.find((o:any)=>o.id===orderId):null;
   const deals=result.deals.filter((d:any)=>(!leadId||d.lead_id===leadId)&&(!orderId||(order?.deal_id?d.id===order.deal_id:d.lead_id===order?.lead_id&&d.order_number===order?.order_number)));

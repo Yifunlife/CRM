@@ -43,8 +43,8 @@ try{
   await request(id,'role-workspace/report?month='+month+'&market='+encodeURIComponent('外贸'));
   await request(id,'sales-monitor',{},405);
  }
- await request(authorized[1],'grade',{id:'foreign-lead',grade:'A'},403);
- await request(authorized[1],'users/permissions',{},403);
+ await request(authorized[1],'grade',{id:'foreign-lead',grade:'A'});
+ await request(authorized[1],'users/permissions',{},400);
  await request(authorized[1],'sales-management/targets',target,403,'personal');
  await request('other-admin','allocation/management/preview',{...target,id:authorized[0]},403);
  for(const [actor,allowed,denied,lead] of [['foreign-manager','外贸','内贸','foreign-lead'],['domestic-manager','内贸','外贸','domestic-lead']]){
@@ -69,5 +69,5 @@ try{
  assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='domestic-lead'").get().owner_id,'domestic-sales');
  assert.deepEqual(sql.prepare('SELECT * FROM crm_users ORDER BY id').all(),accountsBefore);
  assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
- console.log('PASS: fixed three-account settings access; CEO narrow exception; other admins/managers read-only; both-market access for the three; foreign/domestic/dual dashboards enforced server-side; monitor market isolation; no account/owner changes.');
+ console.log('PASS: existing named management access plus CEO business management; other admins/managers retain read-only management settings; both-market access; foreign/domestic/dual dashboards enforced server-side; monitor market isolation; no account/owner changes.');
 }finally{rmSync(tmp,{recursive:true,force:true});}

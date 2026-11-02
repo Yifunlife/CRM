@@ -1,10 +1,10 @@
 import {BUSINESS_SCOPES,monthNow} from './allocation';
 import {AllocationError} from './allocation-server';
-import {clean,id,now} from './crm';
+import {clean,id,now,hasAdminPermissions} from './crm';
 
 // Restore assignments already decided in a source file; do not apply new-lead allocation weights.
 export async function syncAssignments(db:D1Database,user:any,body:any){
- if(user.role!=='admin')throw new AllocationError('只有管理员可以同步表格中已确定的归属',403);
+ if(!hasAdminPermissions(user))throw new AllocationError('只有管理员可以同步表格中已确定的归属',403);
  const rows=body.rows,filename=clean(body.filename,200),scope=BUSINESS_SCOPES.find(s=>s.id===body.business_scope);
  if(!filename||!scope||!Array.isArray(rows)||!rows.length||rows.length>50)throw new AllocationError('请提供来源文件、业务范围和1至50条已核对记录');
  if(new Set(rows.map(r=>r.id)).size!==rows.length)throw new AllocationError('同一客资不能重复提交');

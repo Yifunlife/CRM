@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {SOURCE_KINDS,LOSS_REASONS,QUALITY_STATES} from '../lib/attribution';
 import {AD_PLATFORMS} from '../lib/advertising';
 import './attribution.css';
-import {can} from '../lib/crm';
+import {can,hasAdminPermissions} from '../lib/crm';
 import OperationsSummary from './operations-summary';
 import OperationsAccountSummary from './operations-account-summary';
 import {opToday} from '../lib/operations';
@@ -12,7 +12,7 @@ const money=(n:number|null)=>n===null?'无查看权限':(n/100).toLocaleString('
 const values=(f:HTMLFormElement)=>Object.fromEntries(new FormData(f));
 export default function Attribution({user,api,openLead}:{user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void}){
  const [data,D]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[tab,T]=useState(can(user,'customers_all')&&can(user,'advertising_view')?'投放效果':'咨询核查'),[query,Q]=useState(''),[page,P]=useState(1),[selected,S]=useState(''),[revision,V]=useState(0),[from,F]=useState(opToday().slice(0,7)+'-01'),[to,U]=useState(opToday());
- const admin=user.role==='admin',reviewRef=useRef<HTMLElement>(null);
+ const admin=hasAdminPermissions(user),reviewRef=useRef<HTMLElement>(null);
  const focusReview=()=>{reviewRef.current?.scrollIntoView({block:'start'});reviewRef.current?.focus({preventScroll:true});};
  const selectRow=(key:string)=>{S(key);if(key===selected)focusReview();};
  useEffect(()=>{if(selected)focusReview();},[selected,tab]);
