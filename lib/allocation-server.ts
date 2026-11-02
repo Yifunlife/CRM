@@ -1,3 +1,4 @@
+import {canSetManagement} from './crm';
 import {BUSINESS_SCOPES,GLOBAL_ALLOCATION_SCOPE,defaultConfig,monthNow,nextMonth,validMonth,validateConfig,effectiveShares,equalShares,type Config} from './allocation';
 import {id,now,can} from './crm';
 export class AllocationError extends Error {constructor(message:string,public status=400){super(message);}}
@@ -31,7 +32,8 @@ async function report(db:D1Database,scope:string,month:string){
 }
 export async function allocationEndpoint(db:D1Database,user:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/'))return undefined;
- if(!can(user,path==='allocation/distribute'?'leads_allocate':'performance_view')&&user.role!=='admin')throw new AllocationError('此操作需要运营或管理员权限',403);
+ if(method==='GET'&&!can(user,'performance_view')&&user.role!=='admin')throw new AllocationError('此操作需要运营或管理员权限',403);
+ if(method!=='GET'&&!canSetManagement(user))throw new AllocationError('只有 Winnie、CEO、徐泽贵可以设置分配管理',403);
  const scope=String(body.scope||url.searchParams.get('scope')||GLOBAL_ALLOCATION_SCOPE);
  if(scope!==GLOBAL_ALLOCATION_SCOPE&&!BUSINESS_SCOPES.some(s=>s.id===scope))throw new AllocationError('请选择有效业务范围');
  if(path==='allocation/report'&&method==='GET'){const month=url.searchParams.get('month')||monthNow();if(!validMonth(month)||month>monthNow())throw new AllocationError('请选择本月或过去月份');return report(db,scope,month);}
@@ -41,7 +43,7 @@ export async function allocationEndpoint(db:D1Database,user:any,path:string,meth
   if(selected.length!==ids.length)throw new AllocationError('请选择业务范围已明确、没有负责人且无归属冲突的新增客资；限定范围时须属于同一业务范围');
   return {assigned:await distribute(db,ids,scope,user.id)};
  }
- if(user.role!=='admin')throw new AllocationError('只有管理员可以修改分配规则与确认月度占比',403);
+ if(!canSetManagement(user))throw new AllocationError('只有 Winnie、CEO、徐泽贵可以修改分配规则',403);
  if(path==='allocation/config'&&method==='POST'){
   if(scope!==GLOBAL_ALLOCATION_SCOPE)throw new AllocationError('已改为全渠道共同分配，请刷新页面后保存全渠道设置',409);
   const config:Config=body.config;try{validateConfig(config,await activeUsers(db));}catch(e:any){throw new AllocationError(e.message);}

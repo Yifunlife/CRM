@@ -1,4 +1,5 @@
-import {can,id,now} from './crm';
+import {boardLeadVisible} from './market-access';
+import {canSetManagement,boardMarkets,can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
 import {suiteDay} from './sales-suite';
 import {salesManagementReport} from './sales-management';
@@ -9,7 +10,7 @@ const list=async(db:D1Database,sql:string,args:any[]=[])=> (await db.prepare(sql
 export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!['sales-management/report','sales-management/targets'].includes(path))return undefined;
  if(!['admin','ceo','management'].includes(user.role)||!can(user,'customers_all'))fail('没有销售管理查看权限',403);
- const canEdit=['admin','management'].includes(user.role)&&['admin','management'].includes(actor.role)&&can(user,'performance_view');
+ const canEdit=canSetManagement(user)&&canSetManagement(actor)&&user.id===actor.id;
  if(path==='sales-management/report'&&method==='GET'){
   const [people,leads,links,deals,receipts,targets]=await Promise.all([
    list(db,"SELECT id,name,role,active,trade_scopes FROM crm_users WHERE role='sales' OR (role IN ('management','ceo') AND trade_scopes<>'[]') OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) ORDER BY name"),
@@ -19,10 +20,14 @@ export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,p
    list(db,'SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r WHERE r.cancelled=0'),
    list(db,'SELECT * FROM crm_sales_targets')
   ]);
-  try{return {...salesManagementReport({people,leads,links,deals,receipts,targets},url.searchParams,suiteDay()),can_edit:canEdit};}catch(e){return fail((e as Error).message);}
+  const markets=boardMarkets(user),currencies=markets.map(m=>m==='内贸'?'CNY':'USD');
+  const visibleLeads=leads.filter(l=>boardLeadVisible(user,l)),leadIds=new Set(visibleLeads.map(l=>l.id));
+  const visiblePeople=people.filter(p=>canSetManagement(user)||accountTradeScopes(p).some(v=>markets.includes(v==='domestic'?'内贸':'外贸'))||visibleLeads.some(l=>l.owner_id===p.id)),personIds=new Set(visiblePeople.map(p=>p.id));
+  const visibleDeals=deals.filter(d=>canSetManagement(user)||leadIds.has(d.lead_id)&&currencies.includes(d.currency)),dealIds=new Set(visibleDeals.map(d=>d.id));
+  try{const report=salesManagementReport({people:visiblePeople,leads:visibleLeads,links:links.filter(l=>leadIds.has(l.lead_id)),deals:visibleDeals,receipts:receipts.filter(r=>dealIds.has(r.deal_id)),targets:targets.filter(t=>personIds.has(t.owner_id)&&(canSetManagement(user)||currencies.includes(t.currency)))},url.searchParams,suiteDay());return {...report,rows:report.rows.filter((r:any)=>canSetManagement(user)||currencies.includes(r.currency)),details:report.details.filter((d:any)=>canSetManagement(user)||currencies.includes(d.group_currency)),can_edit:canEdit,allowed_currencies:currencies};}catch(e){return fail((e as Error).message);}
  }
  if(path!=='sales-management/targets'||method!=='POST')fail('操作不存在',405);
- if(!canEdit)fail('只有具备业绩权限的管理员或管理层可设置目标',403);
+ if(!canEdit)fail('只有 Winnie、CEO、徐泽贵可以设置业绩目标',403);
  if(!Array.isArray(body?.items)||!body.items.length||body.items.length>17)fail('请选择要保存的销售目标');
  const person:any=await db.prepare("SELECT id,active,role,trade_scopes FROM crm_users WHERE id=?").bind(body.owner_id||'').first();
  if(!person?.active||!['sales','management','ceo'].includes(person.role))fail('请选择有效业务员');
