@@ -3755,8 +3755,11 @@ ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(pay
       return source.replace(status, "reception:receptionConfig().enabled,autoFirstContact:!!readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{}).autoFirstContact,error:crmAccountSync?.error()");
     }
     function patchFirstContactMail2(source) {
+      source = source.replace("const {approvedFirstMail}=require('./crm-first-contact-mail');", "const {approvedFirstMail,sameFirstDraft}=require('./crm-first-contact-mail');");
+      source = source.replace("if((await list('drafts',row.recipient)).some(m=>matches(m,row.recipient)&&m.id!==row.messageId))", "if(!await sameFirstDraft((await list('drafts',row.recipient)).filter(m=>matches(m,row.recipient)),row.messageId,graph))");
+      source = source.replace("if(latestDrafts.some(m=>m.id!==draft.id))", "if(row.automaticFirstContact?!await sameFirstDraft(latestDrafts,draft.id,graph):latestDrafts.some(m=>m.id!==draft.id))");
       if (source.includes("async function resumeFirst(")) return source;
-      source = "const {approvedFirstMail}=require('./crm-first-contact-mail');\n" + source;
+      source = "const {approvedFirstMail,sameFirstDraft}=require('./crm-first-contact-mail');\n" + source;
       source = source.replace("async function send(client,kind,check=async()=>{})", "async function send(client,kind,check=async()=>{},options={})");
       const prior = "if(existing)return{status:'skipped',reason:'\u5DF2\u6709\u90AE\u4EF6\u8BB0\u5F55\uFF1A'+existing.status};";
       if (!source.includes(prior)) throw Error("\u9996\u8054\u90AE\u4EF6\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
@@ -3767,6 +3770,7 @@ ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(pay
       const after = "if(!row.body||!row.signatureHtml||!row.attachmentSha256||!row.inlineHashes||(row.automaticFirstContact?!approvedFirstMail(html,row):!row.body.split('\\n').filter(Boolean).every(line=>html.replace(/\\s+/g,' ').includes(escape(line).replace(/\\s+/g,' ')))||!row.automaticFirstContact&&!html.includes(row.signatureHtml)))";
       if (!source.includes(before)) throw Error("\u90AE\u4EF6\u56DE\u6267\u6821\u9A8C\u7EC4\u4EF6\u7248\u672C\u4E0D\u517C\u5BB9");
       source = source.replace(before, after);
+      source = source.replace("if(latestDrafts.some(m=>m.id!==draft.id))", "if(row.automaticFirstContact?!await sameFirstDraft(latestDrafts,draft.id,graph):latestDrafts.some(m=>m.id!==draft.id))");
       return source.replace(" async function send(", ` async function resumeFirst(row,client,check){
   if(row.kind!=='first'||row.status!=='preparing'||row.sendRequestedAt||!row.messageId||!row.automaticFirstContact||row.recipient!==emailKey(client.email)||row.body!==contact.firstContact({...client,name:client.emailFirstName||client.name}).body)throw Error('\u539F\u9996\u8054\u8349\u7A3F\u4E0D\u7B26\u5408\u7EED\u53D1\u6761\u4EF6');
   const rows=load(),stored=rows.find(r=>r.requestId===row.requestId),route='/me/messages/'+encodeURIComponent(row.messageId);
@@ -3778,7 +3782,7 @@ ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(pay
   const file=material();if(!file||path.basename(file.path)!==row.attachment||crypto.createHash('sha256').update(fs.readFileSync(file.path)).digest('hex')!==row.attachmentSha256)throw Error('\u539F\u9996\u8054\u9644\u4EF6\u5DF2\u53D8\u5316\uFF0C\u672A\u53D1\u9001');
   await verifyAttachments(row);await check();
   if((await list('sentitems',row.recipient)).some(m=>matches(m,row.recipient)))throw Error('\u5DF2\u53D1\u9001\u9879\u5DF2\u6709\u6B64\u5BA2\u6237\u90AE\u4EF6\uFF0C\u4E0D\u91CD\u590D\u53D1\u9001');
-  if((await list('drafts',row.recipient)).some(m=>matches(m,row.recipient)&&m.id!==row.messageId))throw Error('\u5B58\u5728\u5176\u4ED6\u4EBA\u5DE5\u6216\u5386\u53F2\u8349\u7A3F\uFF0C\u672A\u53D1\u9001');
+  if(!await sameFirstDraft((await list('drafts',row.recipient)).filter(m=>matches(m,row.recipient)),row.messageId,graph))throw Error('\u5B58\u5728\u5176\u4ED6\u4EBA\u5DE5\u6216\u5386\u53F2\u8349\u7A3F\uFF0C\u672A\u53D1\u9001');
   const draft=await graph(route+'?$select=isDraft,body,subject,toRecipients');
   if(!guard()||!draft.isDraft||draft.subject!==subject||draft.toRecipients?.length!==1||!matches(draft,row.recipient)||!approvedFirstMail(draft.body?.content,row))throw Error('\u539F\u9996\u8054\u8349\u7A3F\u53D1\u751F\u5B9E\u9645\u53D8\u5316\uFF0C\u672A\u53D1\u9001');
   await check();stored.status='uncertain';stored.sendRequestedAt=now().toISOString();save(rows);

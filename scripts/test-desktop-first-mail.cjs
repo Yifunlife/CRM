@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),Module=require('node:module');
-const {approvedFirstMail}=require('./desktop-sync/first-contact-mail.cjs'),{patchFirstContactMail}=require('./desktop-sync/patch-app.cjs');
+const {approvedFirstMail,sameFirstDraft}=require('./desktop-sync/first-contact-mail.cjs'),{patchFirstContactMail}=require('./desktop-sync/patch-app.cjs');
 const signature='<div id="Signature">Winnie Wu — International Sales Director<img src="cid:logo"></div>',body='Hi Example,\n\nWelcome. Please contact +61478289733.';
 const html='<html><body><div>Hi Example,</div><div>Welcome. Please contact <span data-outlook-trace="volatile">+61478289733.</span></div>'+signature.replace('id="Signature"','id="Signature" data-outlook-trace="new"')+'</body></html>',row={body,signatureHtml:signature};
 assert(approvedFirstMail(html,row));assert(!approvedFirstMail(html.replace('Welcome.','Different message.'),row));assert(!approvedFirstMail(html.replace('Winnie Wu','Other person'),row));assert(!approvedFirstMail(html.replace('Welcome.','<a href="https://other.invalid">Welcome.</a>'),row));
@@ -8,12 +8,13 @@ assert(approvedFirstMail(html,row));assert(!approvedFirstMail(html.replace('Welc
  const prepared={...row,clientId:'fixture',clientName:'Example',recipient:'customer@example.invalid',sender:'yifunlife@hotmail.com',subject:'Yifunlife Amusement Equipment',kind:'first',automaticFirstContact:true,status:'preparing',messageId:'draft-id',requestId:'request-id',attachment:path.basename(file),attachmentSha256:hash(pdf),attachmentGraphSize:pdf.length,attachmentUploadConfirmed:true,inlineHashes:[{cid:'logo',hash:hash(inline)}]};
  const source={status:'sent',signatureVerified:true,attachmentVerified:true,messageId:'approved-id'};let rows=[source,prepared],sends=0,altered=false;
  const patched=patchFirstContactMail(fs.readFileSync('/Users/jingwu/Desktop/Yifun Life/CRM/work/winnie-auto-first-contact-20261102/outlook-outreach.js','utf8'));const mod=new Module(path.join(dir,'sender.cjs'));mod.filename=path.join(dir,'sender.cjs');
- mod.require=name=>name==='./crm-first-contact-mail'?{approvedFirstMail}:name==='./outreach-policy'?{emailKey:v=>String(v||'').trim().toLowerCase()}:name==='./mail-integration'?{firstContact:()=>({body}),firstName:()=> 'Example'}:require(name);mod._compile(patched,mod.filename);
+ mod.require=name=>name==='./crm-first-contact-mail'?{approvedFirstMail,sameFirstDraft}:name==='./outreach-policy'?{emailKey:v=>String(v||'').trim().toLowerCase()}:name==='./mail-integration'?{firstContact:()=>({body}),firstName:()=> 'Example'}:require(name);mod._compile(patched,mod.filename);
  const request=async(url,init)=>{const p=new URL(url);let value;
   if(init.method==='POST'&&p.pathname.endsWith('/send')){sends++;return{ok:true,status:202};}
   if(p.pathname.endsWith('/me'))value={mail:'yifunlife@hotmail.com'};
   else if(p.pathname.includes('/mailFolders/sentitems/'))value={value:[]};
-  else if(p.pathname.includes('/mailFolders/drafts/'))value={value:[{id:'draft-id',toRecipients:[{emailAddress:{address:prepared.recipient}}]}]};
+  else if(p.pathname.endsWith('/translateExchangeIds'))value={value:JSON.parse(init.body).inputIds.map(id=>({sourceId:id,targetId:id==='rest-draft-id'?'draft-id':'different-draft'}))};
+  else if(p.pathname.includes('/mailFolders/drafts/'))value={value:[{id:'rest-draft-id',toRecipients:[{emailAddress:{address:prepared.recipient}}]}]};
   else if(p.pathname.endsWith('/approved-id'))value={subject:prepared.subject,body:{content:'<html><body>'+signature+'</body></html>'}};
   else if(p.pathname.endsWith('/attachments/pdf'))value={contentBytes:pdf.toString('base64')};
   else if(p.pathname.endsWith('/attachments/logo'))value={contentId:'logo',contentBytes:inline};

@@ -7,3 +7,9 @@ function approvedFirstMail(html,row){
  return [...body.matchAll(/href="([^"]*)"/gi)].every(([,href])=>/^https?:\/\/(?:www\.)?yifunlife\.com\/?$/i.test(href)||/^tel:\+?61478289733$/i.test(href));
 }
 module.exports={approvedFirstMail};
+async function sameFirstDraft(drafts,immutableId,graph){
+ const aliases=drafts.filter(d=>d.id!==immutableId).map(d=>d.id);if(!aliases.length)return true;
+ const converted=await graph('/me/translateExchangeIds','POST',{inputIds:aliases,sourceIdType:'restId',targetIdType:'restImmutableEntryId'});
+ return aliases.every(id=>converted.value?.some(value=>value.sourceId===id&&value.targetId===immutableId));
+}
+module.exports.sameFirstDraft=sameFirstDraft;
