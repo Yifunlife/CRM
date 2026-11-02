@@ -40,7 +40,7 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
     bindings.push({lead_id:update.lead_id,desktop_id:c.id,base});
    }
    if(modified)save(current);
-   write(file,{owner_id:config.owner_id,bindings,blocked:[...new Set([...(journal.blocked||[]),...(result.blocked||[])])],conflicts,updated_at:new Date().toISOString()});
+   write(file,{owner_id:config.owner_id,bindings,blocked:[...new Set(result.blocked||[])],conflicts,updated_at:new Date().toISOString()});
    const first=conflicts[0],name=first?current.clients.find(c=>c.id===first.desktop_id)?.name||result.updates.find(u=>u.lead_id===first.lead_id)?.values.name||'客户':'';
    lastError=first?'同步有 '+conflicts.length+' 项待核对：'+name+' · '+first.reason+'。已保留两端内容，请核对后统一。':'';changed?.({customers:snapshot.length,conflicts:conflicts.length,error:lastError});
   }catch(e){lastError=e.message;}finally{busy=false;}
