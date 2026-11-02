@@ -1,13 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
-import ts from 'typescript';
-const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
-const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const workflow=moduleUrl('lib/order-followup.ts'),rules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)}),crm=moduleUrl('lib/crm.ts');
-const importer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(crm),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(rules)});
+import {moduleURL} from './test-form-intake.mjs';
+const rules=moduleURL('lib/order-import.ts'),importer=moduleURL('lib/order-import-server.ts');
 const {importOrders}=await import(importer),{importDate,importStage,ORDER_IMPORT_LIMIT}=await import(rules);
-const {followupEndpoint}=await import(moduleUrl('lib/order-followup-server.ts',{"'./order-import-server'":JSON.stringify(importer),"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(crm),"'./order-followup'":JSON.stringify(workflow)}));
+const {followupEndpoint}=await import(moduleURL('lib/order-followup-server.ts'));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};

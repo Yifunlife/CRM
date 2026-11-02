@@ -2,22 +2,21 @@ const RealDate=Date;globalThis.Date=class extends RealDate{constructor(...args){
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
-import ts from 'typescript';
-const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
-const crm=module('lib/crm.ts'),allocation=module('lib/allocation.ts'),server=module('lib/allocation-server.ts',{"'./crm'":crm,"'./allocation'":allocation});
-const {customerPoolEndpoint,processCustomerPool}=await import(module('lib/customer-pool.ts',{"'./crm'":crm,"'./allocation'":allocation,"'./allocation-server'":server,"'./attribution'":module('lib/attribution.ts'),"'./lead-notifications'":module('lib/lead-notifications.ts',{"'./crm'":crm}),"'./customer-progress'":module('lib/customer-progress.ts',{"'./crm'":crm})}));
+import {moduleURL} from './test-form-intake.mjs';
+const server=moduleURL('lib/allocation-server.ts');
+const {customerPoolEndpoint,processCustomerPool}=await import(moduleURL('lib/customer-pool.ts'));
 const {allocationWeights,distribute}=await import(server);
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const out=statements.map(s=>({meta:sqlite.prepare(s.sql).run(...s.args)}));sqlite.exec('COMMIT');return out;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
-const admin={id:'admin',role:'admin'},sales={id:'a',role:'sales'},other={id:'b',role:'sales'},ops={id:'ops',role:'operations'};
-for(const u of [admin,sales,other,ops,{id:'paused',role:'sales'},{id:'off',role:'sales'}])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01',u.id==='off'?0:1);
+const admin={id:'admin',role:'admin'},reviewer={id:'reviewer',role:'ceo'},sales={id:'a',role:'sales'},other={id:'b',role:'sales'},ops={id:'ops',role:'operations'};
+for(const u of [admin,reviewer,sales,other,ops,{id:'paused',role:'sales'},{id:'off',role:'sales'}])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01',u.id==='off'?0:1);
 const members=[{user_id:'a',state:'参与',share:99},{user_id:'b',state:'参与',share:1},{user_id:'paused',state:'暂停',share:0},{user_id:'off',state:'参与',share:0}];
 const config={members,rule:{automatic:true,performance:30,maxChange:10,minimum:5,receipts:true}};
-function configure(value=config){sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run('all',JSON.stringify(value),'now','admin');}
-const call=(path,body={},user=admin,method='POST')=>customerPoolEndpoint(db,user,user,'customer-pool'+path,method,body);
-const report=(user=admin)=>call('',{},user,'GET');
+function configure(value=config){sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run('all',JSON.stringify(value),'now','reviewer');}
+const call=(path,body={},user=reviewer,method='POST')=>customerPoolEndpoint(db,user,user,'customer-pool'+path,method,body);
+const report=(user=reviewer)=>call('',{},user,'GET');
 const pool=id=>sqlite.prepare('SELECT * FROM crm_customer_pool WHERE id=?').get(id);
 const lead=id=>sqlite.prepare('SELECT * FROM crm_leads WHERE id=?').get(id);
 const values=(n)=>({name:'客户'+n,phone:'8613800'+String(n).padStart(6,'0'),email:'',country:'',business_scope:'whatsapp',requirement:'室内游乐场',summary:''});
@@ -31,6 +30,7 @@ await assert.rejects(call('/submit',{id:one,source:'WhatsApp／其他',raw:'diff
 await assert.rejects(confirm(one,{name:'unknown'}),/联系方式/);
 await assert.rejects(confirm(one,{...values(1),email:'not-an-email'}),/邮箱/);
 await assert.rejects(call('/confirm',{id:one,version:0,fields:values(1)},sales),/权限/);
+await assert.rejects(call('/confirm',{id:one,version:0,fields:values(1)},admin),/权限/);
 await confirm(one,values(1));
 assert.equal(pool(one).state,'已入CRM');assert.equal(lead(one).owner_id,null);
 assert.equal((await report(other)).rows.length,0,'other salesperson cannot see unassigned submissions');
@@ -80,8 +80,8 @@ sqlite.prepare("INSERT INTO crm_leads(id,name,source,business_scope,detail,finge
 await processCustomerPool(db);assert.equal(lead('history').owner_id,null);
 // Fresh confirmations are rejected if the reviewer no longer has permission.
 const revoked=await submit(9);configure({...config,rule:{...config.rule,automatic:false}});await confirm(revoked,values(9));
-sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='admin'").run();configure();await processCustomerPool(db);assert.equal(lead(revoked).owner_id,null);
-sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='admin'").run();await distribute(db,[revoked],'all','admin');await processCustomerPool(db);assert.ok(lead(revoked).owner_id);
+sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='reviewer'").run();configure();await processCustomerPool(db);assert.equal(lead(revoked).owner_id,null);
+sqlite.prepare("UPDATE crm_users SET active=1 WHERE id='reviewer'").run();await distribute(db,[revoked],'all','admin');await processCustomerPool(db);assert.ok(lead(revoked).owner_id);
 const today=(await report()).today;
 sqlite.prepare("UPDATE crm_leads SET next_date=?,status='正在沟通' WHERE id=?").run(today,one);
 assert.ok((await report(sales)).todo.some(l=>l.id===one));assert.ok(!(await report(other)).todo.some(l=>l.id===one));

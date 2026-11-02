@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
-import ts from 'typescript';
-const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
-const allocation=module('lib/allocation.ts'),crm=module('lib/crm.ts'),{distribute,allocationEndpoint,allocationWeights}=await import(module('lib/allocation-server.ts',{"'./allocation'":allocation,"'./crm'":crm}));
+import {moduleURL} from './test-form-intake.mjs';
+const allocation=moduleURL('lib/allocation.ts'),{distribute,allocationEndpoint,allocationWeights}=await import(moduleURL('lib/allocation-server.ts'));
 const {BUSINESS_SCOPES,monthNow}=await import(allocation),sqlite=new DatabaseSync(':memory:');
 sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const result=statements.map(s=>({meta:sqlite.prepare(s.sql).run(...s.args)}));sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
-for(const [id,role] of [['admin','admin'],['a','sales'],['b','management'],['c','ceo'],['outside','ceo']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
+for(const [id,role] of [['admin','admin'],['reviewer','ceo'],['a','sales'],['b','management'],['c','ceo'],['outside','ceo']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
 const config={members:['a','b','c'].map(user_id=>({user_id,state:'参与',share:0})),rule:{performance:30,maxChange:10,minimum:5,automatic:true}};
 const save=(scope,value=config)=>sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run(scope,JSON.stringify(value),'now','admin');
 save('all');for(const s of BUSINESS_SCOPES)save(s.id);
@@ -19,7 +18,8 @@ assert.deepEqual([0,1,2].map(i=>owner('first-'+i)),['a','b','c'],'Different chan
 // A stale per-channel roster must never override the common roster.
 save('google',{...config,members:[{user_id:'outside',state:'参与',share:100}]});
 assert.deepEqual((await allocationWeights(db,'google')).weights.map(w=>w.user_id),['a','b','c']);
-const call=(path,body={},method='POST',query='')=>allocationEndpoint(db,{id:'admin',role:'admin'},path,method,body,new URL('https://test.invalid/api/'+path+query));
+const call=(path,body={},method='POST',query='')=>allocationEndpoint(db,{id:'reviewer',role:'ceo'},path,method,body,new URL('https://test.invalid/api/'+path+query));
+await assert.rejects(allocationEndpoint(db,{id:'admin',role:'admin'},'allocation/config','POST',{},new URL('https://test.invalid')),e=>e.status===403);
 await assert.rejects(call('allocation/config',{scope:'google',config}),/全渠道|刷新/);
 const ids=[];for(let i=0;i<30;i++){const id='mixed-'+i;insert(id,BUSINESS_SCOPES[i%BUSINESS_SCOPES.length].id);ids.push(id);}
 assert.equal((await call('allocation/distribute',{ids})).assigned,30);
@@ -35,6 +35,6 @@ sqlite.prepare("UPDATE crm_users SET active=0 WHERE id='c'").run();
 assert.deepEqual((await allocationWeights(db,'whatsapp')).weights.map(w=>w.user_id),['a']);
 const report=await call('allocation/report',{},'GET','?scope=all&month='+monthNow());
 assert.equal(report.assigned.reduce((n,r)=>n+r.n,0),35);assert.equal(report.globalAssigned.reduce((n,r)=>n+r.n,0),35);
-assert.equal(report.config_scope,'all');assert.equal(report.policy,'equal-global-v1');
+assert.equal(report.config_scope,'all');assert.equal(report.policy,'full-first-v1');
 assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: shared cross-channel counter and roster, 33 customers split 11/11/11, mixed-source batches, original source preservation, idempotence, carry-forward counts, leave/disabled accounts, stale settings rejection and global reporting.');

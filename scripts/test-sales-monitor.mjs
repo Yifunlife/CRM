@@ -7,6 +7,7 @@ const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 for(const [id,role] of [['a','sales'],['b','sales'],['boss','ceo'],['f','followup']])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
 for(const [id,owner,cohort] of [['a1','a','new'],['a2','a','historical'],['b1','b','new'],['old',null,'historical']])sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,cohort,detail,fingerprint,created) VALUES(?,?,'Meta',?,?,'{}',?,'2026-11-02')").run(id,id,owner,cohort,id);
+sql.exec(`UPDATE crm_users SET trade_scopes='["foreign"]' WHERE role='sales';UPDATE crm_leads SET country='新加坡'`);
 for(const [id,owner] of [['a1','a'],['b1','b']])sql.prepare("INSERT INTO crm_assignments(id,lead_id,owner_id,policy,created,user_id) VALUES(?,?,?,'new-allocation','2026-11-02','boss')").run(id,id,owner);
 for(const id of ['a1','b1'])sql.prepare("INSERT INTO crm_sales_projects(project_id,name,lead_id,stage_at,token,created,created_by,updated,updated_by) VALUES(?,?,?,'2026-11-02','token','2026-11-02','boss','2026-11-02','boss')").run(id,id,id);
 sql.prepare("INSERT INTO crm_sales_quote_links(id,project_id,quote_id,source_key,summary,synced,sync_error,created,created_by,updated,updated_by) VALUES('qa','a1','qa','a','{}','','报价同步失败','now','boss','now','boss')").run();
@@ -16,7 +17,7 @@ for(const id of ['a','b'])sql.prepare("INSERT INTO crm_sales_account_links(user_
 const tables=sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(x=>x.name);
 const snapshot=()=>JSON.stringify(tables.map(t=>sql.prepare('SELECT * FROM "'+t+'"').all()));
 const before=snapshot(),base=database(sql),db={prepare(query){assert.match(query,/^(SELECT|WITH)/,'monitor must remain read-only');return base.prepare(query);}},source=database(q);
-const own=await salesMonitor(db,source,{id:'a',role:'sales'},'sales-monitor','GET');
+const own=await salesMonitor(db,source,{id:'a',role:'sales',trade_scopes:['foreign']},'sales-monitor','GET');
 assert.equal(own.scope,'本人');assert(own.items.some(i=>i.id==='accept:ready-a'));assert(!own.items.some(i=>i.owner_id==='b'||i.lead_id==='a2'));assert.equal(own.team.length,0);assert.equal(own.summary.customers,1);assert(!JSON.stringify(own).includes('never-expose'));
 const boss=await salesMonitor(db,source,{id:'boss',role:'ceo'},'sales-monitor','GET');
 assert.equal(boss.scope,'全团队');assert(boss.items.some(i=>i.id==='accept:ready-b'));assert(boss.customerRules.find(r=>r.number===2).count>0);assert.equal(boss.summary.customers,2);assert(boss.items.some(i=>i.id==='device:b'));assert(boss.items.some(i=>i.id==='sync:qa'));assert.equal(boss.sources.daily,'2026-11-02T00:00:00Z');

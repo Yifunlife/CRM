@@ -21,9 +21,10 @@ async function exercise(ref){
   const req=new Request('https://crm.test/api/'+path,{method,headers:{origin:'https://crm.test',cookie:cookies[role]||'','content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const res=await handlers[method](req);const data=await res.json();assert.equal(res.status,expected,method+' '+path+': '+JSON.stringify(data));responses.push({role,path,method,status:res.status,data});return data;
  }
  await request('none','leads',undefined,401);await request('sales','leads/legacy',undefined,404);
- await request('admin','import',{source:'WhatsApp／其他',business_scope:'whatsapp',rows:[{客户名称:'模块验收客户',邮箱:'modules@test.invalid',录入日期:'2026-11-02T01:00:00Z'}]});
+ const intake={source:'WhatsApp／其他',business_scope:'whatsapp',rows:[{客户名称:'模块验收客户',邮箱:'modules@test.invalid',录入日期:'2026-11-02T01:00:00Z'}]};
+ await request('admin','import',intake,403);await request('ceo','import',intake);
  const lead=sql.prepare("SELECT * FROM crm_leads WHERE name='模块验收客户'").get();assert.equal(lead.cohort,'new');assert.equal(lead.owner_id,null);
- await request('admin','allocation/distribute',{ids:[lead.id]});await request('sales','followup',{id:lead.id,status:'正在沟通',content:'已确认客户需求',method:'WhatsApp',next_step:'确认报价',next_date:'2026-11-03'});await request('sales','grade',{id:lead.id,grade:'A'});
+ await request('admin','allocation/distribute',{ids:[lead.id]},403);await request('ceo','allocation/distribute',{ids:[lead.id]});await request('sales','followup',{id:lead.id,status:'正在沟通',content:'已确认客户需求',method:'WhatsApp',next_step:'确认报价',next_date:'2026-11-03'});await request('sales','grade',{id:lead.id,grade:'A'});
  await request('sales','confirmations/quote',{quote_id:'quote-1',lead_id:lead.id},409);quote.exec("INSERT INTO quotation_crm_messages(id,quotation_id,kind,author,created_at) VALUES('ready','quote-1','业务员确认报价','sales@test.invalid','2026-11-02')");await request('sales','confirmations/quotes');
  const accepted=await request('sales','confirmations/quote',{quote_id:'quote-1',lead_id:lead.id});await request('sales','confirmations/quote',{quote_id:'quote-1',lead_id:lead.id});
  const project=sql.prepare('SELECT * FROM crm_sales_projects').get(),contract={project_id:accepted.id,version:project.version,quote_id:'quote-1',logistics_id:'follower',reason:'已确认合同'};

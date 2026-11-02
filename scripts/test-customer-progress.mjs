@@ -8,7 +8,7 @@ const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
 for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}}
 const db={prepare:sql=>new Statement(sql)};
-for(const [id,role,active] of [['admin','admin',1],['a','sales',1],['b','sales',1],['empty','sales',1],['off','sales',0]])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(id,id,id==='b'?'同名业务员':id==='a'?'同名业务员':id,role,'unused','2026-01-01',active);
+for(const [id,role,active] of [['admin','admin',1],['reviewer','ceo',1],['a','sales',1],['b','sales',1],['empty','sales',1],['off','sales',0]])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(id,id,id==='b'?'同名业务员':id==='a'?'同名业务员':id,role,'unused','2026-01-01',active);
 const insert=sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,original_owner,review,status,last_contact,detail,fingerprint,created) VALUES(?,?,'Meta',?,?,?,?,?,'{}',?,'2026-01-01')");
 const lead=(id,owner=null,status='待首次联系',contact='',review=0,original='')=>insert.run(id,id,owner,original,review,status,contact,id);
 lead('untouched','a');lead('followed','a','正在沟通','2026-10-28');lead('closed','a','已成交','2026-10-28');lead('legacy','a','正在沟通');lead('closed-no-log','a','已结束');lead('review-owned','a','待首次联系','',1);lead('other','b');lead('disabled','off');lead('unassigned');lead('review',null,'待首次联系','',1);lead('named-only',null,'待首次联系','',0,'历史业务员');lead('pending-created');
@@ -16,7 +16,9 @@ const pool=sqlite.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,s
 pool.run('pending-created','待分配','pending-created',null,'admin');pool.run('new-review','待确认',null,null,'admin');pool.run('repeat','待确认',null,'followed','admin');pool.run('done','已入CRM','followed',null,'admin');pool.run('sales-own','待确认',null,null,'a');
 sqlite.exec("UPDATE crm_leads SET cohort='new' WHERE id<>'named-only'");
 const before=sqlite.prepare('SELECT total_changes() n').get().n;
-let report=await customerProgress(db,{id:'admin',role:'admin'});
+const adminReport=await customerProgress(db,{id:'admin',role:'admin'});
+assert.equal(adminReport.stageCounts['全部'],14,'ordinary administrator cannot inspect another user’s unlinked pending intake');
+let report=await customerProgress(db,{id:'reviewer',role:'ceo'});
 assert.deepEqual(report.stageCounts,{'全部':15,'待核查':5,'待分配':2,'已分配':7,'待归属对齐':1});
 assert.deepEqual({...report.staff.find(r=>r.owner_id==='a')},{owner_id:'a',owner_name:'同名业务员',active:1,assigned:6,followed:2,uncontacted:2,unverified:2,closed:2});
 assert.equal(report.staff.find(r=>r.owner_id==='b').assigned,1,'same names remain separate');
@@ -29,7 +31,7 @@ const limited=await customerProgress(db,{id:'a',role:'operations',permissions:{c
 assert.deepEqual(limited,own,'permission overrides constrain the report');
 assert.equal(sqlite.prepare('SELECT total_changes() n').get().n,before,'report must not mutate records');
 sqlite.exec('BEGIN');for(let i=0;i<10010;i++)lead('bulk-'+i,'b');for(let i=0;i<310;i++)pool.run('pool-'+i,'待确认',null,null,'admin');sqlite.exec('COMMIT');
-report=await customerProgress(db,{id:'admin',role:'admin'});
+report=await customerProgress(db,{id:'reviewer',role:'ceo'});
 assert.equal(report.staff.find(r=>r.owner_id==='b').assigned,10011,'not capped at lead list limit');
 assert.equal(report.stageCounts['全部'],10335,'not capped at intake or lead display limits');
 for(const row of report.staff)assert.equal(row.assigned,row.followed+row.uncontacted+row.unverified);
