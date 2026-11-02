@@ -345,3 +345,21 @@
 @media(pointer:coarse) {
  .office-app.sales-workspace .workspace .contract-fees label { min-height:44px; }
 }
+
+/* Keep customer communication archives and linking controls compact. */
+.office-app .workspace .sales-chat-page .archive-actions { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.office-app .workspace .sales-chat-page .archive-profile { padding:12px; margin:0 0 12px; }
+.office-app .workspace .sales-chat-page .archive-profile > h2 { margin-bottom:8px; }
+.office-app .workspace .sales-chat-page .archive-profile dl { grid-template-columns:90px minmax(0,1fr) 90px minmax(0,1fr); gap:6px 12px; margin:0; }
+.office-app .workspace .sales-chat-page .chat-link { margin-top:10px; padding-top:10px; }
+.office-app .workspace .sales-chat-page .chat-link-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px; margin-bottom:6px; }
+.office-app .workspace .sales-chat-page .chat-link-heading :is(h3,p) { margin:0; }
+.office-app .workspace .sales-chat-page .chat-link-controls { display:flex; align-items:flex-end; gap:8px; }
+.office-app .workspace .sales-chat-page .chat-link-controls > label { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; flex:1; min-width:0; gap:8px; margin:0; }
+.office-app .workspace .sales-chat-page .chat-link-controls select { min-width:0; margin:0; }
+.office-app .workspace .sales-chat-page .chat-link-controls > button { flex-shrink:0; }
+@media(max-width:720px) {
+ .office-app .workspace .sales-chat-page .archive-profile dl { grid-template-columns:76px minmax(0,1fr); }
+ .office-app .workspace .sales-chat-page .chat-link-controls > label { display:block; }
+ .office-app .workspace .sales-chat-page .chat-link-controls select { margin-top:4px; }
+}
