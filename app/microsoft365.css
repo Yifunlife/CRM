@@ -29,6 +29,8 @@
   --line: #e0e0e0;
   --canvas: #edf5fc;
   --white: #fff;
+  --crm-page-title-size: 24px;
+  --crm-panel-radius: 12px;
   --crm-status-done-bg: #d9f0e1;
   --crm-status-done-ink: #185a36;
   --crm-status-pending-bg: #e9edf3;
@@ -293,4 +295,31 @@ body,
   .office-app .workspace .sales-overview .so-statistics { border-color: #ccdaec; }
   .office-app .workspace .sales-overview .so-metric { box-shadow: 1px 0 #fff, 0 1px #fff; }
   .office-app .workspace .customer-management .ui-customer-status .crm-status { padding: 3px 7px; }
+}
+
+/* Lazy-loaded modules share the approved shell and type scale. */
+:root .office-app .workspace .panel { border-radius:var(--crm-panel-radius); border-color:#d5e1ef; }
+:root .office-app .workspace .panel .panel { border-radius:0; }
+.office-app .workspace .sales-chat-title {
+  padding:16px 20px;
+  border-radius:12px;
+  background:linear-gradient(110deg,#dceeff,#eae5fc 72%,#e1f5f4);
+}
+.office-app .workspace .sales-chat-title h1 { color:#102f57; font-size:var(--crm-page-title-size); line-height:32px; }
+.office-app .workspace :is(.wb-module-nav,.wb-grade-list,.connection-methods,.ft-view) button[aria-pressed=true] {
+  background:#0f6cbd;
+  color:#fff;
+  border-color:#0f6cbd;
+}
+.office-app .workspace .communication-connections { border-radius:12px; border-color:#d5e1ef; }
+.office-app .workspace :is(.followup-drawer,.followup-dialog,.account-dialog) { font-family:var(--crm-font); }
+.office-app .workspace .sm-report .sm-section-heading h2 { color:#174e84; }
+.office-app .workspace .sm-report .sm-summary { padding:12px; border-radius:8px; background:#edf4fc; }
+.office-app .workspace :is(.ss-badge.blue,.mw-status):not(.mw-risk) { background:var(--crm-status-active-bg); color:var(--crm-status-active-ink); }
+.office-app .workspace .ss-badge.green { background:var(--crm-status-done-bg); color:var(--crm-status-done-ink); }
+.office-app .workspace :is(.ss-badge.amber,.ss-badge.orange) { background:var(--crm-status-wait-bg); color:var(--crm-status-wait-ink); }
+.office-app .workspace :is(.ss-badge.red,.mw-risk) { background:var(--crm-status-error-bg); color:var(--crm-status-error-ink); }
+.office-app .workspace .ss-badge.gray { background:var(--crm-status-pending-bg); color:var(--crm-status-pending-ink); }
+@media(max-width:720px) {
+  .office-app .workspace .sales-chat-title { padding:14px 12px; }
 }
