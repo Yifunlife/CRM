@@ -23,7 +23,7 @@ export default function AllocationManagement({user,api,openLead}:Props){
  const importRows=()=>grid.rows.map(row=>{const raw:Record<string,string>=Object.fromEntries(grid.headers.map((h,i)=>[h,row[i]||'']));for(const [field,header] of Object.entries(mapping))if(header)raw[field]=row[grid.headers.indexOf(header)]||'';return {...raw,_sheet:grid.name};});
  const fields=importFields;
  const eligible=(l:any)=>!l.intake&&l.cohort==='new'&&!l.owner_id&&!l.original_owner&&!l.review;
- return <div className="management-workspace allocation-management"><div className="page-heading"><div><h1>分配管理</h1><p>查看客资、导入表单与手动分配。</p></div><div className="am-heading-actions"><span className="am-paused">自动分配已关闭</span><button disabled={busy} onClick={()=>{PV(null);R(r=>r+1);}}>刷新</button></div></div>
+ return <div className="management-workspace allocation-management"><div className="page-heading"><div><h1>分配管理</h1><p>查看客资、导入表单与手动分配。</p></div><div className="am-heading-actions"><span className="am-paused">{data?.automatic?'自动分配已开启':'自动分配已关闭'}</span><button disabled={busy} onClick={()=>{PV(null);R(r=>r+1);}}>刷新</button></div></div>
  <div role="tablist" aria-label="分配管理页面" className="am-tabs">{['分配总板','导入表单','分配记录'].map(t=><button key={t} type="button" role="tab" aria-selected={tab===t} aria-controls="allocation-panel" id={'am-tab-'+t} onClick={()=>chooseTab(t)}>{t}</button>)}</div>
  {error&&<p role="alert" className="notice error">{error}</p>}{message&&<p role="status" className="notice">{message}</p>}
  <div id="allocation-panel" role="tabpanel" aria-labelledby={'am-tab-'+tab}>

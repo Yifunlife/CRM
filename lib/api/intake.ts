@@ -22,7 +22,7 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
    if(!SOURCES.includes(body.source)||!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem("请选择来源，每次导入1至3000条");
    const businessScope=clean(body.business_scope,80),business=BUSINESS_SCOPES.find(s=>s.id===businessScope);
    if(businessScope&&(!business||business.source!==body.source))throw new Problem('业务范围与来源渠道不匹配');
-   if(body.source==='Meta'&&body.rows.every((r:any)=>r.id&&r.form_id)&&!body.rows.some((r:any)=>clean(r['分配业务员'],80)))return json(await importForms(db,body.rows,actor.id,{scope:businessScope,filename:clean(body.filename,200),preview:body.preview===true,allocate:body.allocate!==false&&body.allocation_management!==true}));
+   if(body.source==='Meta'&&body.rows.every((r:any)=>r.id&&r.form_id)&&!body.rows.some((r:any)=>clean(r['分配业务员'],80)))return json(await importForms(db,body.rows,actor.id,{scope:businessScope,filename:clean(body.filename,200),preview:body.preview===true,allocate:body.allocate!==false&&body.allocation_management!==true,manualOnly:body.allocation_management===true}));
    const autoIds:string[]=[];
    const allUsers = (await db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role='sales'").all()).results;
    const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint FROM crm_leads").all()).results;

@@ -45,8 +45,8 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
  if(!can(user,'customers_all')||!can(user,'leads_allocate')&&user.role!=='ceo')throw new Problem('此页面需要客户管理及分配权限',403);
  if(path==='allocation/management'&&method==='GET'){
   const queue=url.searchParams.get('queue')||'待分配',query=new URL(url);query.searchParams.delete('queue');query.searchParams.set('stage',queue==='已有归属'?'已分配':queue);if(queue==='待分配')query.searchParams.set('cohort','new');
-  const [page,summary,people]=await Promise.all([customerPage(db,user,query),allocationMediaSummary(db,user),db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role IN ('sales','management','ceo') ORDER BY name,id").all<any>()]);
-  return {...page,summary,people:people.results,automatic:false};
+  const [page,summary,people,config]=await Promise.all([customerPage(db,user,query),allocationMediaSummary(db,user),db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role IN ('sales','management','ceo') ORDER BY name,id").all<any>(),db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>()]);
+  return {...page,summary,people:people.results,automatic:config?JSON.parse(config.payload).rule?.automatic===true:false};
  }
  if(path==='allocation/management/records'&&method==='GET'){
   const page=Math.max(1,Math.floor(Number(url.searchParams.get('page'))||1)),base=`WITH records AS (
@@ -71,5 +71,5 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
   statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month,policy) VALUES(?,?,?,?,?,?,?,'manual-v1')").bind(id(),row.id,actor.id,row.owner_id,at,row.business_scope||'',suiteDay().slice(0,7)));
  }
  statements.push(db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) VALUES(?,'手动客资分配',?,?,?,?)").bind(operation,operation,JSON.stringify({ids:plan.ids,recipients:plan.recipients,rows:plan.rows}),at,actor.id));
- await db.batch(statements);return {assigned:plan.rows.length,operation};
+ try{await db.batch(statements);}catch(e:any){if(/malformed JSON/i.test(String(e?.message)+' '+String(e?.cause?.message)))throw new Problem('客户或接收人员状态已变化，请刷新后重新预览',409);throw e;}return {assigned:plan.rows.length,operation};
 }
