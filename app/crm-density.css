@@ -120,6 +120,56 @@
 .office-app .workspace .team-priorities strong{font-size:24px}
 @media(min-width:1500px){.office-app .workspace .contract-templates .role-form-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
+/* Keep management modules at the same operating density as the shared workspace,
+   including their lazy-loaded styles with more specific selectors. */
+:root .office-app .workspace .management-workspace { max-width:none; margin:0; }
+:root .office-app .workspace .management-workspace > .page-heading,
+:root .office-app .workspace .management-workspace .sales-management .page-heading { margin-bottom:12px; gap:12px; align-items:center; }
+:root .office-app .workspace .management-workspace h1,
+:root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:22px; margin:0; }
+:root .office-app .workspace .management-workspace .panel,
+:root .office-app .workspace .management-workspace .sales-management .sm-report { padding:12px; margin-bottom:12px; }
+:root .office-app .workspace .management-workspace .section-heading { margin-bottom:8px; gap:12px; }
+:root .office-app .workspace .management-workspace th,
+:root .office-app .workspace .management-workspace td,
+:root .office-app .workspace .management-workspace .sales-management th,
+:root .office-app .workspace .management-workspace .sales-management td { padding:8px 10px; }
+:root .office-app .workspace .management-workspace td > small { margin-top:3px; }
+:root .office-app .workspace .management-workspace .mw-filterbar,
+:root .office-app .workspace .management-workspace .sales-management .sm-filters { gap:8px 12px; margin-bottom:12px; }
+:root .office-app .workspace .management-workspace .mw-filterbar label { margin-bottom:0; }
+:root .office-app .workspace .management-workspace :is(.mw-actions,.mw-notes,.mw-original) { margin-block:12px; }
+:root .office-app .workspace .management-workspace :is(.mw-focus-grid,.mw-split) { gap:12px; margin-bottom:12px; }
+:root .office-app .workspace .management-workspace .mw-focus { padding:12px; }
+:root .office-app .workspace .management-workspace .mw-focus > strong { font-size:26px; margin:8px 0; }
+:root .office-app .workspace .management-workspace .mw-progress { margin:8px 0; }
+:root .office-app .workspace .management-workspace .mw-summary-list > div { padding:8px 0; }
+:root .office-app .workspace .management-workspace .mw-step-tabs { margin-bottom:12px; gap:20px; }
+:root .office-app .workspace .management-workspace .mw-empty { padding:12px 0; }
+:root .office-app .workspace .management-workspace .sales-management .sm-summary { gap:10px 20px; margin:12px 0; }
+:root .office-app .workspace .management-workspace .sales-management .sm-summary strong { font-size:22px; }
+:root .office-app .workspace .sales-overview :is(.so-metrics,.so-people) { gap:8px; margin-bottom:12px; }
+:root .office-app .workspace .sales-overview :is(.so-metric,.so-person) { padding:12px; }
+:root .office-app .workspace .sales-overview .so-metric > strong { font-size:23px; margin:8px 0; }
+:root .office-app .workspace .sales-overview .so-metric > small { padding-top:6px; }
+:root .office-app .workspace .sales-overview .so-split { gap:12px; }
+:root .office-app .workspace .sales-overview .so-caption { margin-bottom:8px; }
+:root .office-app .workspace .sales-overview .so-goal { margin:12px 0; }
+:root .office-app .workspace .sales-overview .so-reminder { padding:10px 0; }
+:root .office-app .workspace .sales-overview .so-grades { padding:10px 12px; gap:16px; }
+:root .office-app .workspace .sales-overview .so-person .so-new { padding:8px 0; }
+:root .office-app .workspace .sales-overview .so-person > div { margin-top:8px; }
+@media(min-width:1000px) {
+ :root .office-app .workspace .management-workspace .sales-management .sm-target-months th,
+ :root .office-app .workspace .management-workspace .sales-management .sm-target-months td { padding:8px 4px; }
+}
+@media(max-width:720px) {
+ :root .office-app .workspace .management-workspace h1,
+ :root .office-app .workspace .management-workspace .sales-management .page-heading h1 { font-size:20px; }
+ :root .office-app .workspace .management-workspace > .page-heading,
+ :root .office-app .workspace .management-workspace .sales-management .page-heading { align-items:stretch; }
+}
+
 /* Shared Lucide navigation icon geometry. */
 .office-app aside nav button > svg:first-child { width:20px; height:20px; flex:0 0 20px; stroke-width:1.75; }
 .office-app aside nav .nav-group-chevron { width:16px; height:16px; flex:0 0 16px; stroke-width:1.75; }
