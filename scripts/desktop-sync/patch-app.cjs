@@ -47,4 +47,13 @@ ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
 ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
 ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));\n`;
 }
-module.exports={patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionPreload,patchConnectionMain};
+function patchFirstContactMain(source){
+ if(source.includes("require('./crm-first-contact')"))return source;
+ const anchor=" const management=require('./crm-client-management');";
+ if(!source.includes(anchor))throw Error('此工作台版本不支持自动首联，未修改');
+ source=source.replace(anchor,anchor+"\n if(p.auto_first_contact){\n  const config=readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{});\n  const mailSender=createOutlookOutreach({read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),write:(name,value)=>writeJson(path.join(root,'.workbench',name),value),token:()=>backgroundOutlookToken(true),fetch:(...args)=>net.fetch(...args),material:()=>reception.approvedFile(receptionConfig(),'company'),guard:()=>root===workspaceRoot&&!app.isQuitting});\n  return require('./crm-first-contact').firstContact({phonePolicy:require('./outreach-policy'),command,config,getClient,clients:()=>bootstrapClients().clients,read:(name,fallback)=>readJson(path.join(root,'.workbench',name),fallback),draft:loadDraft,archive:client=>saveCustomerArchive(client).messages,active:()=>root===workspaceRoot&&!app.isQuitting,\n   whatsappHistory:async phone=>{const jid=phone+'@s.whatsapp.net',names=whatsappContactNames(),aliases=[jid,...(names.aliases.get(jid)||[])].filter(value=>/^\\d+@(s\\.whatsapp\\.net|lid)$/.test(value));return (await readWhatsAppDatabase(\"SELECT id FROM messages WHERE is_from_me=1 AND chat_jid IN (\"+aliases.map(value=>\"'\"+value+\"'\").join(',')+\") LIMIT 1\")).length>0;},\n   normalizePhone:(clientId,phone)=>{const state=bootstrapClients(),client=state.clients.find(c=>c.id===clientId);client.whatsapp=phone;saveClients(state);},\n   sendWhatsApp:(client,text,guard)=>sendReception(client.id,{kind:'lead-welcome',text},{manual:true,requestId:command.id,guard}),sendEmail:(client,check)=>mailSender.send(client,'first',check)});\n }\n\n");
+ const status='reception:receptionConfig().enabled,error:crmAccountSync?.error()';
+ if(!source.includes(status))throw Error('工作台状态上报版本不兼容，未修改');
+ return source.replace(status,"reception:receptionConfig().enabled,autoFirstContact:!!readJson(path.join(app.getPath('userData'),'crm-bridge.json'),{}).autoFirstContact,error:crmAccountSync?.error()");
+}
+module.exports={patchFirstContactMain,patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionPreload,patchConnectionMain};
