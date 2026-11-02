@@ -15,3 +15,5 @@ export function accountList(users:any[],status:string,role:string,query:string){
  return users.filter(u=>String(u.active)===status&&(!role||u.role===role)&&(!search||[u.name,u.username].some(v=>v.toLowerCase().includes(search))))
   .sort((a,b)=>(order.includes(a.role)?order.indexOf(a.role):order.length)-(order.includes(b.role)?order.indexOf(b.role):order.length)||a.name.localeCompare(b.name,'zh-CN')||a.username.localeCompare(b.username));
 }
+
+export function isSalesPerson(user:any){return user.role==='sales'||['management','ceo'].includes(user.role)&&accountTradeScopes(user).length>0;}

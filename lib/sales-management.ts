@@ -1,13 +1,13 @@
 import {reportPeriod,inReportPeriod} from './report-period';
 import {reportAcquiredDay} from './report-acquired-day';
 import {customerMarket} from './operations-dashboard';
-import {accountTradeScopes} from './account-classification';
+import {accountTradeScopes,isSalesPerson} from './account-classification';
 
 export function salesManagementReport(input:any,params:URLSearchParams,today:string){
  const period=reportPeriod(params,today.slice(0,7)),owner=params.get('owner')||'';
  const year=params.get('target_year')||period.start.slice(0,4);
  if(!/^\d{4}$/.test(year)||Number(year)<2000||Number(year)>9998)throw Error('目标年份无效');
- const people=input.people.filter((p:any)=>!owner||p.id===owner);
+ const people=input.people.filter((p:any)=>isSalesPerson(p)&&(!owner||p.id===owner));
  const links=new Map(input.links.map((r:any)=>[r.lead_id,r.subject_id]));
  const key=(id:string)=>links.has(id)?'subject:'+links.get(id):'lead:'+id;
  const leads=new Map<string,any>(input.leads.map((l:any)=>[l.id,l]));
@@ -53,5 +53,5 @@ export function salesManagementReport(input:any,params:URLSearchParams,today:str
    return {id:p.id,name:p.name,active:p.active,currency,won_new_customers:wonNewCustomers,won_old_customers:wonOldCustomers,annual_target_minor:annualTarget,annual_total_minor:annualTotal,annual_unverified:annualUnverified,annual_completion:annualTarget>0&&!annualUnverified?annualTotal/annualTarget:null,new_customers:newKeys.length,effective_customers:effective.length,old_customers:oldKeys.length,deals:ds.length,total_minor:total,new_minor:known.filter((d:any)=>d.customer_type==='新客户').reduce((n:number,d:any)=>n+d.total_minor,0),old_minor:known.filter((d:any)=>d.customer_type==='老客户').reduce((n:number,d:any)=>n+d.total_minor,0),received_minor:known.reduce((n:number,d:any)=>n+d.received_minor,0),outstanding_minor:known.reduce((n:number,d:any)=>n+Math.max(0,d.outstanding_minor),0),overpaid_minor:known.reduce((n:number,d:any)=>n+Math.max(0,-d.outstanding_minor),0),unverified,target_minor:targetMinor,completion:targetMinor>0&&!unverified?total/targetMinor:null,annual,targets:input.targets.filter((t:any)=>t.owner_id===p.id&&t.currency===currency&&t.period_start.startsWith(year))};
   });
  });
- return {period,target_year:year,people:input.people.map(({id,name,active}:any)=>({id,name,active})),rows:summaries,details:selected};
+ return {period,target_year:year,people:people.map(({id,name,active}:any)=>({id,name,active})),rows:summaries,details:selected};
 }
