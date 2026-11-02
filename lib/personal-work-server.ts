@@ -80,7 +80,13 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const ids=[...new Set(events.filter(e=>e.kind==='业务员跟进记录'&&e.status!=='已结束').map(e=>e.lead_id))];
   for(const lead of ids){const own=events.filter(e=>e.lead_id===lead&&e.kind==='业务员跟进记录'),date=designDeadline(own);if(date&&daysBetween(date,today)<=2){const due=daysBetween(date,today);reminders.push({id:'design:'+lead,lead_id:lead,name:own[0].customer_name,title:'跟进设计进度',date,label:due<0?'出方案已逾期 '+(-due)+' 天':due===0?'今天出方案':'快到期 · 剩 '+due+' 天',rank:due<0?0:1,kind:'设计出方案'});}}
   for(const e of plans.values()){const p=e.payload;if(e.status==='已结束')continue;const s=openingSchedule(p,today);if(s.due<=p.remind||s.late>0||s.slack<=p.remind)reminders.push({id:'opening:'+p.entity,lead_id:e.lead_id,name:e.customer_name,title:OPENING_TITLE(p.phase),date:s.latest[p.phase].finish,label:s.due<0?'已逾期 '+(-s.due)+' 天':s.due<=p.remind?s.due===0?'今天截止':'快到期 · 剩 '+s.due+' 天':s.text,rank:s.due<0?0:s.due<=p.remind?1:3,kind:'开业倒排',forecast:s.text});}
-  const newLeads=await list(db,"SELECT l.id,l.name,l.country,l.source,l.channel,l.status FROM crm_leads l WHERE l.owner_id=? AND l.cohort='new' AND l.review=0 AND date(l.created,'+8 hours')=? ORDER BY l.created DESC",[u.id,today]);
+  const newLeads=await list(db,`SELECT l.id,l.name,l.country,l.source,l.channel,l.status,
+   EXISTS(SELECT 1 FROM crm_workbench_links w WHERE w.lead_id=l.id AND w.owner_id=l.owner_id) AS workbench_added
+   FROM crm_leads l WHERE l.owner_id=? AND l.review=0 AND (
+    (l.cohort='new' AND date(l.created,'+8 hours')=?) OR EXISTS(
+     SELECT 1 FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id
+     AND a.policy IN ('full-first-v1','manual-v1','equal-v1','equal-global-v1') AND date(a.created,'+8 hours')=?))
+   ORDER BY l.created DESC,l.id`,[u.id,today,today]);
   const tasks=await list(db,"SELECT t.id,t.title,t.status,t.due_at,t.next_action,t.lead_id,t.order_id FROM crm_sales_tasks t JOIN crm_leads l ON l.id=t.lead_id WHERE t.owner_id=? AND l.owner_id=? AND t.status IN ('open','done') AND date(t.due_at,'+8 hours')<=? ORDER BY t.due_at",[u.id,u.id,today]);
   const orderTasks=await list(db,"SELECT t.status FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id WHERE t.owner_id=? AND l.owner_id=? AND date(t.due_at,'+8 hours')<=? AND t.status IN ('待处理','已解决')",[u.id,u.id,today]);
   return {today,newLeads,reminders:reminders.sort((a,b)=>a.rank-b.rank||a.date.localeCompare(b.date)),priorities:[...priority].filter(([,v])=>v).map(([k])=>k),tasks,taskCompletion:{total:tasks.length+orderTasks.length,done:tasks.filter(t=>t.status==='done').length+orderTasks.filter(t=>t.status==='已解决').length}};

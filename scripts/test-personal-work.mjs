@@ -49,3 +49,28 @@ const schedule=openingSchedule(plan,today);assert.equal(schedule.latest.at(-1).f
 assert.deepEqual(projectFinancials({deal_id:'d'},[{id:'d',total_minor:1200000,currency:'USD'}],[{deal_id:'d',amount_minor:800000,refunded_minor:10000,currency:'USD'}]),{currency:'USD',amount:1200000,received:790000,outstanding:410000});
 assert.equal(projectFinancials({deal_id:'d'},[{id:'d',total_minor:1200000,currency:'USD'}],[{deal_id:'d',amount_minor:1,refunded_minor:0,currency:'CNY'}]).received,null);
 console.log('PASS: own-customer access, structured follow-up, preserved history, paged filters, first-contact evidence, design deadlines/overdue/closure, opening reverse plans, persistent priority, read-only reports and verified money/refunds/currency isolation.');
+
+// Today's assignments appear even when the inquiry predates today. A desktop link is the receipt.
+const old='2026-01-01T00:00:00.000Z',stamp=today+'T00:00:00+08:00';
+for(const [id,owner,policy,linkedOwner,created] of [
+ ['assigned-old','a','full-first-v1','a',old],['waiting','a','manual-v1','',old],
+ ['alignment','a','historical-alignment','',old],['sheet','a','historical-sheet-v1','',old],
+ ['foreign-assignment','b','full-first-v1','b',old],['stale-link','a','full-first-v1','b',old],
+ ['created-and-assigned','a','full-first-v1','',stamp],['yesterday','a','full-first-v1','',old]
+]){
+ sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,cohort) VALUES(?,?,'Meta',?,'{}',?, ?,?)").run(id,id,owner,id,created,id==='created-and-assigned'?'new':'historical');
+ sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES(?,?,'admin',?,?,?)").run(id,id,owner,id==='yesterday'?old:stamp,policy);
+ if(linkedOwner)sql.prepare("INSERT INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) VALUES(?,?,?,?, 'admin')").run(id,linkedOwner,'desktop-'+id,stamp);
+}
+sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('duplicate-event','assigned-old','admin','a',?,'manual-v1')").run(stamp);
+const tables=['crm_leads','crm_assignments','crm_workbench_links','crm_notes','crm_sales_events'];
+const preserved=()=>JSON.stringify(tables.map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+const beforeReport=preserved(),inbox=(await get('report')).newLeads;
+assert.deepEqual(inbox.map(l=>l.id).sort(),['mine','assigned-old','waiting','stale-link','created-and-assigned'].sort());
+assert.equal(inbox.find(l=>l.id==='assigned-old').workbench_added,1);
+assert.equal(inbox.find(l=>l.id==='stale-link').workbench_added,0);
+assert.equal(inbox.find(l=>l.id==='waiting').workbench_added,0);
+assert.equal(inbox.filter(l=>l.id==='created-and-assigned').length,1);
+assert.equal(preserved(),beforeReport,'report preserves cohort, ownership, allocation and contact history');
+assert.deepEqual((await get('report',other)).newLeads.map(l=>l.id).sort(),['foreign','foreign-assignment'].sort());
+console.log('PASS: today-assigned historical inquiries, confirmed/pending desktop receipts, owner isolation, historical alignment exclusion, previous-day exclusion, deduplication and read-only status.');
