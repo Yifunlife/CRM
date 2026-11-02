@@ -3,3 +3,10 @@
 @media(max-width:760px){.customer-dossier .dossier-toolbar{align-items:start;flex-wrap:wrap;gap:10px}.customer-dossier .dossier-tabs{width:100%;gap:18px}.customer-dossier .dossier-layout{grid-template-columns:1fr}.customer-dossier .dossier-sidebar{grid-template-columns:repeat(2,minmax(0,1fr))}.customer-dossier .dossier-sidebar .panel{min-width:0}.customer-dossier .dossier-sidebar dl{gap:12px}.customer-dossier .dossier-grid{grid-template-columns:1fr}.customer-dossier .dossier-edit{margin-bottom:10px}.customer-dossier .dossier-grid input,.customer-dossier .dossier-grid select,.customer-dossier .dossier-grid textarea{font-size:16px}.customer-dossier .dossier-actions button{min-height:44px}.customer-detail .customer-dossier .panel{padding:16px}.office-app .customer-detail.customer-detail-dossier>.page-heading h1{font-size:23px}}
 @media(max-width:420px){.customer-dossier .dossier-sidebar{grid-template-columns:1fr}.customer-dossier .dossier-tabs{gap:15px}.customer-dossier .dossier-tabs button{font-size:13px}.customer-dossier .dossier-actions{flex-wrap:wrap}}
 .customer-dossier .dossier-sidebar dl{grid-template-columns:1fr}.customer-dossier .dossier-sidebar dl>div{display:block;min-width:0}.customer-dossier .dossier-sidebar dd{width:auto;min-width:0}
+
+
+.customer-dossier .dossier-edit-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.customer-dossier .dossier-editing-state{font-size:13px;color:var(--muted);white-space:nowrap}
+.office-app .workspace .customer-dossier .dossier-edit{min-height:36px;padding:7px 14px;font-weight:600}
+.customer-dossier .dossier-edit:focus-visible,.customer-dossier .dossier-edit-actions button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+@media(max-width:760px){.customer-dossier .dossier-edit-actions{width:100%;justify-content:flex-end;margin-bottom:8px}.customer-dossier .dossier-editing-state{flex:1 1 100%}.office-app .workspace .customer-dossier .dossier-edit,.customer-dossier .dossier-edit-actions button{min-height:44px}}
