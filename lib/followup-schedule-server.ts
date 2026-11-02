@@ -50,6 +50,6 @@ export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,
  const expected=body.action==='problem'?date(body.expected):previous.expected||'';
  if(body.action==='problem'&&!expected)fail('请填写预计解决日期');
  if(expected&&previous.start&&expected<previous.start)fail('预计解决日期不能早于计划开始日期');
- after[node.page]={...previous,schedule_only:false,status:body.action==='problem'?'待确认':'进行中',problem:body.action==='problem'?note:'',expected,confirmed_at:at,at,by:actor.id,...(note?{next:note}:{})};
+ after[node.page]={...previous,schedule_only:false,status:body.action==='problem'?'待确认':'进行中',dual_tracking:true,customer_needs_sync:true,customer_pending_at:at,problem:body.action==='problem'?note:'',expected,confirmed_at:at,at,by:actor.id,...(note?{next:note}:{})};
  return writeFollowup(db,row,body,actor,'更新'+node.page,{page:node.page,quick:body.action,before:previous,after:after[node.page]},()=>[],{...row,details:{...row.details,business_process:after}});
 }

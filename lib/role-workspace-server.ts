@@ -1,7 +1,7 @@
-import {accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
+import {accountTradeScopes,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
 import {projectFinancials} from './personal-work';
 import {reportPeriod,inReportPeriod} from './report-period';
-import {can,authorizedLead,id,now,GRADES} from './crm';
+import {boardMarkets,canViewAllMarkets,can,authorizedLead,id,now,GRADES} from './crm';
 import {PROCESS_STATUSES,FOLLOWUP_NODES} from './followup-board';
 import {paymentSummary} from './workflow-server';
 import {AllocationError} from './allocation-server';
@@ -10,6 +10,8 @@ import {quoteAccount} from './sales-quote-source';
 import {suiteDay,CLOSED_STAGES} from './sales-suite';
 import {deliveryStage,sumCurrencies,PROCESS_FIELDS,DELIVERY_STAGES} from './role-workspace';
 import {followupOrder,writeFollowup} from './order-followup-server';
+import {readCustomerFollowup} from './followup-duties';
+import {customerSyncState} from './order-followup';
 const list=async(db:D1Database,sql:string,args:any[]=[]) => (await db.prepare(sql).bind(...args).all<any>()).results;
 const parse=(s:string)=>JSON.parse(s||'{}');
 const fail=(s:string,status=400):never=>{throw new AllocationError(s,status);};
@@ -20,7 +22,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const personal=u.role==='sales',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
   if(!personal&&!all)fail('没有销售看板权限',403);
   const month=url.searchParams.get('month')||suiteDay().slice(0,7);let period:ReturnType<typeof reportPeriod>;try{period=reportPeriod(url.searchParams,suiteDay().slice(0,7));}catch(e){return fail((e as Error).message);}
-  const market=url.searchParams.get('market')||'内贸';if(!['内贸','外贸','全部','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
+  const allowedMarkets=boardMarkets(u);if(!allowedMarkets.length)fail('账号尚未设置内贸、外贸范围，请联系管理员',403);const market=url.searchParams.get('market')||allowedMarkets[0];if(!allowedMarkets.includes(market)&&!(market==='全部'&&allowedMarkets.length===2)&&!(market==='待确认'&&canViewAllMarkets(u)))fail('没有此业务范围的看板查看权限',403);if(!['内贸','外贸','全部','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';
   const branch=salesCompanyName(url.searchParams.get('branch'));if(!['',...SALES_COMPANIES].some(c=>c===branch)||branch&&market!=='外贸')fail('分公司选择无效');
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
@@ -30,13 +32,13 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    list(db,`SELECT q.*,p.lead_id,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
    list(db,`SELECT o.*,l.country,l.source,l.detail AS lead_detail,l.business_scope,l.name AS customer_name,c.name AS commercial_name,s.name AS logistics_name FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users c ON c.id=o.commercial_id JOIN crm_users s ON s.id=o.logistics_id WHERE ${all?'1=1':'o.commercial_id=? AND l.owner_id=?'}`,all?[]:[u.id,u.id]),
    list(db,`SELECT p.id,p.created,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_customer_pool p JOIN crm_leads l ON l.id=COALESCE(p.target_lead_id,p.lead_id) WHERE ${where} AND p.created>=? AND p.created<?`,[...args,period.start,period.end]),
-   list(db,`SELECT id,name,active FROM crm_users WHERE ${all?"role IN ('sales','ceo','management') OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id)":'id=?'} ORDER BY name`,args),
+   list(db,`SELECT id,name,active,trade_scopes FROM crm_users WHERE ${all?"role IN ('sales','ceo','management') OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id)":'id=?'} ORDER BY name`,args),
    list(db,`SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE r.cancelled=0 AND d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args)
   ]);
   const activeOnly=url.searchParams.get('active')==='1',activeOwners=new Set(people.filter(p=>p.active).map(p=>p.id));
   const companyFor=(row:any)=>salesCompanyName(accountSalesCompany({id:row.owner_id||row.commercial_id||''})||parse(row.lead_detail)._sales_company);
   const classify=(row:any)=>companyFor(row)?'外贸':customerMarket({...row,business_scope:row.business_scope||row.lead_scope});
-  const pick=(rows:any[])=>rows.filter(r=>(!activeOnly||activeOwners.has(r.owner_id||r.commercial_id))&&(market==='全部'||classify(r)===market)&&(!branch||companyFor(r)===branch));
+  const pick=(rows:any[])=>rows.filter(r=>(!activeOnly||activeOwners.has(r.owner_id||r.commercial_id))&&(market==='全部'?(canViewAllMarkets(u)||allowedMarkets.includes(classify(r))):classify(r)===market)&&(!branch||companyFor(r)===branch));
   const leads=pick(rawLeads).filter(l=>inReportPeriod(l.created,period)),projects=pick(rawProjects),deals=pick(rawDeals),quotes=pick(rawQuotes).filter(q=>inReportPeriod(q.created,period)),orders=pick(rawOrders),inquiries=pick(rawInquiries);
   const ps=projects.map(p=>({...p,company:companyFor(p),market:classify(p),details:parse(p.details)})),os=orders.map(o=>({...o,company:companyFor(o),market:classify(o),details:parse(o.details),steps:parse(o.steps)})).map(o=>({...o,delivery_stage:deliveryStage(o)}));
   const monthly=deals.filter(d=>inReportPeriod(d.deal_date,period)).map(d=>{const receipts=rawReceipts.filter(r=>r.deal_id===d.id),mismatch=receipts.some(r=>r.currency!==d.currency),received=receipts.filter(r=>r.currency===d.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);return {...d,company:companyFor(d),market:classify(d),received_minor:mismatch||!d.currency?null:received,outstanding_minor:mismatch||d.total_minor==null?null:d.total_minor-received,receipt_currency_mismatch:mismatch};});
@@ -56,7 +58,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    const allLeads=pick(rawLeads).filter(l=>!owner||l.owner_id===owner);
    return {total_customers:allLeads.length,total_grades:Object.fromEntries([...GRADES,''].map(g=>[g||'未评级',allLeads.filter(l=>(l.grade||'')===g).length])),quoting_count:quoting.length,customers:ls.length,projects:keys.size,grades:Object.fromEntries([...GRADES,''].map(g=>[g||'未评级',ls.filter(l=>(l.grade||'')===g).length])),new_inquiries:inquiries.filter(i=>!owner||i.owner_id===owner).length,following:ls.filter(l=>['已联系待回复','正在沟通'].includes(l.status)).length,won_customers:ls.filter(l=>won.has(l.id)).length,lost:ls.filter(l=>l.status==='已结束'&&!won.has(l.id)).length,quote_count:quoteProjects.size,quoted:sumCurrencies(qs.filter(q=>matchesCurrency(q,q.summary.currency)).map(q=>q.summary),'amount_minor'),quote_unknown:qs.filter(q=>q.summary.amount_minor==null).length,forecast:sumCurrencies(fs.filter(p=>p.currency===currency),'amount_minor'),forecast_unknown:fs.filter(p=>p.amount_minor==null).length,won:sumCurrencies(ds.filter(d=>matchesCurrency(d,d.currency)),'total_minor'),unpriced:ds.filter(d=>d.total_minor==null).length,deal_count:ds.length,currency_mismatches:qs.filter(q=>q.summary.amount_minor!=null&&!matchesCurrency(q,q.summary.currency)).length+fs.filter(p=>p.amount_minor!=null&&!matchesCurrency(p,p.currency)).length+ds.filter(d=>d.total_minor!=null&&!matchesCurrency(d,d.currency)).length,target:null};
   };
-  return {market,branch,currency,month,period,at:now(),personal,summary:summary(personal?u.id:undefined),people:people.filter(p=>!activeOnly||p.active).map(p=>({...p,company:accountSalesCompany(p),...summary(p.id)})),all_customers:pick(rawLeads).map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),customers:leads.map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),quoting_projects:ps.filter(p=>['design','quoted','negotiation'].includes(p.stage)&&inReportPeriod(p.stage_at,period)),projects:ps,orders:os,deals:monthly,quotes:qrows.map(q=>({id:q.id,project_id:q.project_id,owner_id:q.owner_id,lead_id:q.lead_id,summary:q.summary,sync_error:q.sync_error})),forecast};
+  return {market,branch,currency,month,period,at:now(),personal,summary:summary(personal?u.id:undefined),people:people.filter(p=>(!activeOnly||p.active)&&(canViewAllMarkets(u)||accountTradeScopes(p).some(v=>allowedMarkets.includes(v==='domestic'?'内贸':'外贸'))||pick(rawLeads).some(l=>l.owner_id===p.id))).map(p=>({...p,company:accountSalesCompany(p),...summary(p.id)})),all_customers:pick(rawLeads).map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),customers:leads.map(l=>({id:l.id,name:l.name,owner_id:l.owner_id,grade:l.grade,created:l.created,company:companyFor(l),market:classify(l)})),quoting_projects:ps.filter(p=>['design','quoted','negotiation'].includes(p.stage)&&inReportPeriod(p.stage_at,period)),projects:ps,orders:os,deals:monthly,quotes:qrows.map(q=>({id:q.id,project_id:q.project_id,owner_id:q.owner_id,lead_id:q.lead_id,summary:q.summary,sync_error:q.sync_error})),forecast};
  }
  if(path==='role-workspace/customer'&&method==='POST'){
   if(!can(u,'customers_edit')||u.role==='ceo')fail('没有客户维护权限',403);
@@ -72,7 +74,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
  }
  const match=path.match(/^followup\/orders\/([^/]+)\/business-process$/);
  if(match&&method==='POST'){
-  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.role==='ceo')fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
+  const {row,manager}=await followupOrder(db,u,match[1]);if(!manager||u.role==='ceo'||u.id!==actor.id)fail('没有本单跟单维护权限',403);if(row.archived)fail('已归档订单不可修改');
   const fields=PROCESS_FIELDS[body.page];if(!fields)fail('流程节点无效');const values:Record<string,string>={};for(const key of fields)values[key]=text(body.values?.[key]||'');
   const next=text(body.next);if(!next)fail('请填写下一步与处理安排');if(!['project','toy'].includes(body.purchase_kind))fail('请选择项目下单或玩具下单');
   const businessStage=body.business_stage||row.details.business_stage||deliveryStage(row);if(!DELIVERY_STAGES.includes(businessStage)||businessStage==='已完成'&&deliveryStage(row)!=='已完成')fail('完成状态由交付及归档流程确认');
@@ -106,7 +108,15 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
    const node=FOLLOWUP_NODES.find(n=>n.page===body.page)!;
    if(await db.prepare("SELECT id FROM crm_followup_tasks WHERE order_id=? AND step=? AND status='待处理' LIMIT 1").bind(row.id,node.step).first())fail('本环节仍有未解决待办，请先处理');
   }
-  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:{...previous,...dates,values,next,status,schedule_only:false,owner_id:ownerId,due,original_start:previous.original_start||previous.start||dates.start,original_due:previous.original_due||previous.due||due,confirmed_at:now(),...(status==='已完成'?{problem:''}:{}),...(archiving?{archive_checks:body.archive_checks}:{}),at:now(),by:actor.id}}};
+  const at=now(),internalChanged=status!==(previous.status||'进行中')||next!==(previous.next||'')||ownerId!==(previous.owner_id||row.logistics_id)||due!==(previous.due||'')||Object.entries(dates).some(([k,v])=>v!==(previous[k]||''))||fields.some(k=>values[k]!==(previous.values?.[k]||''));
+  const checked=body.customer_followup===undefined?{value:previous.customer_followup,error:''}:readCustomerFollowup(body.customer_followup,previous.customer_followup,body.page,suiteDay(),at);
+  if(checked.error)fail(checked.error);
+  if(body.page==='出货交付'&&status==='已完成'&&row.details.execution?.profile?.inspection===true&&(!checked.value?.has_inspection_photos||!checked.value?.inspection_photos))fail('完成出货前，请记录责任部门提供的验货照片及发送依据');
+  const updated={...previous,...dates,values,next,status,schedule_only:false,owner_id:ownerId,due,original_start:previous.original_start||previous.start||dates.start,original_due:previous.original_due||previous.due||due,dual_tracking:true,customer_needs_sync:body.customer_followup!==undefined?checked.value?.status==='待同步客户':internalChanged||previous.customer_needs_sync===true,customer_pending_at:internalChanged?at:previous.customer_pending_at||at,customer_followup:checked.value,confirmed_at:internalChanged?at:previous.confirmed_at??previous.at??'',...(status==='已完成'?{problem:''}:{}),...(archiving?{archive_checks:body.archive_checks}:{}),at,by:actor.id};
+  if(['已完成','不适用'].includes(status)&&customerSyncState(updated)==='待同步客户')fail('完成本环节前，请同步客户并记录沟通依据；由商务沟通的事项也需记录转达结果');
+  if(archiving&&FOLLOWUP_NODES.slice(0,-1).some(n=>['待同步客户','已同步，待回复'].includes(customerSyncState(row.details.business_process?.[n.page]))))fail('仍有待同步客户或待回复事项，请先跟进处理再归档');
+  if(archiving&&customerSyncState(updated)==='已同步，待回复')fail('仍待客户回复，请先跟进处理再归档');
+  const details={...row.details,purchase_kind:body.purchase_kind,business_stage:businessStage,business_process:{...row.details.business_process,[body.page]:updated}};
   return writeFollowup(db,row,body,actor,archiving?'订单归档':'更新'+body.page,{page:body.page,mode:archiving?'流程总表':undefined,before:row.details.business_process?.[body.page]||null,after:details.business_process[body.page],business_stage:businessStage,purchase_kind:body.purchase_kind},()=>[],{...row,details,archived:archiving?1:row.archived});
  }
  return undefined;

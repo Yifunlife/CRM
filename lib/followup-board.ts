@@ -1,4 +1,4 @@
-import {FOLLOWUP_NODES,processNodeStatus} from './order-followup';
+import {FOLLOWUP_NODES,processNodeStatus,customerSyncState} from './order-followup';
 export {FOLLOWUP_NODES} from './order-followup';
 export const PROCESS_STATUSES=['未开始','进行中','待确认','已完成','不适用'] as const;
 export function processSummary(order:any,node:typeof FOLLOWUP_NODES[number],tasks:any[]=[]){
@@ -15,5 +15,5 @@ export function processSummary(order:any,node:typeof FOLLOWUP_NODES[number],task
  const problem=node.execution.some(k=>{const stage=order.details?.execution?.stages?.[k];return stage&&stage.status!=='已完成'&&!!stage.problem?.trim();});
  const warning=!order.archived?(overdue?'已逾期':exception||problem||saved?.problem?'异常待处理':''):'';
  const tone=warning?'error':status==='已完成'?'done':status==='进行中'?'active':['待确认','已记录'].includes(status)?'wait':'pending';
- return {status,tone,warning,owner_id:pending[0]?.owner_id||saved?.owner_id||order.logistics_id,owner_name:pending[0]?.owner_name||(saved?.owner_id===order.commercial_id?order.commercial_name:!saved?.owner_id||saved.owner_id===order.logistics_id?order.logistics_name:''),next:pending[0]?.next_action||saved?.next||(completed?'已核对，点击查看':'待安排'),due,pending:pending.length};
+ return {status,tone,warning,customer_status:customerSyncState(saved),owner_id:pending[0]?.owner_id||saved?.owner_id||order.logistics_id,owner_name:pending[0]?.owner_name||(saved?.owner_id===order.commercial_id?order.commercial_name:!saved?.owner_id||saved.owner_id===order.logistics_id?order.logistics_name:''),next:pending[0]?.next_action||saved?.next||(completed?'已核对，点击查看':'待安排'),due,pending:pending.length};
 }

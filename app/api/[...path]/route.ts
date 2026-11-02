@@ -1,3 +1,4 @@
+import {canSetManagement,managementSettingPath} from '../../../lib/crm';
 import {contractFiles} from '../../../lib/contract-files';
 import {tracedRequest,type RequestTrace} from '../../../lib/api/diagnostics';
 import { env } from "cloudflare:workers";
@@ -56,19 +57,22 @@ async function execute(req: Request,trace:RequestTrace) {
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  const actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.trade_scopes,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) throw new Problem("请先登录", 401);
   trace.actor(actor.id);
   if(actor.must_change_password&&!['me','logout','password'].includes(path))throw new Problem('请先修改初始密码',403);
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
+  const managementWrite=write&&(managementSettingPath(path)||path==='import'&&(body.allocation_management===true||body.allocate!==false));
+  const managementAllowed=canSetManagement(actor)&&canSetManagement(user)&&actor.id===user.id;
+  if(managementWrite&&!managementAllowed)throw new Problem('只有 Winnie、CEO、徐泽贵可以设置分配管理、业绩目标及智能监控',403);
   const personalCeo=actor.role==='ceo'&&user.personal_business&&user.id===actor.id&&user.role==='sales';
-  if((!personalCeo&&!ceoRequestAllowed(actor,path,req.method))||!ceoRequestAllowed(user,path,req.method))throw new Problem('CEO拥有全部查看权限，不能修改业务数据或系统设置',403);
+  if(!managementWrite&&((!personalCeo&&!ceoRequestAllowed(actor,path,req.method))||!ceoRequestAllowed(user,path,req.method)))throw new Problem('CEO拥有全部查看权限，不能修改业务数据或系统设置',403);
   const permissionDenied=(key:any)=>{if(!can(user,key))throw new Problem('此账号没有此功能的操作权限',403);};
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
-  if(path==='assign'||path==='allocation/distribute')permissionDenied('leads_allocate');
+  if((path==='assign'||path==='allocation/distribute')&&!managementAllowed)permissionDenied('leads_allocate');
   if(path==='allocation/report')permissionDenied('performance_view');
-  if(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project'))permissionDenied('customers_edit');
+  if(!(managementWrite&&managementAllowed)&&(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project')))permissionDenied('customers_edit');
   if(path==='advertising'||path.startsWith('operations/'))permissionDenied(write?'advertising_edit':'advertising_view');
   if(path==='users/permissions'&&req.method==='POST')return json(await setAccountPermissions(db,user,body));
   if(path==='admin/backup' &&req.method==='GET'){if(!['admin','ceo'].includes(actor.role)||!['admin','ceo'].includes(user.role))throw new Problem('没有导出备份权限',403);return databaseBackup(db);}
