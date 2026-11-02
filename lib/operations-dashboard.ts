@@ -1,6 +1,8 @@
 import {reportCountry} from './report-country';
 import {reportDay} from './operations-report';
 export function customerMarket(l:any):string{
+ let detail=l.detail||{};if(typeof detail==='string'){try{detail=JSON.parse(detail);}catch{detail={};}}
+ if(['内贸','外贸'].includes(detail['客资市场']))return detail['客资市场'];
  if(l.business_scope==='alibaba'||/阿里|alibaba/i.test(l.source||''))return '外贸';
  const country=reportCountry(l.country);
  if(country.code==='CN')return '内贸';
