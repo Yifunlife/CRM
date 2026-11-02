@@ -44,9 +44,12 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
  if(!path.startsWith('allocation/management'))return undefined;
  if(!can(user,'customers_all')||!can(user,'leads_allocate')&&user.role!=='ceo')throw new Problem('此页面需要客户管理及分配权限',403);
  if(path==='allocation/management'&&method==='GET'){
-  const queue=url.searchParams.get('queue')||'待分配',query=new URL(url);query.searchParams.delete('queue');query.searchParams.set('stage',queue==='已有归属'?'已分配':queue);if(queue==='待分配')query.searchParams.set('cohort','new');
-  const [page,summary,people,config]=await Promise.all([customerPage(db,user,query),allocationMediaSummary(db,user),db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role IN ('sales','management','ceo') ORDER BY name,id").all<any>(),db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>()]);
-  return {...page,summary,people:people.results,automatic:config?JSON.parse(config.payload).rule?.automatic===true:false};
+  const queue=url.searchParams.get('queue')||'待分配',query=new URL(url),from=url.searchParams.get('from')??'2026-10-29',to=url.searchParams.get('to')??suiteDay();
+  for(const date of [from,to])if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date))throw new Problem('请选择有效的起止日期');
+  if(from&&to&&from>to)throw new Problem('开始日期不能晚于结束日期');
+  query.searchParams.delete('queue');query.searchParams.delete('cohort');if(queue==='待分配')query.searchParams.delete('stage');else query.searchParams.set('stage',queue==='已有归属'?'已分配':queue);
+  const [page,summary,people,config]=await Promise.all([customerPage(db,user,query,{unassignedOnly:queue==='待分配',from,to}),allocationMediaSummary(db,user),db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role IN ('sales','management','ceo') ORDER BY name,id").all<any>(),db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>()]);
+  return {...page,from,to,summary,people:people.results,automatic:config?JSON.parse(config.payload).rule?.automatic===true:false};
  }
  if(path==='allocation/management/records'&&method==='GET'){
   const page=Math.max(1,Math.floor(Number(url.searchParams.get('page'))||1)),base=`WITH records AS (
