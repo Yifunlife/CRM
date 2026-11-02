@@ -13,7 +13,7 @@ related_targets: ["app/followup-navigation.tsx","app/followup-navigation.css","a
 
 ## Navigation and phase queues
 
-“跟单管理”下依次提供总览“跟进表”、可折叠“我的工作”（待办／交接确认）及七个编号阶段入口；存储键“跟进收款”显示为“收款归档”。跟单账号登录落在总览；业务员全局“我的工作”保留自身含义。阶段键及旧入口别名、单项目订单范围和返回原项目路径继续保留，阶段路由优先进入共享 `FollowupBoard`。
+“跟单管理”下依次提供总览“跟进表”、“我的工作”（同一页面同时显示待办、交接确认）及七个无编号阶段入口；存储键“跟进收款”显示为“收款归档”。跟单账号登录落在总览；业务员全局“我的工作”保留自身含义。阶段键及旧入口别名、单项目订单范围和返回原项目路径继续保留，阶段路由优先进入共享 `FollowupBoard`。
 
 七阶段页分别列出项目／客户、内部进度、客户同步、负责人／日期、下一步及操作；打开项目进入原双向记录编辑器，返回该阶段列表并恢复原操作按钮焦点，搜索与范围保持。阶段层可显示职责和时限说明，不虚构交接时间；选中真实订单后才显示该单已有正式交接时间或待核实提示。手机队列按文字标签堆叠，各项目操作至少44px；导航沿用现有移动抽屉，不另建一套导航。总览、职责时限、双向记录及数据权限边界沿用。
 
@@ -59,4 +59,13 @@ related_targets: ["app/followup-navigation.tsx","app/followup-navigation.css","a
 
 顶部工具栏按用户指出的三层按钮占位再次收紧。证据为 `.impeccable/review/followup-toolbar/{desktop,intermediate,mobile,empty}.png`：桌面／中间宽度图表顶部从260px移至157px，手机从454px移至277px。主任务记录编辑筛选与月份保留、视图／范围切换、空态“查看示例”入口及无溢出检查通过，布局检测前后 `[]`，类型检查与生产构建通过；审阅后仅对齐空态入口文案，最终重建通过。独立 `toolbar_compact_finish_reviewer` 给出 **ship — compact-header scope**，该范围无实质性发现。已整合当前生产基线 `44447d9b`（源码 `2d55caa`）；本次工具栏已发布，版本 `7afd0cb0-af57-44d0-b19c-dd0439f07ab7` 承担100%流量；公开入口200、新跟单资源与构建一致、未登录接口401，已在Safari真实登录会话确认紧凑工具栏（当前在办空态），实拍位于 `outputs/followup-toolbar-20261102/safari-production.png`。原职责规范、双向记录及权限边界沿用，真实账号及实际通知送达验收继续暂停。
 
-导航与七阶段队列扩展继承已部署基线 `ad15bb3`（源码 `8b6336e0`）的现有主题。1440／390px本地合成数据证据为 `.impeccable/review/followup-navigation/` 下 `overview-desktop.png`、`phase-desktop.png`、`editor-desktop.png`、`work-desktop.png`、`phase-mobile.png`、`navigation-mobile.png`、`editor-mobile.png`。主任务记录层级、七阶段页面、保存后重读、返回焦点、筛选及手机无溢出／运行时检查通过，类型及角色／双向／排期专项通过，机械检测 `[]`；生产构建完成状态另行记录。独立 `followup_navigation_finish_reviewer` 给出 **ship — navigation/phase-queue scope**，该范围无实质性发现。此证据仅为本地合成数据检查，本次导航扩展尚未发布，不代表当前生产或真实账号验收；原合同、附件、历史、归属及权限不变。
+导航与七阶段队列扩展继承生产版本 `8b6336e0`（源码 `ad15bb3`）的现有主题；发布前另合并生产版本 `123b10cd`（源码 `40a9d86`），保留其他已授权工作。1440／390px本地合成数据证据为 `.impeccable/review/followup-navigation/` 下 `overview-desktop.png`、`phase-desktop.png`、`editor-desktop.png`、`work-desktop.png`、`phase-mobile.png`、`navigation-mobile.png`、`editor-mobile.png`。主任务记录层级、七阶段页面、保存后重读、返回焦点、筛选及手机无溢出／运行时检查通过，类型及角色／双向／排期专项通过，机械检测 `[]`；最终生产构建及合并后类型检查通过。独立 `followup_navigation_finish_reviewer` 给出 **ship — navigation/phase-queue scope**，该范围无实质性发现。本次导航扩展已发布，版本 `a5a67d49-776c-4aa3-aa75-5c441721efb2` 承担100%流量；公开入口200、菜单及跟单资源与本地构建一致、未登录接口401。Safari现有登录会话已确认新菜单和生产跟进队列，实拍使用内建虚拟项目，位于 `outputs/followup-navigation-20261102/safari-production.png`；未保存真实业务记录，真实通知送达仍按用户要求暂停。原合同、附件、历史、归属及权限不变。
+
+
+## Approved entry update (2026-11-03)
+
+用户确认预览后授权上线：取消七步骤数字；跟单“我的工作”是直接入口，同页显示待办与交接确认，使用独立内部路由以保留业务员原“我的工作”。旧待办／交接入口仍映射到该页。电脑保留紧凑表格，手机逐项显示各列及操作。
+
+本次结果／下一步、客户回复与沟通依据类型使用按节点提供的下拉选项；客户同步内容采用展开勾选、支持多选，收起显示已选文字。“尚未同步”与实际同步事项互斥，服务端拒绝相互矛盾的组合。特殊情况可选其他并补充。沟通依据保留具体时间、对象、邮件主题或文件位置，不能用类型替代依据。
+
+继续沿用原订单 business_process、客户跟进的字符串字段与版本门禁。多选逐行保存，读回还原选择；旧手填文字作为“其他”保留原文。完整核对资料按需展开，原附件、历史、业务归属、金额／验货／收款归档条件继续保留；不迁移、不批量更新真实数据。

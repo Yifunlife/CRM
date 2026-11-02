@@ -11,7 +11,7 @@ export default function FollowupWorkspace({page:initialPage,user,api,openOrder,i
  const phase=FOLLOWUP_NODES.find(n=>n.page===section||n.page===initialPage);
  if(phase)return <FollowupBoard phase={phase.page} initialNode={phase.page} initialDemo={initialDemo} initialOrderId={initialOrderId} user={user} api={api}/>;
  if(initialPage!=='跟单管理')return <LegacyFollowupWorkspace page={initialPage} user={user} api={api} openOrder={openOrder}/>;
- return ['跟进表','节点跟进表'].includes(section)?<FollowupBoard initialDemo={initialDemo} initialOrderId={initialOrderId} user={user} api={api}/>:<FollowupTasks kind={section==='我的待办'?'我的待办':'交接确认'} demo={initialDemo} orderId={initialOrderId} user={user} api={api} openOrder={openOrder}/>;
+ return ['跟进表','节点跟进表'].includes(section)?<FollowupBoard initialDemo={initialDemo} initialOrderId={initialOrderId} user={user} api={api}/>:<FollowupTasks demo={initialDemo} orderId={initialOrderId} user={user} api={api} openOrder={openOrder}/>;
 }
 
 function LegacyFollowupWorkspace({page:initialPage,user,api,openOrder}:{page:string;user:any;api:(path:string,body?:any)=>Promise<any>;openOrder:(id:string)=>void}){

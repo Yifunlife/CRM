@@ -21,6 +21,11 @@ const post=(extra={},user=follow)=>roleWorkspaceEndpoint(db,user,user,'followup/
 assert.equal(customerSyncState({status:'已完成'}),'','legacy completion is not retroactively flagged');
 await assert.rejects(()=>post({},other),e=>e.status===404);
 await post({customer_followup:sent});assert.equal(customerSyncState(current()),'已同步，待回复');assert.equal(current().confirmed_at,initial.business_process.生产跟进.confirmed_at,'customer-only entry cannot mask internal inactivity');assert.equal(processActivityDay(row(),'生产跟进'),'2026-10-01');
+const multiContent='生产排期及预计完工时间\n本周生产进度\n其他已确认的具体内容';
+await post({customer_followup:{...sent,content:multiContent}});assert.equal(current().customer_followup.content,multiContent,'all selected topics and custom detail survive API persistence');
+const multiEvent=JSON.parse(sql.prepare("SELECT payload FROM crm_followup_events WHERE order_id='order' AND kind='更新生产跟进' ORDER BY rowid DESC LIMIT 1").get().payload);assert.equal(multiEvent.after.customer_followup.content,multiContent,'history retains every selected topic');
+await assert.rejects(()=>post({customer_followup:{...sent,content:'尚未同步\n本周生产进度'}}),/尚未同步/);
+await post({customer_followup:sent});
 assert.ok(orderReminders(row(),[],'2026-11-02').some(r=>r.key==='customer-reply-生产跟进'));
 const history=sql.prepare('SELECT count(*) n FROM crm_followup_events').get().n;
 await followupScheduleEndpoint(db,follow,follow,'followup/orders/order/progress','POST',{version:row().version,page:'生产跟进',action:'normal'});
