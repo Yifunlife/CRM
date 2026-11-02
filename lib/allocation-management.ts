@@ -1,4 +1,4 @@
-import {can,digest,id,now} from './crm';
+import {canSetManagement,can,digest,id,now} from './crm';
 import {Problem} from './api/http';
 import {customerPage} from './customer-page';
 import {customerAllocationSummary} from './customer-allocation-summary';
@@ -42,7 +42,7 @@ async function manualPlan(db:D1Database,body:any){
 }
 export async function allocationManagementEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/management'))return undefined;
- if(!can(user,'customers_all')||!can(user,'leads_allocate')&&user.role!=='ceo')throw new Problem('此页面需要客户管理及分配权限',403);
+ if(!can(user,'customers_all')||!can(user,'performance_view'))throw new Problem('此页面需要客户管理及分配权限',403);
  if(path==='allocation/management'&&method==='GET'){
   const queue=url.searchParams.get('queue')||'待分配',query=new URL(url),from=url.searchParams.get('from')??'2026-10-29',to=url.searchParams.get('to')??suiteDay();
   for(const date of [from,to])if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date))throw new Problem('请选择有效的起止日期');
@@ -62,7 +62,7 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
   return {rows,total:count.total,page};
  }
  if(method!=='POST'||!['allocation/management/preview','allocation/management/confirm'].includes(path))throw new Problem('操作不存在',404);
- if(!can(actor,'leads_allocate')||!can(user,'leads_allocate')||actor.role==='ceo'||user.role==='ceo')throw new Problem('此账号只能查看，不能分配客户',403);
+ if(!canSetManagement(actor)||!canSetManagement(user)||actor.id!==user.id)throw new Problem('此账号只能查看，不能分配客户',403);
  const plan=await manualPlan(db,body);if(path.endsWith('/preview'))return plan;
  if(typeof body.token!=='string'||body.token!==plan.token)throw new Problem('分配预览已变化，请重新预览并确认',409);
  const at=now(),operation=id(),ids=JSON.stringify(plan.ids),recipients=JSON.stringify(plan.recipients);

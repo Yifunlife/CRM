@@ -57,7 +57,7 @@ const beforeManagement=sqlite.prepare("SELECT username,password,name FROM crm_us
 await setAccountPermissions(db,admin,{id:'other',role:'management',permissions:permissionDefaults('management')});
 const management=sqlite.prepare("SELECT id,role,permissions FROM crm_users WHERE id='other'").get();
 assert.equal(authorizedLead(management,{owner_id:'sales'}),true);
-assert.equal(can(management,'leads_allocate'),true);assert.equal(can(management,'performance_view'),true);
+assert.equal(can(management,'leads_allocate'),false);assert.equal(can(management,'performance_view'),true);
 assert.equal(can(management,'customers_edit'),false);assert.equal(can(management,'followup_edit'),false);
 assert.deepEqual(sqlite.prepare("SELECT username,password,name FROM crm_users WHERE id='other'").get(),beforeManagement);
 assert.equal(sqlite.prepare("SELECT owner_id FROM crm_leads WHERE id='lead2'").get().owner_id,'other');
@@ -68,7 +68,7 @@ await followupEndpoint(db,admin,admin,'followup','POST',{project:'Other owner or
 const managementOrders=await followupEndpoint(db,management,management,'followup','GET',{});
 assert.equal(managementOrders.orders.length,2);assert.equal(managementOrders.can_manage,false);
 await assert.rejects(followupEndpoint(db,management,management,'followup','POST',{project:'Denied'}),e=>e.status===403);
-console.log('PASS: management role retains its existing defaults, reads company-wide projects and performance, allocates leads without rule/account/followup maintenance or self-escalation, and preserves credentials and ownership.');
+console.log('PASS: management role retains its existing defaults, reads company-wide projects and performance, cannot allocate leads or maintain rules/accounts/followup or self-escalation, and preserves credentials and ownership.');
 
 // Sales stays personal even when a historical permission record grants company-wide access.
 const broadSales={...other,permissions:JSON.stringify(Object.fromEntries(Object.keys(permissionDefaults('sales')).map(k=>[k,true])))};

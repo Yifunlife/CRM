@@ -1,3 +1,4 @@
+import {boardLeadVisible} from './market-access';
 import {BUSINESS_SCOPES} from './allocation';
 import {can,emailKey,phoneKey,now} from './crm';
 import {AllocationError} from './allocation-server';
@@ -22,8 +23,8 @@ export async function customerEntryMonitor(db:D1Database,user:any,options?:{rule
  if(options&&(!Number.isInteger(options.rule)||options.rule<1||options.rule>6||!Number.isInteger(options.page)||options.page<1))throw new AllocationError('请选择有效规则和页码',400);
  const all=can(user,'customers_all'),args=all?[]:[user.id],where=all?'1=1':'l.owner_id=?';
  const [leads,pool,reviews,accounts]=await Promise.all([
-  list(db,`SELECT l.id,l.name,l.phone,l.email,l.source,l.channel,l.business_scope,l.entered,l.created,l.cohort,l.owner_id,l.original_owner,l.review,u.id AS existing_owner,u.name AS owner_name,u.active AS owner_active,u.role AS owner_role,s.subject_id,
-   json_object('公司名称',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.公司名称'),'platform',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.platform'),'来源渠道',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源渠道'),'来源平台',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源平台')) AS detail,
+  list(db,`SELECT l.id,l.name,l.country,l.phone,l.email,l.source,l.channel,l.business_scope,l.entered,l.created,l.cohort,l.owner_id,l.original_owner,l.review,u.id AS existing_owner,u.name AS owner_name,u.active AS owner_active,u.role AS owner_role,s.subject_id,
+   json_object('_sales_company',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$._sales_company'),'公司名称',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.公司名称'),'platform',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.platform'),'来源渠道',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源渠道'),'来源平台',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源平台')) AS detail,
    a.source_kind,a.campaign_id,c.id AS existing_campaign
    FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id LEFT JOIN crm_customer_subject_links s ON s.lead_id=l.id LEFT JOIN crm_attribution_leads a ON a.lead_id=l.id LEFT JOIN crm_attribution_campaigns c ON c.id=a.campaign_id WHERE `+where+' ORDER BY l.id',args),
   list(db,"SELECT p.id,p.source,p.payload,p.raw,p.created,p.created_by,p.state,p.last_error FROM crm_customer_pool p LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) WHERE p.state<>'已入CRM' AND l.id IS NULL"+(all?'':' AND p.created_by=?')+' ORDER BY p.id',args),
@@ -37,6 +38,7 @@ export async function customerEntryMonitor(db:D1Database,user:any,options?:{rule
   const day=reportAcquiredDay(String(entered));
   records.push({...payload,id:'pool:'+p.id,name:payload.name||'待入档咨询',source:p.source,phone:payload.phone||'',email:payload.email||'',entered,created:p.created,cohort:day?(day<'2026-11-01'?'historical':'new'):'unknown',owner_id:null,original_owner:'',review:p.state==='待确认'?1:0,detail:payload,state:p.state,last_error:p.last_error,intake:true});
  }
+ for(let i=records.length-1;i>=0;i--)if(!boardLeadVisible(user,records[i]))records.splice(i,1);
  const decisions=new Map<string,string>();for(const r of reviews)decisions.set(pairKey(r.lead_id,r.other_lead_id),r.state);
  const buckets=new Map<string,any[]>();
  for(const l of records){
