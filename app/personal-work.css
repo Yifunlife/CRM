@@ -22,9 +22,6 @@
 .personal-contact-followup small{display:block;margin-top:4px;line-height:1.5}
 .personal-contact-action{display:block;margin:6px 0 3px}
 .personal-contact-followup button{white-space:normal;word-break:keep-all}
-.personal-dormant-customers summary{cursor:pointer}.personal-dormant-customers summary small{margin-bottom:4px}
-.office-app .workspace .personal-contact-followup .personal-contact-dormant td{background:#f5f7f9;color:#424242}
-.personal-contact-dormant .badge{background:#e9edf3;color:#424242}
 .personal-contact-followup .personal-todo-soon small{color:#805000}
 .office-app .workspace .personal-contact-followup .personal-todo-soon td{background:#fff6e3}
 .personal-contact-followup .personal-todo-soon .badge{background:#fff6e3;color:#805000}

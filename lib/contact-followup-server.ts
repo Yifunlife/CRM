@@ -1,5 +1,12 @@
 import {contactFollowup} from './contact-followup';
-import {customerLeadSQL} from './contact-kind';
+import {customerLeadSQL,isColleague} from './contact-kind';
+
+export async function dormantContactIds(db:D1Database,leads:any[],at:string){
+ const eligible=leads.filter(l=>l.owner_id&&l.customer_type!=='existing'&&!isColleague(l.grade));
+ const owners=[...new Set<string>(eligible.map(l=>l.owner_id))];
+ const rows=(await Promise.all(owners.map(owner=>contactFollowups(db,owner,eligible.filter(l=>l.owner_id===owner),at)))).flat();
+ return new Set(rows.filter(r=>r.kind==='dormant').map(r=>r.id));
+}
 
 export async function contactFollowups(db:D1Database,owner:string,leads:any[],at:string){
  const sentNote="(n.content LIKE '线上发送已确认｜%' OR n.content LIKE '发送已确认｜%' OR n.method IN ('首次WhatsApp','二次WhatsApp','首次邮件','二次邮件') OR (e.id IS NOT NULL AND json_extract(e.payload,'$.result') NOT IN ('未接通 / 未联系上','其他') AND json_extract(e.payload,'$.type')<>'客户实际回复'))";

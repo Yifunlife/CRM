@@ -6,9 +6,11 @@ import {can} from './crm';
 import {assignmentFields,assignmentJoin} from './assignment-reminders';
 import {assignmentCategory} from './assignment-categories';
 import {customerOrigin,sourceRecord} from './customer-origin';
+import {dormantContactIds} from './contact-followup-server';
 
 // Pagination is read-only. Keep the legacy /leads contract for existing consumers.
 export async function customerPage(db:D1Database,user:any,url:URL,options:{unassignedOnly?:boolean;from?:string;to?:string;market?:string;platform?:string;account?:string}={}){
+ const at=new Date().toISOString(),dormantOnly=url.searchParams.get('contact_mark')==='dormant';
  const p=url.searchParams,all=can(user,'customers_all'),manages=all&&can(user,'leads_allocate');
  const poolAll=manages||options.unassignedOnly&&all;
  const pool=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.grade AS lead_grade,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id WHERE '+(poolAll?'1=1':user.role==='sales'?'(l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL))':'(p.created_by=? OR l.owner_id=?)')+(options.unassignedOnly?" AND p.state<>'已入CRM' AND COALESCE(l.owner_id,'')='' AND trim(COALESCE(l.original_owner,''))=''":'')+' ORDER BY p.created DESC,p.id'+(options.unassignedOnly?'':' LIMIT 300')).bind(...(poolAll?[]:[user.id,user.id])).all<any>()).results.filter(r=>r.state!=='已入CRM'&&!isColleague(r.lead_grade)).map(r=>({...r,payload:JSON.parse(r.payload)}));
@@ -42,17 +44,24 @@ export async function customerPage(db:D1Database,user:any,url:URL,options:{unass
  if(queue==='今日跟进'){conditions.push('next_date=?');values.push(today);}
  if(queue==='逾期未跟进'){conditions.push("next_date<>'' AND next_date<? AND display_status NOT IN ('已成交','已结束')");values.push(today);}
  const matches=(r:any)=>(country==='全部'||r.country?.toLowerCase().includes(country.toLowerCase()))&&(method==='全部'||String(r.detail?.['偏好联系方式']||r.detail?.['联系方式偏好']||r.detail?.['which_method_would_you_prefer_to_be_contacted_by?']||'').toLowerCase().includes(method.toLowerCase()))&&filters.every(k=>p.get(k)===null||p.get(k)==='全部'||(k==='source'&&['Facebook','Instagram',PLATFORM_PENDING].includes(p.get(k)||'')?(r.display_source||customerSource(r)):k==='grade'||k==='business_scope'?(r[k]||''):r[k])===p.get(k))&&(!q||[r.name,r.phone,r.email,r.country,r.detail?.['公司名称'],r.intake?.raw].some(v=>v?.toLowerCase().includes(q)))&&(queue==='全部'||queue==='待分配'&&r.stage==='待分配'||queue==='待核查'&&r.stage==='待核查'||queue==='待首次联系'&&(r.cohort==='new'||r.assignment_category==='new')&&r.status==='待首次联系'||queue==='今日跟进'&&r.next_date===today||queue==='逾期未跟进'&&r.next_date&&r.next_date<today&&!['已成交','已结束'].includes(r.status));
- const filteredPending=pending.filter(r=>scopeMatches(r)&&matches(r)&&(!options.from||r.entered>=options.from)&&(!options.to||r.entered<=options.to)),where=conditions.length?' WHERE '+conditions.join(' AND '):'';
+ const contactFields=`CASE WHEN EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=rows.id AND d.cancelled=0) THEN 'existing' ELSE 'new' END AS customer_type,(SELECT MAX(p.updated) FROM crm_customer_pool p WHERE p.lead_id=rows.id AND p.state='已入CRM' AND (rows.last_contact='' OR p.updated>rows.last_contact)) AS inquiry_at`;
+ let dormantIds:Set<string>|undefined;
+ if(dormantOnly){
+  const candidates=(await db.prepare(base+` SELECT *,${contactFields} FROM rows`+(conditions.length?' WHERE '+conditions.join(' AND '):'')).bind(...args,...values).all<any>()).results;
+  dormantIds=await dormantContactIds(db,candidates,at);conditions.push('id IN (SELECT value FROM json_each(?))');values.push(JSON.stringify([...dormantIds]));
+ }
+ const filteredPending=pending.filter(r=>!dormantOnly&&scopeMatches(r)&&matches(r)&&(!options.from||r.entered>=options.from)&&(!options.to||r.entered<=options.to)),where=conditions.length?' WHERE '+conditions.join(' AND '):'';
  const [count,groups]=await Promise.all([
   db.prepare(base+' SELECT COUNT(*) total FROM rows'+where).bind(...args,...values).first<{total:number}>(),
   db.prepare(base+" SELECT source,display_source,COALESCE(grade,'') grade,COUNT(*) total FROM rows WHERE COALESCE(grade,'') NOT IN ('Yifun Staff','同事') GROUP BY source,display_source,COALESCE(grade,'')").bind(...args).all<any>()
  ]);
  const total=(count?.total||0)+filteredPending.length,pages=Math.max(1,Math.ceil(total/30)),page=Math.max(1,Math.min(pages,Math.floor(Number(p.get('page'))||1))),offset=(page-1)*30,head=filteredPending.slice(offset,offset+30),take=30-head.length;
- const records=take?(await db.prepare(base+` SELECT *,CASE WHEN EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=rows.id AND d.cancelled=0) THEN 'existing' ELSE 'new' END AS customer_type FROM rows${where} ORDER BY created DESC,id LIMIT ? OFFSET ?`).bind(...args,...values,take,Math.max(0,offset-filteredPending.length)).all<any>()).results:[];
+ const records=take?(await db.prepare(base+` SELECT *,${contactFields} FROM rows${where} ORDER BY created DESC,id LIMIT ? OFFSET ?`).bind(...args,...values,take,Math.max(0,offset-filteredPending.length)).all<any>()).results:[];
+ const marked=dormantIds||await dormantContactIds(db,records,at);
  const originals=records.length?(await db.prepare("SELECT lead_id,raw FROM crm_form_submissions WHERE lead_id IN (SELECT value FROM json_each(?)) AND kind='new' ORDER BY occurred,id").bind(JSON.stringify(records.map(r=>r.id))).all<any>()).results:[];
  const originalByLead=new Map<string,any>();for(const row of originals)if(!originalByLead.has(row.lead_id))originalByLead.set(row.lead_id,row.raw);
  const sources:Record<string,number>={},platform_sources:Record<string,number>={},grades:Record<string,number>={};let overall=pending.length;
  for(const g of groups.results){platform_sources[g.display_source]=(platform_sources[g.display_source]||0)+g.total;sources[g.source]=(sources[g.source]||0)+g.total;grades[g.grade]=(grades[g.grade]||0)+g.total;overall+=g.total;}
  for(const r of pending){const label=r.display_source||customerSource(r);platform_sources[label]=(platform_sources[label]||0)+1;sources[r.source]=(sources[r.source]||0)+1;grades['']=(grades['']||0)+1;}
- return {rows:[...head.map(r=>({...r,original_inquiry:customerInquiry(r)})),...records.map(r=>({...r,...customerOrigin(r,originalByLead.get(r.id)),original_inquiry:customerInquiry(r,originalByLead.get(r.id)),status:r.display_status,assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)}))],total,page,pages,overall,sources,platform_sources,grades};
+ return {rows:[...head.map(r=>({...r,original_inquiry:customerInquiry(r)})),...records.map(r=>({...r,...customerOrigin(r,originalByLead.get(r.id)),original_inquiry:customerInquiry(r,originalByLead.get(r.id)),status:r.display_status,dormant:marked.has(r.id),assignment_category:assignmentCategory(r),detail:JSON.parse(r.detail)}))],total,page,pages,overall,sources,platform_sources,grades};
 }

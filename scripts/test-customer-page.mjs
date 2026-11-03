@@ -21,3 +21,21 @@ for(const e of evidence){const expr=customerSourceSQL();const row=sql.prepare('S
 assert.equal(customerSource(evidence[0]),'Facebook');assert.equal(customerSource(evidence[1]),'Instagram');assert.equal(customerSource(evidence[4]),PLATFORM_PENDING);assert.equal(customerSource(evidence[5]),PLATFORM_PENDING);assert.equal(customerSource(evidence[6]),'独立站');
 sql.prepare("UPDATE crm_leads SET channel='FB' WHERE id='lead01'").run();sql.prepare("UPDATE crm_leads SET channel='IG' WHERE id='lead02'").run();sql.prepare("UPDATE crm_leads SET channel='ig' WHERE id='lead64'").run();let fb=await read({source:'Facebook'},sales),ig=await read({source:'Instagram'},sales);assert.equal(fb.total,1);assert.equal(ig.total,1);assert.equal(fb.rows[0].display_source,'Facebook');assert.equal(fb.rows[0].source,'Meta');assert.equal(ig.rows[0].display_source,'Instagram');assert.equal((await read({source:'Meta'},sales)).total,60);assert.equal((await read({source:PLATFORM_PENDING},sales)).total,58);assert.equal(fb.platform_sources.Facebook,1);assert.equal(ig.platform_sources.Instagram,1);const snapshots=JSON.stringify(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all());await read({source:'Facebook'},admin);await read({source:'Instagram'},sales);assert.equal(JSON.stringify(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all()),snapshots);console.log('PASS: Facebook/Instagram evidence, SQL/JS parity, unknown/conflicting platforms, platform filtering, original Meta group and owner isolation preserved.');
 sql.prepare("UPDATE crm_customer_pool SET payload=json_set(payload,'$.platform','fb') WHERE id='pool'").run();assert.equal((await read({source:'Facebook'},admin)).rows.some(r=>r.intake&&r.display_source==='Facebook'),true);console.log('PASS: pending Facebook intake retains source display and platform filter.');
+
+for(let i=0;i<32;i++){
+ const id='sleep'+String(i).padStart(2,'0'),owner=i===31?'other':'sales';
+ sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,cohort,status,phone,email,fingerprint,detail,created,last_contact) VALUES(?,?,'Meta',?,'new','已联系待回复','61400000000','sleep@example.invalid',?,'{}','2020-01-01','2020-01-02T00:00:00Z')").run(id,'Sleeping '+String(i).padStart(2,'0'),owner,id);
+ for(const method of ['WhatsApp','邮件'])sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,method,content,next_step,created) VALUES(?,?,?,?, '线上发送已确认｜actual receipt','','2020-01-02T00:00:00Z')").run(id+method,id,owner,method);
+}
+const sleeping=await read({contact_mark:'dormant'},sales),secondSleeping=await read({contact_mark:'dormant',page:'2'},sales);
+assert.equal(sleeping.total,31);assert.equal(sleeping.pages,2);assert.equal(sleeping.rows.length,30);assert.equal(secondSleeping.rows.length,1);
+assert(sleeping.rows.every(r=>r.dormant&&!r.intake&&r.owner_id==='sales'));
+assert.equal(new Set([...sleeping.rows,...secondSleeping.rows].map(r=>r.id)).size,31,'dormant filtering occurs before pagination');
+assert.equal((await read({contact_mark:'dormant'},admin)).total,32);
+assert.equal((await read({q:'Sleeping 00'},sales)).rows[0].dormant,true,'ordinary total-customer list carries the marker');
+const beforeRead=JSON.stringify(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all());await read({contact_mark:'dormant'},sales);assert.equal(JSON.stringify(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all()),beforeRead);
+sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,method,content,next_step,created) VALUES('sleep-reply','sleep00','sales','系统收信','客户线上回复｜actual reply','','2020-01-03T00:00:00Z')").run();
+assert.equal((await read({q:'Sleeping 00'},sales)).rows[0].dormant,false);
+assert.equal((await read({contact_mark:'dormant'},sales)).total,30,'reply removes marker and dormant filter membership');
+sql.prepare("UPDATE crm_leads SET grade='Yifun Staff' WHERE id='sleep01'").run();assert.equal((await read({contact_mark:'dormant'},sales)).total,29,'colleagues are never marked as dormant customers');
+console.log('PASS: dormant marker in total customer list, pre-pagination filtering, scoped counts and search, replies restore normal classification, colleague exclusion and zero customer writes.');
