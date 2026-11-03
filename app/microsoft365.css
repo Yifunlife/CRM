@@ -133,14 +133,14 @@ body,
 .office-app .workspace > header .followup-actions { flex-shrink: 0; }
 .office-app .workspace > header .followup-actions > button { color: #424242; font-size: 12px; background: transparent; }
 .office-app .workspace > header .followup-actions > button:hover { background: #f0f0f0; }
-.office-app .workspace .content { padding: 24px 28px; }
+.office-app .workspace .content { padding: 12px 28px 24px; }
 
 /* Fluent's web type ramp: 14/20 body, 16/22 section, 24/32 page title. */
 .office-app .workspace h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: 0; }
 .office-app .workspace h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .office-app .workspace h3 { font-size: 14px; line-height: 20px; font-weight: 600; }
-.office-app .workspace .page-heading { margin-bottom: 20px; }
-.office-app .workspace .page-heading p { font-size: 13px; line-height: 20px; margin-top: 6px; }
+.office-app .workspace .page-heading { margin-bottom: 8px; }
+.office-app .workspace .page-heading p { font-size: 13px; line-height: 20px; margin-top: 4px; }
 .office-app .workspace .panel { border-radius: 8px; border-color: var(--line); padding: 16px; margin-bottom: 16px; }
 .office-app .workspace .panel .panel { border-radius: 0; }
 .office-app .workspace .section-heading { margin-bottom: 12px; }
@@ -187,7 +187,7 @@ body,
   .office-app > aside { width: 200px; }
   .office-app .workspace { margin-left: 200px; width: calc(100% - 200px); }
   .office-app .workspace-brand { flex-basis: 184px; }
-  .office-app .workspace .content { padding: 20px; }
+  .office-app .workspace .content { padding: 12px 20px 20px; }
   .office-app .workspace > header { gap: 16px; padding-right: 16px; }
   .office-app .workspace > header .followup-actions > .small { display: none; }
 }
@@ -207,9 +207,9 @@ body,
   .office-app > aside > nav button,
   .office-app > aside .nav-submenu button { min-height: 44px; }
   .office-app .navigation-backdrop { background: rgb(0 0 0 / 28%); }
-  .office-app .workspace .content { padding: 16px 12px; }
+  .office-app .workspace .content { padding: 8px 12px 16px; }
   .office-app .workspace h1 { font-size: 24px; line-height: 32px; }
-  .office-app .workspace .page-heading { margin-bottom: 16px; }
+  .office-app .workspace .page-heading { margin-bottom: 8px; }
   .office-app .workspace .panel { padding: 12px; }
   .office-app .workspace button { min-height: 44px; }
   .office-app .workspace :is(input, select, textarea) { font-size: 16px; }
@@ -227,7 +227,7 @@ body,
 /* Category colors support reading; process colors describe actual state. */
 .office-app .workspace > header { border-bottom-color: #cbdcf1; }
 .office-app .workspace .page-heading {
-  padding: 16px 20px;
+  padding: 8px 16px;
   border-radius: 12px;
   background: linear-gradient(110deg, #dceeff, #eae5fc 72%, #e1f5f4);
 }
@@ -292,7 +292,7 @@ body,
 .office-app .workspace .ft-tone-wait { --ft-tone: var(--crm-status-wait-ink); }
 .office-app .workspace .ft-tone-error { --ft-tone: var(--crm-status-error-ink); }
 @media (max-width: 720px) {
-  .office-app .workspace .page-heading { padding: 14px 12px; }
+  .office-app .workspace .page-heading { padding: 8px 12px; }
   .office-app .workspace .sales-overview .so-statistics { border-color: #ccdaec; }
   .office-app .workspace .sales-overview .so-metric { box-shadow: 1px 0 #fff, 0 1px #fff; }
   .office-app .workspace .customer-management .ui-customer-status .crm-status { padding: 3px 7px; }
@@ -302,7 +302,7 @@ body,
 :root .office-app .workspace .panel { border-radius:var(--crm-panel-radius); border-color:#d5e1ef; }
 :root .office-app .workspace .panel .panel { border-radius:0; }
 .office-app .workspace .sales-chat-title {
-  padding:16px 20px;
+  padding:8px 16px;
   border-radius:12px;
   background:linear-gradient(110deg,#dceeff,#eae5fc 72%,#e1f5f4);
 }
@@ -322,5 +322,5 @@ body,
 .office-app .workspace :is(.ss-badge.red,.mw-risk) { background:var(--crm-status-error-bg); color:var(--crm-status-error-ink); }
 .office-app .workspace .ss-badge.gray { background:var(--crm-status-pending-bg); color:var(--crm-status-pending-ink); }
 @media(max-width:720px) {
-  .office-app .workspace .sales-chat-title { padding:14px 12px; }
+  .office-app .workspace .sales-chat-title { padding:8px 12px; }
 }
