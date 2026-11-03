@@ -10,10 +10,11 @@ import {moneyLabel,PROJECT_STAGES,suiteDay} from '../lib/sales-suite';
 import {SalesMetricDetails} from './sales-dashboard-details';
 import './role-workspace.css';
 import './management-workspace.css';
+import './sales-overview-metrics.css';
 type Props={user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void;openOrder:(id:string)=>void;openProject:(id:string)=>void;navigate?:(page:string)=>void};
 const totals=(values:Record<string,number>={})=>Object.entries(values).map(([c,n])=>moneyLabel(n,c)).join(' / ')||'暂无登记';
 const stages=Object.fromEntries(PROJECT_STAGES);
-function Amounts({values}:{values:Record<string,number>}){return <span className="ui-currencies">{Object.entries(values).map(([currency,n])=><span key={currency}>{moneyLabel(n,currency)}</span>)}{!Object.keys(values).length&&'暂无登记'}</span>;}
+function Amounts({values}:{values:Record<string,number>}){return <span className="ui-currencies">{Object.entries(values).map(([currency,n])=><span key={currency} data-currency={currency}>{moneyLabel(n,currency)}</span>)}{!Object.keys(values).length&&<span className="so-empty-amount">暂无登记</span>}</span>;}
 export default function SalesOverview({api,user,openLead,openOrder,openProject,navigate}:Props){
  const today=suiteDay(),month=today.slice(0,7),[kind,K]=useState('month'),[data,D]=useState<any>(null),[error,E]=useState(''),[loading,L]=useState(true),[revision,R]=useState(0),[owner,O]=useState(''),[stage,S]=useState('全部'),[metric,F]=useState(''),[reminder,REM]=useState(false),[cardMarket,CM]=useState(''),[moreMetrics,MORE]=useState(false),[mobileView,VIEW]=useState('people');
  const params=new URLSearchParams({period:kind,month,year:today.slice(0,4),quarter:String(Math.ceil(Number(today.slice(5,7))/3)),active:'1'}),range=reportPeriod(params,month),query=params.toString(),cycle=kind==='month'?'本月':kind==='quarter'?'本季':'全年';
@@ -25,7 +26,7 @@ export default function SalesOverview({api,user,openLead,openOrder,openProject,n
  const all=data?.all,summary=all?.summary,people=all?.people||[],customers=all?.all_customers||[],deals=all?.deals||[],projects=all?.projects||[],orders=all?.orders||[],quotes=all?.quotes||[];
  const staff=[...people,...(all?.followup_people||[])];
  const items=[...(data?.interventions.items||[]),...(data?.monitor.items||[])].filter((i:any)=>!i.id.startsWith('device:')&&i.level!=='历史对齐'&&(!i.owner_id||people.some((p:any)=>p.id===i.owner_id)));
- function marketCounts(field:string,unit:string,grade=''){return <>{markets.map(name=>{const report=name==='内贸'?data.domestic:data.foreign,value=grade?report.summary[field][grade]:report.summary[field];return <span key={name}>{name} {value||0} {unit}</span>;})}</>;}
+ function marketCounts(field:string,unit:string,grade=''){return <span className="so-market-counts">{markets.map(name=>{const report=name==='内贸'?data.domestic:data.foreign,value=grade?report.summary[field][grade]:report.summary[field];return <span className="so-market-count" data-market={name==='内贸'?'domestic':'foreign'} key={name}><span>{name}</span><b>{value||0}</b><span>{unit}</span></span>;})}</span>;}
  function goal(name:string,id=''){
   const currency=name==='内贸'?'CNY':'USD',report=name==='内贸'?data?.domestic:data?.foreign;
   const rows=(data?.performance.rows||[]).filter((r:any)=>r.currency===currency&&r.active!==0&&(!id||r.id===id));

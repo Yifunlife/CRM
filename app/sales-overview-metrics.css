@@ -1,0 +1,55 @@
+/* Keep each total beside its title, with a separate, consistent market breakdown. */
+:root .office-app .workspace .content .sales-overview .so-metric {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-content: start;
+  align-items: baseline;
+  gap: 6px 10px;
+  min-height: 0;
+  padding: 8px 10px;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > span { min-width: 0; line-height: 1.5; }
+:root .office-app .workspace .content .sales-overview .so-metric > strong {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.35;
+  text-align: right;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > small {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  line-height: 1.5;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts {
+  float: none;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 6px;
+}
+:root .office-app .workspace .content .sales-overview .so-market-count {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+:root .office-app .workspace .content .sales-overview .so-market-count b { margin-left: auto; font-size: 15px; font-weight: 600; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=foreign] { color: #145397; background: #f0f6ff; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=domestic] { color: #17634b; background: #eef9f3; }
+:root .office-app .workspace .content .sales-overview .so-market-counts:has(> :only-child) { grid-template-columns: 1fr; }
+:root .office-app .workspace .content .sales-overview .so-metric .ui-currencies { gap: 2px; font-size: 16px; }
+:root .office-app .workspace .content .sales-overview .so-metric .ui-currencies > span { white-space: normal; overflow-wrap: anywhere; }
+:root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=USD] { color: #145397; }
+:root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=CNY] { color: #17634b; }
+:root .office-app .workspace .content .sales-overview .so-metric .so-empty-amount { font-size: 14px; font-weight: 500; }
+@media (max-width: 720px) {
+  :root .office-app .workspace .content .sales-overview .so-metric > strong { font-size: 20px; }
+  :root .office-app .workspace .content .sales-overview .so-metric:has(.ui-currencies > [data-currency]) > strong { grid-column: 1 / -1; text-align: left; }
+  :root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts { grid-template-columns: 1fr; gap: 3px; }
+}
