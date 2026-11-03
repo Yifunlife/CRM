@@ -18,7 +18,9 @@ const run=async(overrides={})=>{
  await assert.rejects(run({client:{owner:'Other'}}),/归属/);
  for(const grade of ['Yifun Staff','同事'])await assert.rejects(run({client:{grade}}),/客户资料/);
  await assert.rejects(run({payload:{assigned_at:'2026-11-02T11:00:00Z'}}),/分配时间/);
- await assert.rejects(run({client:{country:'EG',whatsapp:'+96569309607'},payload:{country:'EG',recipient_key:'96569309607'}}),/国家冲突/);
+ r=await run({client:{country:'EG',whatsapp:'+96569309607'},payload:{country:'EG',recipient_key:'96569309607'}});assert.equal(r.sent,1,'complete international numbers do not depend on the customer country');
+ r=await run({client:{country:'GB',whatsapp:'07911123456'},payload:{country:'GB',recipient_key:'07911123456'}});assert.equal(r.sent,1);assert.equal(r.client.whatsapp,'+447911123456');
+ await assert.rejects(run({client:{country:'GB',whatsapp:'12345'},payload:{country:'GB',recipient_key:'12345'}}),/国际格式/);
  await assert.rejects(run({args:{clients:()=>[{id:'duplicate',whatsapp:'16145551234'}]}}),/号码与其他客户重合/);
- console.log('PASS: approved WhatsApp greeting, original email adapter, country-based normalization, existing sent/uncertain/history suppression, ownership/draft/workspace/cutoff guards and country/duplicate conflicts; no real messages sent');
+ console.log('PASS: international numbers independent of country, national country completion, invalid number rejection, approved greeting/email, existing history/uncertainty/draft/owner guards; no real messages sent');
 })().catch(e=>{console.error(e);process.exitCode=1});

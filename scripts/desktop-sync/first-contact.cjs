@@ -25,7 +25,7 @@ async function firstContact({phonePolicy,command,config,getClient,clients,read,d
  if(clients().some(other=>!other.deleted&&other.id!==id&&digits(other.whatsapp)===phone))throw Error('号码与其他客户重合，自动首联待核对');
  if(await whatsappHistory(phone))return{status:'skipped',detail:'WhatsApp已有发出记录，不重复首联'};
  if(!guard())throw Error('客户资料或工作区已变化，自动首联未发送');
- if(digits(c.whatsapp)!==phone)normalizePhone(id,'+'+phone);
+ if(String(c.whatsapp).trim()!=='+'+phone)normalizePhone(id,'+'+phone);
  const result=await sendWhatsApp(c,p.text,guard);
  return{status:result.status,messageId:result.messageId||'',text:p.text,detail:result.detail||''};
 }
