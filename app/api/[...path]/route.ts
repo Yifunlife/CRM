@@ -62,7 +62,7 @@ async function execute(req: Request,trace:RequestTrace) {
    return json({ ok: true }, 200, { "Set-Cookie": `crm_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === "https:" ? "; Secure" : ""}` });
   }
   const token = /(?:^|;\s*)crm_session=([^;]+)/.exec(req.headers.get("cookie") || "")?.[1] || "";
-  let actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.role,u.permissions,u.trade_scopes,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
+  let actor: any = token ? await db.prepare("SELECT u.id,u.username,u.name,u.email,u.whatsapp,u.wechat,u.role,u.permissions,u.trade_scopes,u.must_change_password FROM crm_sessions s JOIN crm_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1").bind(await digest(token), Date.now()).first() : null;
   if (!actor) {if(rolePreviewToken(req))return json({error:"请先登录"},401,{"Set-Cookie":rolePreviewCookie(req)});throw new Problem("请先登录", 401);}
   trace.actor(actor.id);
   const authenticatedActor=actor;

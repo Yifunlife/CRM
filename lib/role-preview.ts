@@ -7,7 +7,7 @@ const START='角色验收开始',END='角色验收结束';
 export const canRolePreview=(actor:any)=>['admin','ceo'].includes(actor?.role)&&actor.active!==0&&!actor.must_change_password;
 export const rolePreviewToken=(req:Request)=>/(?:^|;\s*)crm_role_preview=([^;]+)/.exec(req.headers.get('cookie')||'')?.[1]||'';
 export const rolePreviewCookie=(req:Request,value='')=>`${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${value?86400:0}${new URL(req.url).protocol==='https:'?'; Secure':''}`;
-const fields='id,username,name,email,role,permissions,trade_scopes,active,must_change_password';
+const fields='id,username,name,email,whatsapp,wechat,role,permissions,trade_scopes,active,must_change_password';
 const permittedTarget=(actor:any,target:any)=>!!target?.active&&(actor.role==='admin'||target.role!=='admin');
 export type RolePreview={context_id:string;target:any;actor:any;expires_at:number;status:string;reason:string};
 export function rolePreviewInfo(preview:RolePreview){return {context_id:preview.context_id,target:{id:preview.target.id,name:preview.target.name,role:preview.target.role},actor:{id:preview.actor.id,name:preview.actor.name,role:preview.actor.role},expires_at:preview.expires_at,status:preview.status,reason:preview.reason,read_only:true};}

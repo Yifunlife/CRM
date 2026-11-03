@@ -178,7 +178,7 @@ export default function CRM({businessEntry=false}:{businessEntry?:boolean}){
  page==='广告归因与未成交'?<Attribution key={user.id+user.role} user={user} api={api} openLead={(id:string)=>open({id})}/>:page==='订单跟单'?<OrderFollowup key={user.id} user={user} initialOrderId={workflowOrder} openLead={id=>open({id})} userId={user.id} userName={user.name} crmView={activeView} api={api} businessView={user.role==='sales'&&!can(user,'followup_all')}/>:
  page==='广告投放'&&can(user,'advertising_view')?<Advertising users={users} userId={user.id} readOnly={!can(user,'advertising_edit')}/>:
  page==='账号与权限'?<><AccountManagement protectAdminAccounts={user.role==='ceo'} users={users} currentId={user.id} api={api} refresh={refresh} onSelfReset={()=>{U(null);M('密码已修改，请使用新密码登录');}}/><details className="panel"><summary>人员交接</summary><Workflow section="人员交接" api={api} user={user} onSaved={refresh}/></details><details className="panel"><summary>业务操作记录</summary><Workflow section="操作记录" api={api} user={user}/></details></>:
- page==='个人资料'?<AccountProfile user={user} role={roles[user.role]} save={async email=>{await api('profile',{email});await refresh();}}/>:
+ page==='个人资料'?<AccountProfile user={user} role={roles[user.role]} save={async contacts=>{await api('profile',contacts);await refresh();}}/>:
  page==='修改密码'?<><div className="page-heading"><div><h1>修改密码</h1><p>修改后，其他设备上的登录会失效。</p></div></div><section className="panel narrow"><PasswordForm busy={busy} save={async(current,password)=>{let saved=false;await act(async()=>{await api('password',{current,password});M('密码已更新');saved=true;});return saved;}}/></section></>:null}
  </Suspense></div></main></div>;
 }

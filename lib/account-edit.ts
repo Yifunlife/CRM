@@ -3,17 +3,18 @@ import {passwordHash,PERMISSION_FIELDS,SALES_PERSONAL_ONLY,permissionDefaults,ha
 import {AllocationError} from './allocation-server';
 export async function editAccount(db:D1Database,actor:any,body:any){
  if(!hasAdminPermissions(actor))throw new AllocationError('只有管理员可以编辑账号',403);
- if(Object.keys(body).some(k=>!['id','name','username','trade_scopes','email'].includes(k)))throw new AllocationError('只能修改姓名、用户名、邮箱和业务范围');
+ if(Object.keys(body).some(k=>!['id','name','username','trade_scopes','email','whatsapp','wechat'].includes(k)))throw new AllocationError('只能修改姓名、用户名、联系方式和业务范围');
  const name=typeof body.name==='string'?body.name.trim():'',username=typeof body.username==='string'?body.username.trim().toLowerCase():'';
  if(!name||name.length>80||!/^[a-z0-9._-]{3,80}$/.test(username))throw new AllocationError('姓名为1–80字；用户名为3–80位英文、数字、点、下划线或短横线');
  const existing:any=await db.prepare('SELECT id,role FROM crm_users WHERE id=?').bind(body.id).first();
  if(!existing)throw new AllocationError('账号不存在',404);
  if(actor.role==='ceo'&&existing.role==='admin')throw new AllocationError('管理员系统配置账号仅限管理员维护',403);
  const email='email' in body?await accountEmail(db,body.email,existing.id):null;
+ const whatsapp='whatsapp' in body?accountContact('whatsapp',body.whatsapp):null,wechat='wechat' in body?accountContact('wechat',body.wechat):null;
  const scopes='trade_scopes' in body?validateTradeScopes(existing.role,body.trade_scopes):null;
  if(await db.prepare('SELECT id FROM crm_users WHERE username=? AND id<>?').bind(username,body.id).first())throw new AllocationError('用户名已存在，请换一个');
  if(existing.role==='sales'&&await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales' AND id<>?").bind(name,body.id).first())throw new AllocationError('此业务员姓名已有账号，请使用不同姓名');
- try{await db.prepare('UPDATE crm_users SET name=?,username=?,email=COALESCE(?,email),trade_scopes=COALESCE(?,trade_scopes) WHERE id=?').bind(name,username,email,scopes===null?null:JSON.stringify(scopes),body.id).run();}catch(e:any){if(String(e.message).includes('crm_users_email_unique'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');if(String(e.message).includes('UNIQUE'))throw new AllocationError('用户名已存在，请换一个');throw e;}
+ try{await db.prepare('UPDATE crm_users SET name=?,username=?,email=COALESCE(?,email),whatsapp=COALESCE(?,whatsapp),wechat=COALESCE(?,wechat),trade_scopes=COALESCE(?,trade_scopes) WHERE id=?').bind(name,username,email,whatsapp,wechat,scopes===null?null:JSON.stringify(scopes),body.id).run();}catch(e:any){if(String(e.message).includes('crm_users_email_unique'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');if(String(e.message).includes('UNIQUE'))throw new AllocationError('用户名已存在，请换一个');throw e;}
  return {ok:true};
 }
 
@@ -57,8 +58,21 @@ export async function accountEmail(db:D1Database,value:unknown,userId=''){
  return email;
 }
 export async function saveAccountProfile(db:D1Database,actor:any,body:any){
- if(Object.keys(body).some(k=>k!=='email'))throw new AllocationError('个人资料仅可修改本人邮箱');
+ if(Object.keys(body).some(k=>!['email','whatsapp','wechat'].includes(k)))throw new AllocationError('个人资料仅可修改本人邮箱、WhatsApp 和 WeChat');
  const email=await accountEmail(db,body.email,actor.id);
- try{await db.prepare('UPDATE crm_users SET email=? WHERE id=?').bind(email,actor.id).run();}catch(e:any){if(String(e.message).includes('UNIQUE'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');throw e;}
+ const whatsapp='whatsapp' in body?accountContact('whatsapp',body.whatsapp):null,wechat='wechat' in body?accountContact('wechat',body.wechat):null;
+ try{await db.prepare('UPDATE crm_users SET email=?,whatsapp=COALESCE(?,whatsapp),wechat=COALESCE(?,wechat) WHERE id=?').bind(email,whatsapp,wechat,actor.id).run();}catch(e:any){if(String(e.message).includes('UNIQUE'))throw new AllocationError('此邮箱已绑定其他账号，请换一个');throw e;}
  return {ok:true};
+}
+
+export function accountContact(channel:'whatsapp'|'wechat',value:unknown){
+ if(typeof value!=='string')throw new AllocationError(channel==='whatsapp'?'请填写有效的 WhatsApp 号码':'请填写有效的 WeChat 微信号');
+ const contact=value.trim();
+ if(!contact)return '';
+ if(channel==='whatsapp'){
+  if(contact.length>40||!/^\+[0-9 ().-]+$/.test(contact)||!/^\+[1-9]\d{6,14}$/.test(contact.replace(/[ ().-]/g,'')))throw new AllocationError('WhatsApp 号码需包含 + 和国家区号，共7–15位数字');
+  return contact.replace(/[ ().-]/g,'');
+ }
+ if(contact.length>80||/\s|[\u0000-\u001f\u007f]/.test(contact))throw new AllocationError('WeChat 请填写不含空格的微信号，最多80字');
+ return contact;
 }

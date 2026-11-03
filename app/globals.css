@@ -133,3 +133,18 @@
 @media(max-width:720px){.workflow-review table{min-width:0}.workflow-review thead{display:none}.workflow-review tbody{display:block}.workflow-review tr{display:grid;grid-template-columns:1fr auto;gap:8px 12px;padding:16px 0;border-bottom:1px solid var(--line)}.workflow-review td{border:0;padding:0;white-space:normal;overflow-wrap:anywhere}.workflow-review td:nth-child(2){text-align:right;color:var(--muted)}.workflow-review td:nth-child(3),.workflow-review td:last-child{grid-column:1/-1}}
 
 .accounts-page .account-tabs{display:flex;align-items:center;gap:20px;margin:0 0 12px;border-bottom:1px solid var(--line)}.accounts-page .account-tabs button{flex:0 0 auto;width:auto;min-height:40px;padding:8px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);font-weight:550;white-space:nowrap}.accounts-page .account-tabs button:hover{color:var(--green)}.accounts-page .account-tabs button[aria-selected="true"]{color:var(--green);border-bottom-color:var(--green)}.account-tabs button span{font-size:12px;font-variant-numeric:tabular-nums}.accounts-page #account-tab-panel{min-height:0}.accounts-page .accounts-filters label{margin-bottom:0}.account-trade-summary{display:block;font-size:12px;color:var(--muted);margin-top:4px}.account-trade-scopes{border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:16px}.account-trade-scopes>div{display:flex;gap:24px}.account-trade-scopes label{display:flex;align-items:center;gap:8px;margin:0}.account-trade-scopes input[type="checkbox"]{width:18px;height:18px;margin:0}.account-trade-scopes p{margin:12px 0 0}
+
+/* Employee profiles share the account page's existing form and table styles. */
+.account-contact-fields,.account-profile-basics{border:0;padding:0;margin:0 0 20px;min-width:0}
+.account-contact-fields legend,.account-profile-basics legend{font-weight:650;margin-bottom:12px;padding:0}
+.account-contact-fields p{margin:-4px 0 14px}
+.account-contact-fields label:last-child,.account-profile-basics label:last-child{margin-bottom:0}
+.account-contacts dl{margin:0;min-width:180px;max-width:280px;font-size:12px}
+.accounts-list .account-contacts dl>div{display:grid;grid-template-columns:68px minmax(0,1fr);gap:8px;margin:2px 0;padding:0;border:0}
+.account-contacts dt{color:var(--muted)}
+.account-contacts dd{margin:0;white-space:normal;overflow-wrap:anywhere}
+.account-personal-profile dd{overflow-wrap:anywhere}
+.account-personal-profile dl>div{grid-template-columns:112px minmax(0,1fr)}
+.account-dialog-heading h2{min-width:0;overflow-wrap:anywhere}
+.account-dialog-heading button{flex-shrink:0}
+@media(max-width:720px){.accounts-list td.account-contacts{grid-column:1/-1;text-align:left}.accounts-list td:nth-child(3){text-align:left;color:var(--muted)}.accounts-list td:nth-child(4){text-align:right}.accounts-list td:nth-child(5){text-align:left}.accounts-list td:nth-child(6){text-align:right;color:var(--muted);font-size:12px}.account-contacts dl{max-width:none;min-width:0}.accounts-list .account-row-actions{flex-wrap:wrap}}

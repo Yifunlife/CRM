@@ -1,4 +1,4 @@
-import { editAccount,resetAccountPassword,validateTradeScopes,accountEmail,saveAccountProfile } from '../account-edit';
+import { editAccount,resetAccountPassword,validateTradeScopes,accountEmail,accountContact,saveAccountProfile } from '../account-edit';
 import { can,clean,digest,id,now,passwordHash,verifyPassword,hasAdminPermissions} from '../crm';
 import { initializeEmployeeLogin } from '../employee-login';
 import { followupManager } from '../order-followup-server';
@@ -24,7 +24,7 @@ export async function accountRecords({db,req,path,write,body,user,actor,token,pr
   if(path==='users/employee-login'&&req.method==='POST')return json(await initializeEmployeeLogin(db,user,body));
   if(path==='users/reset-password'&&req.method==='POST')return json(await resetAccountPassword(db,user,body));
   if (path === "users") {
-   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,email,role,permissions,trade_scopes,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
+   if (!write) return json(!can(user,'customers_all') ? [] : (await db.prepare("SELECT id,username,name,email,whatsapp,wechat,role,permissions,trade_scopes,active,created,EXISTS(SELECT 1 FROM crm_followup_staff s WHERE s.user_id=crm_users.id) AS followup_staff FROM crm_users ORDER BY created").all()).results);
    if (!hasAdminPermissions(user)) throw new Problem("只有管理员可以管理账号",403);
    if (req.method === "POST") {
     if(user.role==='ceo'&&body.role==='admin')throw new Problem('系统配置管理员仅限管理员创建',403);
@@ -34,9 +34,10 @@ export async function accountRecords({db,req,path,write,body,user,actor,token,pr
     if (await db.prepare("SELECT id FROM crm_users WHERE username=?").bind(username).first()) throw new Problem("用户名已存在");
     if (body.role === "sales" && await db.prepare("SELECT id FROM crm_users WHERE name=? AND role='sales'").bind(name).first()) throw new Problem("此业务员姓名已有账号，请使用已有账号");
     const email=body.email?await accountEmail(db,body.email):'';
+    const whatsapp=accountContact('whatsapp','whatsapp' in body?body.whatsapp:''),wechat=accountContact('wechat','wechat' in body?body.wechat:'');
     const tradeScopes=validateTradeScopes(body.role,body.trade_scopes??[]);
     const userId = id();
-    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password,trade_scopes,email) VALUES(?,?,?,?,?,1,?,1,?,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now(),JSON.stringify(tradeScopes),email)];
+    const statements = [db.prepare("INSERT INTO crm_users(id,username,name,role,password,active,created,must_change_password,trade_scopes,email,whatsapp,wechat) VALUES(?,?,?,?,?,1,?,1,?,?,?,?)").bind(userId,username,name,body.role,await passwordHash(body.password),now(),JSON.stringify(tradeScopes),email,whatsapp,wechat)];
     if (body.role === "sales") statements.push(db.prepare("UPDATE crm_leads SET owner_id=? WHERE owner_id IS NULL AND original_owner=?").bind(userId,name));
     if(body.role==='followup')statements.push(db.prepare("UPDATE crm_users SET permissions=? WHERE id=?").bind(JSON.stringify({followup_edit:true}),userId));
     await db.batch(statements);return json({ok:true});
