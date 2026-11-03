@@ -1,5 +1,5 @@
 import {unzipSync,zipSync,strFromU8,strToU8} from 'fflate';
-import {paymentTermsField,customPaymentTerms,replaceWordPaymentTerms} from './contract-payment-terms';
+import {paymentTermsField,customPaymentTerms,replaceWordPaymentTerms,calculatePaymentPlan} from './contract-payment-terms';
 import {domesticContractAssets} from './domestic-contract-assets';
 export type ContractField={key:string;label:string;type?:string;required?:boolean;options?:string[];defaultValue?:string};
 const common:ContractField[]=[{key:'contractNo',label:'合同编号',required:true},{key:'signDate',label:'签订日期',type:'date',required:true},{key:'projectName',label:'项目名称',required:true},{key:'projectAddress',label:'项目地址',required:true},{key:'customerName',label:'甲方名称 / 姓名',required:true},{key:'customerAddress',label:'甲方通讯地址',required:true},{key:'customerAgent',label:'甲方签约人 / 代理人',required:true},{key:'customerPhone',label:'甲方电话',required:true},{key:'sellerAgent',label:'乙方签约人 / 联系人',required:true},{key:'sellerPhone',label:'乙方电话',required:true},{key:'amount',label:'合同总金额（人民币元）',type:'number',required:true},{key:'days',label:'周期天数',type:'number',required:true}];
@@ -32,8 +32,9 @@ export function generateDomesticContract(id:string,input:Record<string,unknown>)
  const deposit=Math.round(cents*50/100),shipment=Math.round(cents*45/100),balance=cents-deposit-shipment;
  for(const [key,value] of [['deposit',deposit],['shipment',shipment],['balance',balance]] as const){values[key]=(value/100).toFixed(2);values[key+'Upper']=rmbUpper(value);}
  const fill=(s:string,xml=false)=>s.replace(/\{\{(\w+)\}\}/g,(_,key)=>xml?escapeXml(values[key]||'________'):values[key]||'________');
- const parts=unzipSync(Uint8Array.from(atob(template.data),c=>c.charCodeAt(0))),paymentTerms=customPaymentTerms(id,values.paymentTerms),paragraphs=replaceWordPaymentTerms(id,parts,template.paragraphs,paymentTerms);
+ const plan=calculatePaymentPlan(input.paymentPlan,cents,'CNY');
+ const parts=unzipSync(Uint8Array.from(atob(template.data),c=>c.charCodeAt(0))),paymentTerms=plan?.terms||customPaymentTerms(id,values.paymentTerms),paragraphs=replaceWordPaymentTerms(id,parts,template.paragraphs,paymentTerms);
  for(const name of Object.keys(parts))if(name.startsWith('word/')&&name.endsWith('.xml'))parts[name]=strToU8(fill(strFromU8(parts[name]),true));
  const binary=zipSync(parts);let data='';for(let start=0;start<binary.length;start+=8192)data+=String.fromCharCode(...binary.subarray(start,start+8192));
- return {paragraphs:paragraphs.map(p=>fill(p)),paymentTerms,data:btoa(data),name:(values.contractNo+'_'+values.projectName+'_'+(id==='template-1'?'设计合同':'设备合同')).replace(/[\\/:*?"<>|]/g,'_')+'.docx',amount:values.amount,amountUpper:values.amountUpper,payments:paymentTerms?[]:id==='template-1'?[{label:'签订后3日内 · 100%',amount:values.amount}]:[{label:'定金 · 50%',amount:values.deposit},{label:'发货款 · 45%',amount:values.shipment},{label:'验收尾款 · 5%',amount:values.balance}]};
+ return {paragraphs:paragraphs.map(p=>fill(p)),paymentTerms,data:btoa(data),name:(values.contractNo+'_'+values.projectName+'_'+(id==='template-1'?'设计合同':'设备合同')).replace(/[\\/:*?"<>|]/g,'_')+'.docx',amount:values.amount,amountUpper:values.amountUpper,payments:plan?plan.payments:paymentTerms?[]:id==='template-1'?[{label:'签订后3日内 · 100%',amount:values.amount}]:[{label:'定金 · 50%',amount:values.deposit},{label:'发货款 · 45%',amount:values.shipment},{label:'验收尾款 · 5%',amount:values.balance}]};
 }

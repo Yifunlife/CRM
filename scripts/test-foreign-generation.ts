@@ -36,3 +36,11 @@ for(const id of ids){
  for(const invalid of ['', 'x'.repeat(3001),'bad\x01text','{{amount}}'])assert.throws(()=>generateForeignContract(id,{...values,paymentTerms:invalid}));
 }
 console.log('PASS: manual payment clauses replace defaults in all 4 foreign Word contracts and all 5 Excel forms, including duplicate cells and shifted rows; summary, multiline XML and validation remain consistent.');
+for(const id of ids)for(const shares of [['100'],['30','70'],['30','60','10'],['25','25','25','25']]){
+ const stages=['signing','dispatch','arrival','acceptance'],paymentPlan=shares.map((percent,i)=>({milestone:stages[i],percent})),r=generateForeignContract(id,{...values,paymentPlan}),parts=unzipSync(Buffer.from(r.data,'base64'));
+ assert.equal(r.payments.filter(p=>p.label.startsWith('第')).length,shares.length);assert.equal(r.payments.filter(p=>p.label.startsWith('第')).reduce((sum,p)=>sum+Math.round(Number(p.amount)*100),0),Math.round(Number(r.amount)*100));
+ assert.ok(r.paragraphs.join('\n').includes('After signing this Contract, Party A shall pay '+shares[0]+'%'));
+ const xml=strFromU8(parts[r.format==='docx'?'word/document.xml':'xl/worksheets/sheet1.xml']);assert.ok(xml.includes('After signing this Contract, Party A shall pay '+shares[0]+'%'));assert.ok(!xml.includes('pay a 50% deposit'));assert.ok(!xml.includes('pay the remaining 50% balance'));
+ assert.throws(()=>generateForeignContract(id,{...values,paymentPlan:[{milestone:'signing',percent:'80'}]}),/100%/);
+}
+console.log('PASS: all foreign Word/Excel outputs match the selected installment count, translated milestones, percentages and amounts, with separate installation fees preserved.');
