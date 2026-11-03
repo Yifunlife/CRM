@@ -8,7 +8,8 @@ const errors='data:text/javascript,export class AllocationError extends Error {c
 const envUrl='data:text/javascript,'+encodeURIComponent(`const objects=new Map();export const env={BUCKET:{async put(key,input){const bytes=new Uint8Array(await new Response(input).arrayBuffer());objects.set(key,bytes);return {size:bytes.length};},async get(key){const bytes=objects.get(key);return bytes?{size:bytes.length,body:bytes,json:async()=>JSON.parse(new TextDecoder().decode(bytes))}:null;},async delete(key){objects.delete(key);}}};`);
 const storageUrl=moduleUrl('lib/object-storage.ts',{"'cloudflare:workers'":JSON.stringify(envUrl)});
 const autoUrl=moduleUrl('lib/auto-first-contact.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))});
-const bridgeUrl=moduleUrl('lib/workbench-bridge.ts', {"'./customer-profile'":JSON.stringify(moduleUrl('lib/customer-profile.ts')),"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
+const codeUrl=moduleUrl('lib/customer-code.ts',{"'./allocation-server'":JSON.stringify(errors)});
+const bridgeUrl=moduleUrl('lib/workbench-bridge.ts', {"'./customer-code'":JSON.stringify(codeUrl),"'./customer-profile'":JSON.stringify(moduleUrl('lib/customer-profile.ts')),"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
 const {bridgeDeviceEndpoint}=await import(bridgeUrl);
 
 const {digest}=await import(moduleURL('lib/crm.ts'));
@@ -30,3 +31,9 @@ const edited={...snapshot,...base,project:'Fixture project',customerType:'商户
 const result=await sync(edited,base);assert.equal(current()._customer_profile.project,'Fixture project');assert.equal(current()._customer_profile.customerType,'商户');assert.equal(result.updates[0].values.notes,'Fixture note');
 const changed={...current(),_customer_profile:{...current()._customer_profile,project:'Cloud concurrent'}};sql.prepare("UPDATE crm_leads SET detail=? WHERE id='l'").run(JSON.stringify(changed));
 const conflict=await sync({...edited,project:'Local concurrent'},result.updates[0].values);assert(conflict.conflicts.some(c=>c.field==='project'));assert.equal(current()._customer_profile.project,'Cloud concurrent');console.log('PASS full profile two-way agreed-base, preserved concurrent values');
+const {ensureCustomerCode}=await import(codeUrl);
+const code1=await ensureCustomerCode(db,{...sql.prepare("SELECT * FROM crm_leads WHERE id='l'").get(),country:'AU'});assert.match(code1,/^[A-Z]{2}\d{8}(?:-\d+)?$/);
+assert.equal(await ensureCustomerCode(db,sql.prepare("SELECT * FROM crm_leads WHERE id='l'").get()),code1);
+sql.exec("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,country) VALUES('l2','Second','Meta','s','{}','fp2','2026-01-01','AU'),('l3','Old','Meta','s','{}','fp3','2026-01-01','AU')");
+assert.equal(await ensureCustomerCode(db,sql.prepare("SELECT * FROM crm_leads WHERE id='l3'").get(),'AU20260101'),'AU20260101');
+assert.equal(await ensureCustomerCode(db,sql.prepare("SELECT * FROM crm_leads WHERE id='l2'").get()),'AU20260101-2');console.log('PASS stable business codes, preserved existing code, unique same-day sequence');

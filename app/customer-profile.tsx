@@ -40,7 +40,7 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
   <div className="dossier-layout"><div className="dossier-main">
    {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading"><h2>基本客户资料</h2><span className="small muted">{editing?'编辑客户资料':'客户档案'}</span></div>
     <CustomerInquiry lead={lead}/><form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
-     {field('name','客户姓名 *',lead.name)}{field('customer_id','客户 ID',detail._workbench?.desktop_id||lead.id,'text',true)}
+     {field('name','客户姓名 *',lead.name)}{field('customer_id','客户 ID',detail._customer_code||detail._workbench?.desktop_id||lead.id,'text',true)}
      {field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
      {field('phone','电话 / WhatsApp',lead.phone)}{field('email','Email',lead.email,'email')}
      {field('source_display','客户来源',customerSource(lead),'text',true)}{select('profile_customerType','客户类型',profile.customerType,customerTypes)}
