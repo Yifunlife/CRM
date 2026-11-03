@@ -12,6 +12,7 @@ class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...ar
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const out=statements.map(s=>({meta:sqlite.prepare(s.sql).run(...s.args)}));sqlite.exec('COMMIT');return out;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
 const admin={id:'admin',role:'admin'},reviewer={id:'reviewer',role:'ceo'},sales={id:'a',role:'sales'},other={id:'b',role:'sales'},ops={id:'ops',role:'operations'};
 for(const u of [admin,reviewer,sales,other,ops,{id:'paused',role:'sales'},{id:'off',role:'sales'}])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created,active) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01',u.id==='off'?0:1);
+sqlite.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 const members=[{user_id:'a',state:'参与',share:99},{user_id:'b',state:'参与',share:1},{user_id:'paused',state:'暂停',share:0},{user_id:'off',state:'参与',share:0}];
 const config={members,rule:{automatic:true,performance:30,maxChange:10,minimum:5,receipts:true}};
 function configure(value=config){sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run('all',JSON.stringify(value),'now','reviewer');}

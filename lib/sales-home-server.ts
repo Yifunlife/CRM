@@ -8,7 +8,7 @@ import {homeCustomer,sortHomeCustomers} from './sales-home';
 // This endpoint is deliberately personal, including for sales accounts with company-wide visibility.
 export async function salesHomeEndpoint(db:D1Database,user:any,path:string,method:string,assigned?:Promise<any[]>){
  if(path!=='sales-home')return undefined;
- if(user.role!=='sales')throw new AllocationError('此首页仅用于业务员本人工作',403);
+ if(!['sales','management','ceo','admin'].includes(user.role))throw new AllocationError('此首页仅用于业务员本人工作',403);
  if(method!=='GET')throw new AllocationError('首页只支持读取',405);
  const at=now(),today=salesDay(at),month=today.slice(0,7);
  const [leadResult,dealResult,taskResult,handoverResult,performance,receipts,refunds,assignments]=await Promise.all([

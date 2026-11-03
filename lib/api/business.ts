@@ -1,3 +1,4 @@
+import {allocationPerformanceEndpoint} from '../allocation-performance-server';
 import {communicationConnection} from '../communication-connections';
 import {allocationManagementEndpoint} from '../allocation-management';
 import {personalWorkEndpoint} from '../personal-work-server';
@@ -38,6 +39,7 @@ export async function businessModules(context:ApiContext):Promise<Response|undef
  const {db,env,req,url,path,body,user,actor}=context;
  if(path==='role-workspace/daily-first-contact'){if(req.method!=='GET')throw new AllocationError('首联完成看板仅支持读取',405);return json(await dailyFirstContact(db,user,url));}
  if(path==='allocation/management/intake-status'&&req.method==='GET')return json(await allocationWhatsAppStatus(db,env as any,user));
+ const performance=await allocationPerformanceEndpoint(db,user,actor,path,req.method,body,url);if(performance!==undefined)return json(performance);
  const personal=await personalWorkEndpoint(db,user,actor,path,req.method,body,url);if(personal!==undefined)return json(personal);
  const salesManagement=await salesManagementEndpoint(db,user,actor,path,req.method,body,url);if(salesManagement!==undefined)return json(salesManagement);
  const salesWorkflow=await salesWorkflowEndpoint(db,user,actor,path,req.method,body,url);if(salesWorkflow!==undefined)return json(salesWorkflow);

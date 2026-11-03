@@ -39,13 +39,13 @@ async function manualPlan(db:D1Database,body:any){
  const leads=(await db.prepare(`SELECT id,name,business_scope,country,detail,source,${fullLeadSQL('crm_leads')} AS is_full FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) AND ${eligible} ORDER BY is_full DESC,entered,id`).bind(JSON.stringify(ids)).all<any>()).results;
  if(body.market&&leads.some(l=>customerMarket(l)!==body.market))throw new Problem('不能跨内外贸分配，请刷新后重新选择',409);
  if(leads.length!==ids.length)throw new Problem('客户归属或核查状态已变化，请刷新后重新选择',409);
- const {weights}=await allocationWeights(db);if(recipients.some(id=>!weights.some(w=>w.user_id===id)))throw new Problem('接收人员不在参与名单中，或已请假、暂停，请重新选择',409);
+ const {weights,adjusted}=await allocationWeights(db);if(recipients.some(id=>!weights.some(w=>w.user_id===id)))throw new Problem('接收人员不在参与名单中，或已请假、暂停，请重新选择',409);
  const people=(await db.prepare("SELECT id,name,role,trade_scopes FROM crm_users WHERE id IN (SELECT value FROM json_each(?)) AND active=1 AND role IN ('sales','management','ceo') ORDER BY id").bind(JSON.stringify(recipients)).all<any>()).results;
  if(body.market&&people.some(p=>!allocationRecipientMarket(p,body.market)))throw new Problem('接收人员业务范围与客资不一致',409);
  if(people.length!==recipients.length)throw new Problem('接收人员已停用或不再具备接收资格，请重新选择',409);
  const totals=await cumulativeAllocationCounts(db);
- const counts=people.map(p=>({...p,before:totals.find(r=>r.owner_id===p.id)?.total||0,full_before:totals.find(r=>r.owner_id===p.id)?.full_count||0,assigned:0,full_assigned:0}));
- const rows=leads.map(l=>{counts.sort((a,b)=>(l.is_full?(a.full_before+a.full_assigned)-(b.full_before+b.full_assigned):0)||(a.before+a.assigned)-(b.before+b.assigned)||a.id.localeCompare(b.id));const pick=counts[0];pick.assigned++;if(l.is_full)pick.full_assigned++;return {...l,owner_id:pick.id,owner_name:pick.name};});
+ const counts=people.map(p=>({...p,weight:adjusted?(weights.find(w=>w.user_id===p.id)?.share||1):1,before:totals.find(r=>r.owner_id===p.id)?.total||0,full_before:totals.find(r=>r.owner_id===p.id)?.full_count||0,assigned:0,full_assigned:0}));
+ const rows=leads.map(l=>{counts.sort((a,b)=>(l.is_full?(a.full_before+a.full_assigned)/a.weight-(b.full_before+b.full_assigned)/b.weight:0)||(a.before+a.assigned)/a.weight-(b.before+b.assigned)/b.weight||a.id.localeCompare(b.id));const pick=counts[0];pick.assigned++;if(l.is_full)pick.full_assigned++;return {...l,owner_id:pick.id,owner_name:pick.name};});
  const token=await digest(JSON.stringify({policy:'full-first-v1',rows,counts:counts.sort((a,b)=>a.id.localeCompare(b.id))}));
  return {rows,people:counts,token,ids,recipients};
 }
@@ -65,7 +65,7 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
  if(path==='allocation/management/records'&&method==='GET'){
   const page=Math.max(1,Math.floor(Number(url.searchParams.get('page'))||1)),base=`WITH records AS (
    SELECT a.id,'客户分配' kind,a.created,l.name customer,u.name recipient,p.name author,a.policy detail FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id LEFT JOIN crm_users u ON u.id=a.owner_id LEFT JOIN crm_users p ON p.id=a.user_id
-   UNION ALL SELECT w.id,w.kind,w.created,l.name,NULL,p.name,json_extract(w.payload,'$.operation') FROM crm_workflow_audit w LEFT JOIN crm_leads l ON l.id=w.entity_id LEFT JOIN crm_users p ON p.id=w.created_by WHERE w.kind='撤销客资分配'
+   UNION ALL SELECT w.id,w.kind,w.created,COALESCE(l.name,target.name),target.name,p.name,COALESCE(json_extract(w.payload,'$.after.reason'),json_extract(w.payload,'$.operation')) FROM crm_workflow_audit w LEFT JOIN crm_leads l ON l.id=w.entity_id LEFT JOIN crm_users p ON p.id=w.created_by LEFT JOIN crm_users target ON target.id=w.entity_id WHERE w.kind IN ('撤销客资分配','人工调整分配档位','修改分配规则','表单去重与规则分配')
    UNION ALL SELECT b.id,'表单导入',b.created,b.filename,NULL,u.name,CAST(b.total AS TEXT)||' 条原始记录' FROM crm_batches b LEFT JOIN crm_users u ON u.id=b.creator
   )`;
   const count=await db.prepare(base+' SELECT COUNT(*) total FROM records').first<any>();

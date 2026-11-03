@@ -1,3 +1,4 @@
+import {confirmedAllocationImport} from '../allocation-confirmed-import';
 import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS} from '../allocation-intake';
 import { BUSINESS_SCOPES } from '../allocation';
 import { allocationWeights,distribute } from '../allocation-server';
@@ -20,6 +21,7 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
   }
   if(path === "review" && req.method === "POST") { await db.prepare("UPDATE crm_leads SET review=0 WHERE id=? AND owner_id IS NULL").bind(body.id).run();return json({ok:true}); }
   if (path === "import" && req.method === "POST") {
+   if(body.confirmed_flow===true)return json(await confirmedAllocationImport(db,user,actor,body));
    Object.assign(body,prepareAllocationImport(user,actor,body));
    if(!(SOURCES.includes(body.source)||body.allocation_management===true&&body.market&&(Object.values(ALLOCATION_ACCOUNTS).some(c=>Object.hasOwn(c,body.source))||FOREIGN_INTAKE_CHANNELS.includes(body.source)))||!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem("请选择来源，每次导入1至3000条");
    const businessScope=clean(body.business_scope,80),business=BUSINESS_SCOPES.find(s=>s.id===businessScope);

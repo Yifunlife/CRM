@@ -3,6 +3,7 @@ process.on('uncaughtException',e=>{console.error(e.message);process.exitCode=1;}
 const RealDate=Date;globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-02T01:00:00Z']));}static now(){return RealDate.parse('2026-11-02T01:00:00Z');}};
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));const db=database(sql),admin={id:'admin',role:'admin'},reviewer={id:'reviewer',role:'ceo'},sales={id:'a',role:'sales'};
 for(const [id,role] of [['admin','admin'],['reviewer','ceo'],['a','sales'],['b','sales'],['paused','sales']])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
+sql.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 const {customerPoolEndpoint}=await import(moduleURL('lib/customer-pool.ts')),{allocationEndpoint}=await import(moduleURL('lib/allocation-server.ts')),{historicalAlignment}=await import(moduleURL('lib/historical-alignment.ts')),{customerProgress}=await import(moduleURL('lib/customer-progress.ts'));
 const config={members:[{user_id:'a',state:'参与'},{user_id:'b',state:'参与'},{user_id:'paused',state:'暂停'}],rule:{automatic:false}};
 sql.prepare('INSERT INTO crm_allocation_configs VALUES(?,?,?,?)').run('all',JSON.stringify(config),'now','reviewer');

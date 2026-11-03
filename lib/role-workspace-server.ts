@@ -21,7 +21,7 @@ const text=(v:any,max=2000)=>typeof v==='string'&&v.trim().length<=max?v.trim():
 export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL,source?:D1Database){
  if(path==='role-workspace/report'){
   if(method!=='GET')fail('看板仅支持读取',405);
-  const personal=u.role==='sales',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
+  const personal=u.role==='sales'||['admin','ceo','management'].includes(u.role)&&url.searchParams.get('personal')==='1',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
   if(!personal&&!all)fail('没有销售看板权限',403);
   const month=url.searchParams.get('month')||suiteDay().slice(0,7);let period:ReturnType<typeof reportPeriod>;try{period=reportPeriod(url.searchParams,suiteDay().slice(0,7));}catch(e){return fail((e as Error).message);}
   const allowedMarkets=boardMarkets(u);if(!allowedMarkets.length)fail('账号尚未设置内贸、外贸范围，请联系管理员',403);const market=url.searchParams.get('market')||allowedMarkets[0];if(!allowedMarkets.includes(market)&&!(market==='全部'&&allowedMarkets.length===2)&&!(market==='待确认'&&canViewAllMarkets(u)))fail('没有此业务范围的看板查看权限',403);if(!['内贸','外贸','全部','待确认'].includes(market))fail('内外贸分类无效');const currency=market==='内贸'?'CNY':market==='外贸'?'USD':'';

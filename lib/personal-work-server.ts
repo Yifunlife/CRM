@@ -1,4 +1,5 @@
-import {authorizedLead,can,clean,id,now,STATUSES} from './crm';
+import {allocationPerformance} from './allocation-performance-server';
+import {authorizedLead,canSetManagement,can,clean,id,now,STATUSES} from './crm';
 import {AllocationError} from './allocation-server';
 import {validateLeadFollowup} from './workflow-server';
 import {closingOutcome} from './attribution-server';
@@ -74,7 +75,8 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const saved=await event(db,actor,lead,'业务员重点项目',{entity:body.entity,marked:body.marked,owner_id:u.id}).run();if(!saved.meta.changes)fail('项目归属已变化，请刷新',409);return {ok:true};
  }
  if(path==='personal-work/report'&&method==='GET'){
-  if(u.role!=='sales')fail('此工作台只用于本人业务',403);
+  if(u.role!=='sales'&&!['ceo','management','admin'].includes(u.role))fail('此工作台只用于本人业务',403);
+  const managesAllocation=canSetManagement(u);u={...u,role:'sales'};
   const today=day(),events=await entries(db,u),reminders:any[]=[],priority=new Map<string,boolean>(),plans=new Map<string,any>();
   for(const e of events){if(e.kind==='业务员重点项目'&&e.payload.owner_id===u.id&&!priority.has(e.payload.entity))priority.set(e.payload.entity,!!e.payload.marked);if(e.kind==='业务员开业计划'&&!plans.has(e.payload.entity))plans.set(e.payload.entity,e);}
   const ids=[...new Set(events.filter(e=>e.kind==='业务员跟进记录'&&e.status!=='已结束').map(e=>e.lead_id))];
@@ -90,6 +92,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
    ORDER BY l.created DESC,l.id`,[u.id,today,today]);
   const tasks=await list(db,"SELECT t.id,t.title,t.status,t.due_at,t.next_action,t.lead_id,t.order_id FROM crm_sales_tasks t JOIN crm_leads l ON l.id=t.lead_id WHERE t.owner_id=? AND l.owner_id=? AND t.status IN ('open','done') AND date(t.due_at,'+8 hours')<=? ORDER BY t.due_at",[u.id,u.id,today]);
   const orderTasks=await list(db,"SELECT t.status FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id WHERE t.owner_id=? AND l.owner_id=? AND date(t.due_at,'+8 hours')<=? AND t.status IN ('待处理','已解决')",[u.id,u.id,today]);
+  if(managesAllocation){const allocation=await allocationPerformance(db);for(const person of allocation.rows.filter(p=>p.performance.tier==='review'))reminders.push({id:'allocation-review:'+person.id,lead_id:'',page:'分配管理',name:person.name,title:'持续未达标，需管理层处理调岗',date:today,label:'调岗待办',rank:0,kind:'岗位调整'});}
   return {today,newLeads,reminders:reminders.sort((a,b)=>a.rank-b.rank||a.date.localeCompare(b.date)),priorities:[...priority].filter(([,v])=>v).map(([k])=>k),tasks,taskCompletion:{total:tasks.length+orderTasks.length,done:tasks.filter(t=>t.status==='done').length+orderTasks.filter(t=>t.status==='已解决').length}};
  }
  fail('个人业务操作不存在',404);

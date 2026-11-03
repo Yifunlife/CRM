@@ -1,3 +1,4 @@
+import {confirmedImportAllowed} from '../../../lib/allocation-confirmed-import';
 import {domesticAllocationImport} from '../../../lib/allocation-intake';
 import {canSetManagement,managementSettingPath} from '../../../lib/crm';
 import {contractFiles} from '../../../lib/contract-files';
@@ -76,7 +77,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(preview){await guardRolePreview(db,preview,req,path);actor=preview.target;db=previewDatabase(db);if(!['boss','personal'].includes(req.headers.get('x-crm-view')||'boss'))throw new Problem('验收中请使用所选人员的公司或本人业务视角',403);}
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
   if(user.role==='followup'&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
-  const domesticImport=path==='import'&&domesticAllocationImport(user,actor,body);
+  const domesticImport=path==='import'&&(domesticAllocationImport(user,actor,body)||confirmedImportAllowed(user,actor,body));
   const managementWrite=!domesticImport&&write&&(managementSettingPath(path)||path==='import'&&(body.allocation_management===true||body.allocate!==false));
   const managementAllowed=canSetManagement(actor)&&canSetManagement(user)&&actor.id===user.id;
   if(managementWrite&&!managementAllowed)throw new Problem('只有 Winnie、CEO、徐泽贵可以设置分配管理、业绩目标及智能监控',403);

@@ -1,0 +1,47 @@
+.confirmed-allocation{color:#242424;color-scheme:light}.confirmed-allocation .panel{color:#242424;background:#fff}.confirmed-allocation .op-import-steps{display:flex;flex-wrap:wrap;gap:24px;margin:0 0 18px;padding:0;list-style-position:inside}
+.confirmed-allocation .op-import-steps{display:flex;gap:24px;flex-wrap:wrap;list-style-position:inside;padding:0;margin:0 0 18px;color:#616161;font-size:13px}
+.confirmed-allocation .op-import-steps li[aria-current=step]{color:#0f548c;font-weight:600}
+.confirmed-allocation .op-import-source{flex-wrap:wrap}
+.confirmed-allocation .op-import-source label{flex:1;min-width:160px}
+.confirmed-allocation .op-import-source input[readonly]{background:#f5f8ff}
+.confirmed-allocation .op-import-summary{font-size:13px;margin:10px 0 14px;color:#314c70}
+.confirmed-allocation .op-import-rules{margin-top:14px;font-size:13px}
+.confirmed-allocation .op-import-rules p{margin-top:10px}
+.confirmed-allocation .op-import-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+.confirmed-allocation .op-import-result{white-space:normal;min-width:110px}
+.confirmed-allocation .op-rule-fields{display:flex;flex-wrap:wrap;gap:12px 24px;margin:12px 0}
+.confirmed-allocation .op-rule-fields label{flex:1;min-width:170px;max-width:100%}
+.confirmed-allocation .op-rule-fields select{width:100%;margin-top:5px}
+.confirmed-allocation .op-rule-fields input{width:100%;margin-top:5px}
+.confirmed-allocation .op-distribution-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.confirmed-allocation .op-distribution-toolbar label{margin:0;font-size:12px}
+.confirmed-allocation .op-distribution-toolbar select{margin-left:8px}
+.confirmed-allocation .op-distribution-table{table-layout:fixed;width:100%}
+.confirmed-allocation .op-distribution-table :is(th,td){white-space:normal;overflow-wrap:anywhere;vertical-align:top;padding:8px 5px;font-size:12px}
+.confirmed-allocation .op-distribution-table td{color:#242424!important}
+.confirmed-allocation .op-distribution-table td>div{color:inherit!important}
+.confirmed-allocation .op-distribution-table td:first-child>div{color:#17365b!important;font-weight:600}
+.confirmed-allocation .op-distribution-table :is(th,td):first-child{width:14%}
+.confirmed-allocation .op-distribution-table :is(th,td):nth-child(2){width:14%}
+.confirmed-allocation .op-distribution-table :is(th,td):nth-child(n+3):nth-child(-n+5){width:7%;text-align:center}
+.confirmed-allocation .op-distribution-table :is(th,td):nth-child(6){width:21%}
+.confirmed-allocation .op-distribution-table :is(th,td):nth-child(7){width:14%}
+.confirmed-allocation .op-distribution-table :is(th,td):nth-child(8){width:16%}
+.confirmed-allocation .op-distribution-table small{display:block;font-size:11px;color:#616161;margin-top:4px}
+.confirmed-allocation .op-distribution-table .op-pending{color:#8a5700;font-weight:500}
+.confirmed-allocation .op-status{display:inline-block;padding:3px 6px;border-radius:4px;font-size:11px;line-height:1.5;font-weight:500;white-space:normal}
+.confirmed-allocation .op-status-green{background:#e6f4eb;color:#0b663a}
+.confirmed-allocation .op-status-amber{background:#fff1cf;color:#825300}
+.confirmed-allocation .op-status-red{background:#ffebeb;color:#a42020}
+.confirmed-allocation .op-status-purple{background:#f0eafa;color:#673da1}
+.confirmed-allocation .op-status-grey{background:#ededed;color:#575757}
+.confirmed-allocation .op-status-blue{background:#e6f0fc;color:#0f548c}
+.confirmed-allocation .op-status-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.confirmed-allocation .op-distribution-table td.op-quantity{color:#0f548c!important;font-weight:600}
+.confirmed-allocation .op-distribution-table button[data-adjust-person]{font-size:11px;padding:4px 5px;margin-top:7px;max-width:100%;min-height:28px;color:#0f548c;background:#eaf2fc;border-color:#c9ddf3}
+.confirmed-allocation .op-distribution-table .op-adjust-cell{padding:14px;background:#f5f1fb;text-align:left}
+.confirmed-allocation .op-adjust-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin:12px 0}
+.confirmed-allocation .op-adjust-fields label{font-size:13px;margin:0}
+.confirmed-allocation .op-adjust-fields :is(select,textarea){width:100%;font-size:13px;margin-top:5px}
+.confirmed-allocation .op-adjust-error{color:#a42020;margin-top:10px}
+@media(max-width:600px){.confirmed-allocation .op-adjust-fields{grid-template-columns:1fr}}

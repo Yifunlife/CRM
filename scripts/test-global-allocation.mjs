@@ -8,6 +8,7 @@ sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filt
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>{sqlite.exec('BEGIN');try{const result=statements.map(s=>({meta:sqlite.prepare(s.sql).run(...s.args)}));sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
 for(const [id,role] of [['admin','admin'],['reviewer','ceo'],['a','sales'],['b','management'],['c','ceo'],['outside','ceo']])sqlite.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(id,id,id,role,'unused','2026-01-01');
+sqlite.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 const config={members:['a','b','c'].map(user_id=>({user_id,state:'参与',share:0})),rule:{performance:30,maxChange:10,minimum:5,automatic:true}};
 const save=(scope,value=config)=>sqlite.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload').run(scope,JSON.stringify(value),'now','admin');
 save('all');for(const s of BUSINESS_SCOPES)save(s.id);

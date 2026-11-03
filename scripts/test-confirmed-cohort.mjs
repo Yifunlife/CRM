@@ -10,6 +10,7 @@ const add=(id,entered,created='2026-11-02T00:00:00Z')=>sql.prepare("INSERT INTO 
 add('old','2026-10-31');add('edgeOld','2026-10-31T15:59:59Z');add('edgeNew','2026-10-31T16:00:00Z');add('unknown','invalid');add('importedOld','', '2026-10-20T00:00:00Z');
 const before=sql.prepare('SELECT * FROM crm_leads ORDER BY id').all();
 for(const f of files.filter(f=>f>='0030'))sql.exec(readFileSync('drizzle/'+f,'utf8'));
+sql.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 const rows=sql.prepare('SELECT * FROM crm_leads ORDER BY id').all();
 assert.deepEqual(rows.map(({cohort,...row})=>row),before.map(r=>({...r})),'Migration must preserve every original field');
 assert.deepEqual(Object.fromEntries(rows.map(r=>[r.id,r.cohort])),{edgeNew:'new',edgeOld:'historical',importedOld:'historical',old:'historical',unknown:'unknown'});

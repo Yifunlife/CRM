@@ -49,7 +49,7 @@ assert.equal(result.performance.unpriced,1);
 assert.deepEqual(result.performance.contracts,[{currency:'USD',amount:1200000}]);
 assert.deepEqual(result.performance.receipts,[{currency:'CNY',amount:20000},{currency:'USD',amount:50000}]);
 assert.deepEqual(result.performance.refunds,[{currency:'USD',amount:1000}]);
-await assert.rejects(salesHomeEndpoint(db,admin,'sales-home','GET'),e=>e.status===403);
+assert.equal((await salesHomeEndpoint(db,admin,'sales-home','GET')).customer_count,0,'manager work remains limited to their own customers');
 await assert.rejects(salesHomeEndpoint(db,sales,'sales-home','POST'),e=>e.status===405);
 const base={cohort:'new',id:'x',name:'x',status:'待首次联系',phone:'123',email:'',detail:{},assigned_at:'2026-10-23T02:00:00Z'};
 assert.ok(homeCustomer(base,at).tags.includes('overdue'),'first-contact deadline follows existing China workday rules');

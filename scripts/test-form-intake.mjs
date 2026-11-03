@@ -18,6 +18,7 @@ const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 const db=database(sql),admin={id:'admin',role:'admin'},a={id:'a',role:'sales'},b={id:'b',role:'sales'};
 for(const u of [admin,a,b])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
+sql.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 sql.prepare('INSERT INTO crm_allocation_configs VALUES(?,?,?,?)').run('all',JSON.stringify({members:[{user_id:'a',state:'参与',share:50},{user_id:'b',state:'参与',share:50}],rule:{automatic:true}}),'now','admin');
 const row=(id,email,created='2026-11-03T05:00:00-05:00',extra={})=>({id,form_id:'f:test',form_name:'【全案客资】多个单选-含国家',full_name:id,work_email:email,work_phone_number:'',created_time:created,country:'US',...extra});
 const count=table=>sql.prepare('SELECT COUNT(*) n FROM '+table).get().n;
