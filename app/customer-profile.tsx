@@ -6,8 +6,7 @@ import CustomerInquiry from './customer-inquiry';
 import ContractFiles from './contract-files';
 import {customerSource} from '../lib/customer-source';
 import {salesCompanyName} from '../lib/account-classification';
-import {can} from '../lib/crm';
-import {customerProfile,customerContractNumber,CUSTOMER_PROJECT_STAGES,CUSTOMER_PROJECT_STATUSES,CUSTOMER_FOLLOW_STATUSES} from '../lib/customer-profile';
+import {canEditCustomerProfile,customerProfile,customerContractNumber,CUSTOMER_PROJECT_STAGES,CUSTOMER_PROJECT_STATUSES,CUSTOMER_FOLLOW_STATUSES} from '../lib/customer-profile';
 import './customer-profile.css';
 type Props={lead:any;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>;onSaved:()=>Promise<void>;tab:string;onTab:(tab:string)=>void;followup:ReactNode;project:ReactNode;original:ReactNode;onEditingChange?:(editing:boolean)=>void};
 const customerTypes=['商户','集团公司','开发商','其他'];
@@ -15,7 +14,7 @@ const tabs=[['客户资料','基本资料'],['成交与收款','项目与成交'
 const date=(value:string)=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):value||'待补充';
 export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followup,project,original,onEditingChange}:Props){
  const [contacts,C]=useState<any[]>([]),[busy,B]=useState(false),[error,E]=useState(''),[message,M]=useState(''),[editing,S]=useState(false),[reset,R]=useState(0);
- const detail=lead.detail||{},profile=customerProfile(lead),editable=can(user,'customers_edit'),formId=useId();
+ const detail=lead.detail||{},profile=customerProfile(lead),editable=canEditCustomerProfile(user,lead),formId=useId();
  useEffect(()=>{C(detail._contacts||[]);S(false);E('');},[lead.id,detail._profile_revision]);
  useEffect(()=>{M('');},[lead.id]);
  useEffect(()=>{onEditingChange?.(editing);const prevent=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};if(editing)window.addEventListener('beforeunload',prevent);return()=>{onEditingChange?.(false);window.removeEventListener('beforeunload',prevent);};},[editing,onEditingChange]);
@@ -34,12 +33,12 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
  }
  function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='contract_number'?'成交后显示合同编号':'待补充'}/></label>;}
  function select(name:string,label:string,value:string,options:string[]){return <label>{label}<select name={name} defaultValue={value||''} disabled={!editing}><option value="">待确认</option>{value&&!options.includes(value)&&<option value={value}>{value}（原记录）</option>}{options.map(o=><option key={o} value={o}>{contactGradeLabel(o)}</option>)}</select></label>;}
- function actions(){return editing&&<div className="dossier-actions"><button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" className="primary" disabled={busy}>{busy?'正在保存…':'确认修改'}</button></div>;}
+ function actions(header=false){return editable&&(editing?<div className={header?'dossier-edit-actions':'dossier-actions'} role="group" aria-label="客户资料修改操作">{header&&<span className="dossier-editing-state" role="status">编辑中，尚未保存</span>}<button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" form={formId} className="primary" disabled={busy}>{busy?'正在保存…':'保存修改'}</button></div>:header?<button type="button" className="primary dossier-edit" disabled={busy} onClick={edit}><Pencil size={16} aria-hidden="true"/>编辑档案</button>:null);}
  return <div className="customer-dossier">
-  <div className="dossier-toolbar"><div className="dossier-tabs" role="tablist" aria-label="客户档案栏目">{tabs.map(([key,label],index)=><button key={key} id={'dossier-tab-'+index} role="tab" aria-selected={tab===key} aria-controls={'dossier-panel-'+index} tabIndex={tab===key?0:-1} onClick={()=>switchTab(key)} onKeyDown={e=>{const next=e.key==='ArrowRight'?(index+1)%tabs.length:e.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:-1;if(next>=0){e.preventDefault();switchTab(tabs[next][0]);if(!editing)document.getElementById('dossier-tab-'+next)?.focus();}}}>{label}</button>)}</div>{editable&&tab!=='文件归档'&&(editing?<div className="dossier-edit-actions" role="group" aria-label="客户资料修改操作"><span className="dossier-editing-state" role="status">编辑中，尚未保存</span><button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" form={formId} className="primary" disabled={busy}>{busy?'正在保存…':'确认修改'}</button></div>:<button type="button" className="primary dossier-edit" disabled={busy} onClick={edit}><Pencil size={16} aria-hidden="true"/>编辑资料</button>)}</div>
+  <div className="dossier-toolbar"><div className="dossier-tabs" role="tablist" aria-label="客户档案栏目">{tabs.map(([key,label],index)=><button key={key} id={'dossier-tab-'+index} role="tab" aria-selected={tab===key} aria-controls={'dossier-panel-'+index} tabIndex={tab===key?0:-1} onClick={()=>switchTab(key)} onKeyDown={e=>{const next=e.key==='ArrowRight'?(index+1)%tabs.length:e.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:-1;if(next>=0){e.preventDefault();switchTab(tabs[next][0]);if(!editing)document.getElementById('dossier-tab-'+next)?.focus();}}}>{label}</button>)}</div>{tab!=='客户资料'&&tab!=='文件归档'&&actions(true)}</div>
   {error&&<p role="alert" className="notice error">{error}</p>}{message&&<p role="status" className="notice success">{message}</p>}
   <div className="dossier-layout"><div className="dossier-main">
-   {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading"><h2>基本客户资料</h2><span className="small muted">{editing?'编辑客户资料':'客户档案'}</span></div>
+   {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading dossier-profile-heading"><h2>基本客户资料</h2>{editable?actions(true):<span className="small muted">客户档案</span>}</div>
     <CustomerInquiry lead={lead}/><form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
      {field('name','客户姓名 *',lead.name)}{field('contract_number','合同编号',customerContractNumber(lead),'text',true)}
      {field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
