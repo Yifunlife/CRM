@@ -17,7 +17,7 @@ export async function allocationPerformance(db:D1Database,month=monthNow()){
  return {config,configVersion:settings?.payload||'',overrideVersion:overrides.filter(o=>o.scope.startsWith('performance:'+month+':')).reduce((n,o)=>n+(JSON.parse(o.payload).version||0),0),rows,month};
 }
 export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any,url:URL){
- if(!['allocation/management/staff','allocation/management/adjustment','allocation/management/policy'].includes(path))return undefined;
+ if(!['allocation/management/staff','allocation/management/adjustment','allocation/management/policy','allocation/management/state'].includes(path))return undefined;
  if(!can(user,'customers_all')||!can(user,'performance_view'))throw new Problem('没有分配管理查看权限',403);
  if(path==='allocation/management/staff'&&method==='GET'){
   const receiptMonth=url.searchParams.get('month')||new Date(Date.UTC(Number(monthNow().slice(0,4)),Number(monthNow().slice(5,7))-2,1)).toISOString().slice(0,7);
@@ -28,6 +28,18 @@ export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor
   return {rows,receiptMonth,allocationMonth:report.month,date:summary.date,config:report.config,configVersion:report.configVersion,can_edit:canSetManagement(user)&&canSetManagement(actor)&&user.id===actor.id};
  }
  if(method!=='POST'||!canSetManagement(user)||!canSetManagement(actor)||user.id!==actor.id)throw new Problem('只有分配管理负责人可以修改',403);
+ if(path==='allocation/management/state'){
+  if(!['参与','请假','暂停'].includes(body.state))throw new Problem('请选择参与、请假或暂停');
+  const old=await db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>();if(!old)throw new Problem('请先设置接收名单');
+  if(body.version!==old.payload)throw new Problem('接收名单已更新，请刷新后重试',409);
+  const config=JSON.parse(old.payload),member=config.members.find((m:any)=>m.user_id===body.user_id);
+  const person=await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo')").bind(body.user_id).first();
+  if(!member||!person)throw new Problem('只能修改接收名单中已启用人员的状态');
+  if(member.state===body.state)return {ok:true};
+  const before=member.state;member.state=body.state;
+  const result=await db.batch([db.prepare("UPDATE crm_allocation_configs SET payload=?,updated=?,updated_by=? WHERE scope='all' AND payload=? AND EXISTS(SELECT 1 FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo'))").bind(JSON.stringify(config),now(),actor.id,old.payload,body.user_id),db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,'修改接收状态',?,?,?,? WHERE changes()>0").bind(id(),body.user_id,JSON.stringify({before,after:body.state,operation:before+' → '+body.state}),now(),actor.id)]);
+  if(!result[0].meta.changes)throw new Problem('接收名单或账号状态已更新，请刷新后重试',409);return {ok:true};
+ }
  if(path==='allocation/management/policy'){
   if(!['original','performance'].includes(body.mode))throw new Problem('请选择有效分配规则');
   const old=await db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>();if(!old)throw new Problem('请先设置接收名单');

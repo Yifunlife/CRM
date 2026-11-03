@@ -66,7 +66,7 @@ export async function allocationManagementEndpoint(db:D1Database,user:any,actor:
  if(path==='allocation/management/records'&&method==='GET'){
   const page=Math.max(1,Math.floor(Number(url.searchParams.get('page'))||1)),base=`WITH records AS (
    SELECT a.id,'客户分配' kind,a.created,l.name customer,u.name recipient,p.name author,a.policy detail FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id LEFT JOIN crm_users u ON u.id=a.owner_id LEFT JOIN crm_users p ON p.id=a.user_id
-   UNION ALL SELECT w.id,w.kind,w.created,COALESCE(l.name,target.name),target.name,p.name,COALESCE(json_extract(w.payload,'$.after.reason'),json_extract(w.payload,'$.operation')) FROM crm_workflow_audit w LEFT JOIN crm_leads l ON l.id=w.entity_id LEFT JOIN crm_users p ON p.id=w.created_by LEFT JOIN crm_users target ON target.id=w.entity_id WHERE w.kind IN ('撤销客资分配','人工调整分配档位','修改分配规则','表单去重与规则分配')
+   UNION ALL SELECT w.id,w.kind,w.created,COALESCE(l.name,target.name),target.name,p.name,COALESCE(json_extract(w.payload,'$.after.reason'),json_extract(w.payload,'$.operation')) FROM crm_workflow_audit w LEFT JOIN crm_leads l ON l.id=w.entity_id LEFT JOIN crm_users p ON p.id=w.created_by LEFT JOIN crm_users target ON target.id=w.entity_id WHERE w.kind IN ('撤销客资分配','人工调整分配档位','修改接收状态','修改分配规则','表单去重与规则分配')
    UNION ALL SELECT b.id,'表单导入',b.created,b.filename,NULL,u.name,CAST(b.total AS TEXT)||' 条原始记录' FROM crm_batches b LEFT JOIN crm_users u ON u.id=b.creator
   )`;
   const count=await db.prepare(base+' SELECT COUNT(*) total FROM records').first<any>();
