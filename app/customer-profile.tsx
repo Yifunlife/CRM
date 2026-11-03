@@ -7,7 +7,7 @@ import ContractFiles from './contract-files';
 import {customerSource} from '../lib/customer-source';
 import {salesCompanyName} from '../lib/account-classification';
 import {can} from '../lib/crm';
-import {customerProfile,CUSTOMER_PROJECT_STAGES,CUSTOMER_PROJECT_STATUSES,CUSTOMER_FOLLOW_STATUSES} from '../lib/customer-profile';
+import {customerProfile,customerContractNumber,CUSTOMER_PROJECT_STAGES,CUSTOMER_PROJECT_STATUSES,CUSTOMER_FOLLOW_STATUSES} from '../lib/customer-profile';
 import './customer-profile.css';
 type Props={lead:any;user:any;api:(path:string,body?:any,method?:string)=>Promise<any>;onSaved:()=>Promise<void>;tab:string;onTab:(tab:string)=>void;followup:ReactNode;project:ReactNode;original:ReactNode;onEditingChange?:(editing:boolean)=>void};
 const customerTypes=['商户','集团公司','开发商','其他'];
@@ -32,7 +32,7 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
    await onSaved();S(false);M('保存成功，修改已生效');
   }catch(e:any){E(e.message);}finally{B(false);}
  }
- function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder="待补充"/></label>;}
+ function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='contract_number'?'成交后显示合同编号':'待补充'}/></label>;}
  function select(name:string,label:string,value:string,options:string[]){return <label>{label}<select name={name} defaultValue={value||''} disabled={!editing}><option value="">待确认</option>{value&&!options.includes(value)&&<option value={value}>{value}（原记录）</option>}{options.map(o=><option key={o} value={o}>{contactGradeLabel(o)}</option>)}</select></label>;}
  function actions(){return editing&&<div className="dossier-actions"><button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" className="primary" disabled={busy}>{busy?'正在保存…':'确认修改'}</button></div>;}
  return <div className="customer-dossier">
@@ -41,7 +41,7 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
   <div className="dossier-layout"><div className="dossier-main">
    {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading"><h2>基本客户资料</h2><span className="small muted">{editing?'编辑客户资料':'客户档案'}</span></div>
     <CustomerInquiry lead={lead}/><form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
-     {field('name','客户姓名 *',lead.name)}{field('customer_id','客户 ID',detail._customer_code||detail._workbench?.desktop_id||lead.id,'text',true)}
+     {field('name','客户姓名 *',lead.name)}{field('contract_number','合同编号',customerContractNumber(lead),'text',true)}
      {field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
      {field('phone','电话 / WhatsApp',lead.phone)}{field('email','Email',lead.email,'email')}
      {field('source_display','客户来源',customerSource(lead),'text',true)}{select('profile_customerType','客户类型',profile.customerType,customerTypes)}

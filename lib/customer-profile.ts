@@ -27,3 +27,5 @@ export function validateCustomerProfile(value:any){
  if(result.closeDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(result.closeDate)||!Number.isFinite(Date.parse(result.closeDate))||new Date(result.closeDate).toISOString().slice(0,10)!==result.closeDate))throw Error('成交时间无效');
  return result;
 }
+
+export function customerContractNumber(lead:any){return [...new Set((lead.deals||[]).filter((deal:any)=>!deal.cancelled).map((deal:any)=>String(deal.order_number||'').trim()).filter(Boolean))].join('、');}
