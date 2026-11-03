@@ -5,6 +5,7 @@ import {AllocationError} from './allocation-server';
 import {now} from './crm';
 import {salesDay} from './sales-pipeline';
 import {homeCustomer,sortHomeCustomers} from './sales-home';
+import {contactFollowups} from './contact-followup-server';
 
 // This endpoint is deliberately personal, including for sales accounts with company-wide visibility.
 export async function salesHomeEndpoint(db:D1Database,user:any,path:string,method:string,assigned?:Promise<any[]>){
@@ -32,7 +33,8 @@ export async function salesHomeEndpoint(db:D1Database,user:any,path:string,metho
  const rows=leadResult.results.map(lead=>homeCustomer({...lead,assignment_category:lead.assigned_at?assignmentCategory(lead):categories.get(lead.id)},at,dealMap.get(lead.id)||[]));
  const historicalIds=new Set(assignments.filter(l=>l.assignment_category!=='new').map(l=>l.id));
  const tasks=taskResult.results.map(t=>({...t,mine:t.owner_id===user.id,due:t.due_at?salesDay(t.due_at):'',next_date:t.next_followup?salesDay(t.next_followup):''}));
- return {at,today,month,timezone:'Asia/Shanghai',customer_count:rows.length,
+ const contact_reminders=await contactFollowups(db,user.id,leadResult.results.filter(lead=>!dealMap.has(lead.id)).map(lead=>({...lead,assignment_category:lead.assigned_at?assignmentCategory(lead):categories.get(lead.id)})),at);
+ return {at,today,month,timezone:'Asia/Shanghai',customer_count:rows.length,contact_reminders,
   todos:rows.filter(r=>r.tags.length&&(!historicalIds.has(r.id)||r.tags.some(t=>['inquiry','today','overdue'].includes(t)))).sort(sortHomeCustomers),historical_review_count:historicalIds.size,
   projects:rows.filter(r=>['replied','design','negotiation'].includes(r.stage)||(r.stage==='unverified'&&r.status==='正在沟通')||r.handover_pending>0).sort((a,b)=>Number(b.handover_pending>0)-Number(a.handover_pending>0)||sortHomeCustomers(a,b)),
   tasks,handovers:handoverResult.results.map(h=>({...h,incoming:h.to_id===user.id})),
