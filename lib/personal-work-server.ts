@@ -45,6 +45,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   if(['暂停跟进','已结束'].includes(body.status)&&!CONTACT_REASONS.some(v=>v===reason))fail('请选择暂停或结束原因');
   const at=clean(body.at,40);if(!Number.isFinite(Date.parse(at))||new Date(at).toISOString()!==at||at>timestamp)fail('请填写真实发生时间，不能在未来');
   if(!['WhatsApp','邮件','电话','线上会议','到访公司','其他'].includes(body.method))fail('请选择沟通方式');
+  const participants=clean(body.participants,500);if(['线上会议','到访公司'].includes(body.method)&&(!participants||!note||!next))fail('请补齐参与人、会议或到访结论与下一步行动');
   const proposal=clean(body.proposal_date,10),needsProposal=result==='设计已下单'||action==='跟进设计进度';if(needsProposal&&!validDate(proposal)||proposal&&!validDate(proposal))fail('请填写有效的预计出方案日期');
   const content=result+(note?'；备注：'+note:''),date=clean(body.next_date,10);if(date&&!validDate(date))fail('下次跟进日期无效');
   const normalized={...body,content,next_step:next,pause_reason:reason,loss_note:note||reason};await validateLeadFollowup(db,lead,normalized);
@@ -57,7 +58,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   if((result==='客户已回复'||type==='客户实际回复')&&at>state.reply_at)state.reply_at=at;
   if(result==='设计已下单'&&(!state.stage_at||at>=state.stage_at)){state.stage='design';state.stage_at=at;}
   state.version++;
-  const token=id(),metadata={note_id:token,type,result,note,next_action:next,next_date:date,proposal_date:needsProposal?proposal:'',reason,status:body.status};
+  const token=id(),metadata={note_id:token,type,result,note,participants,next_action:next,next_date:date,proposal_date:needsProposal?proposal:'',reason,status:body.status};
   const outcome=await closingOutcome(db,lead,normalized,actor);
   let writes;try{writes=await db.batch([db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=?,detail=json_set(detail,'$._sales_progress',json(?)) WHERE id=? AND owner_id IS ? AND detail=?").bind(body.status,date,result!=='未接通 / 未联系上'&&at>lead.last_contact?at:lead.last_contact,JSON.stringify(state),lead.id,lead.owner_id,lead.detail),db.prepare('INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(CASE WHEN changes()>0 THEN ? ELSE NULL END,?,?,?,?,?,?)').bind(token,lead.id,actor.id,content,body.method,next,at),db.prepare("INSERT INTO crm_sales_events(id,lead_id,kind,payload,occurred_at,created,created_by) SELECT ?,?,'业务员跟进记录',?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_notes WHERE id=?)").bind(token,lead.id,JSON.stringify(metadata),at,timestamp,actor.id,token),...outcome]);}catch(e){if(String((e as Error).message).includes('crm_notes.id'))fail('客户资料或归属已变化，请刷新后重试',409);throw e;}
   if(!writes[0].meta.changes)fail('客户资料或归属已变化，请刷新后重试',409);return {ok:true};

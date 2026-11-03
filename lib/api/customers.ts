@@ -27,8 +27,12 @@ export async function customerRecords({db,req,path,write,body,user,actor}:ApiCon
    if (!STATUSES.includes(body.status) || !clean(body.content)) throw new Problem("请填写跟进结果并选择状态");
    await validateLeadFollowup(db,lead,body);
    const date = clean(body.next_date,10); if(date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Problem("跟进日期格式不正确");
+   const meeting=body.method==='线上会议';const participants=clean(body.participants,500),meetingDate=clean(body.meeting_date,10);
+   if(meeting&&(!participants||!clean(body.next_step)||!/^\d{4}-\d\d-\d\d$/.test(meetingDate)||!Number.isFinite(Date.parse(meetingDate))||new Date(meetingDate).toISOString().slice(0,10)!==meetingDate))throw new Problem('请补齐线上会议日期、参与人、结论与下一步');
+   const noteId=id(),recordedAt=meeting?meetingDate+'T00:00:00+08:00':now();
+   const meetingStatements=meeting?[db.prepare("INSERT INTO crm_sales_events(id,lead_id,kind,payload,occurred_at,created,created_by) VALUES(?,?,'业务员跟进记录',?,?,?,?)").bind(noteId,lead.id,JSON.stringify({note_id:noteId,participants}),recordedAt,now(),actor.id)]:[];
    const outcomeStatements=await closingOutcome(db,lead,body,actor);
-   await db.batch([...outcomeStatements,customerChange(db,actor,lead.id,'status',body.status,clean(body.content)),db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(id(),lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),now()),db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
+   await db.batch([...outcomeStatements,customerChange(db,actor,lead.id,'status',body.status,clean(body.content)),db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(noteId,lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),recordedAt),...meetingStatements,db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
   if (path === "grade" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();

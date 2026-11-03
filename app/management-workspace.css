@@ -20,3 +20,49 @@
 .management-workspace .mw-allocation-summary table{min-width:0;width:100%;font-variant-numeric:tabular-nums}.management-workspace .mw-allocation-summary .section-heading{gap:12px;flex-wrap:wrap}.management-workspace .mw-allocation-summary :is(th,td):not(:first-child){text-align:right}.management-workspace .mw-allocation-summary thead th{white-space:normal}.management-workspace .mw-allocation-summary tbody th{font-weight:500;background:transparent;color:var(--ink)}.management-workspace .mw-allocation-summary tbody th small{display:block;color:var(--muted);font-size:12px}.management-workspace .mw-allocation-summary tfoot{background:#f4f7fb}.management-workspace .mw-allocation-summary tfoot :is(th,td){font-weight:600;border-top:1px solid var(--line)}
 
 .office-app .workspace .management-workspace .mw-current-stage .crm-status{white-space:nowrap}
+
+.management-workspace .mw-visit-import{margin:16px 0;padding:16px 0;border-block:1px solid var(--line)}.management-workspace .mw-visit-import h3{margin:0 0 12px}.management-workspace .mw-visit-import fieldset{margin-top:12px}.management-workspace .mw-visit-import td{overflow-wrap:anywhere}.management-workspace .section-heading{flex-wrap:wrap;gap:12px}
+.management-workspace .mw-visit-drop{padding:16px;border:1px dashed var(--muted);border-radius:6px;margin-bottom:16px}.management-workspace .mw-visit-drop.is-dragging,.management-workspace .mw-visit-drop:focus-within{border-color:var(--blue,#0f6cbd);background:#ebf3fc}.management-workspace .mw-visit-drop p:last-child{margin-bottom:0}.management-workspace .mw-visit-drop[aria-busy=true]{opacity:.65}
+.office-app .workspace .management-workspace.mw-meetings{max-width:none}
+.office-app .workspace .mw-meetings>.page-heading{padding:10px 12px;margin-bottom:10px;gap:10px;align-items:center;flex-wrap:wrap}
+.office-app .workspace .mw-meetings>.page-heading>div:first-child{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.office-app .workspace .mw-meetings>.page-heading h1{font-size:22px;line-height:28px;margin:0}
+.office-app .workspace .mw-meetings>.page-heading p{margin:0;font-size:12px;line-height:18px}
+.office-app .workspace .mw-meetings .confirmed-employee{display:flex;align-items:center;gap:8px;margin:0 0 0 auto;white-space:nowrap}
+.office-app .workspace .mw-meetings .confirmed-employee select{width:170px;margin:0}
+.office-app .workspace .mw-meetings>.panel{padding:12px;margin-bottom:10px}
+.office-app .workspace .mw-meetings .section-heading{margin-bottom:6px;gap:8px;align-items:center}
+.office-app .workspace .mw-meetings .section-heading h2{margin:0;font-size:15px;line-height:22px}
+.office-app .workspace .mw-meetings .mw-meeting-help{margin:0 0 8px;line-height:20px}
+.office-app .workspace .mw-meetings button{min-height:32px;padding:4px 10px}
+.office-app .workspace .mw-meetings button.text{padding:0 4px;min-height:28px}
+.office-app .workspace .mw-meetings label{margin-bottom:8px;font-size:12px}
+.office-app .workspace .mw-meetings :is(input:not([type=file]),select){height:34px;min-height:34px;padding:5px 8px}
+.office-app .workspace .mw-meetings textarea{min-height:56px;padding:6px 8px}
+.office-app .workspace .mw-meetings th{padding:7px 10px;font-size:12px}
+.office-app .workspace .mw-meetings td{padding:8px 10px;font-size:13px;line-height:1.45}
+.office-app .workspace .mw-meetings td>small{margin-top:2px}
+.office-app .workspace .mw-meetings>.panel>p:last-child{margin:8px 0 0}
+.office-app .workspace .mw-meetings .mw-visit-import{margin:10px 0;padding:10px 0}
+.office-app .workspace .mw-meetings .mw-visit-import-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.office-app .workspace .mw-meetings .mw-visit-import h3{margin:0;font-size:14px;line-height:20px}
+.office-app .workspace .mw-meetings .mw-visit-import p{margin:4px 0 8px;font-size:12px;line-height:18px}
+.office-app .workspace .mw-meetings .mw-visit-import fieldset{margin-top:8px}
+.office-app .workspace .mw-meetings .role-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin-bottom:8px}
+.office-app .workspace .mw-meetings .role-form-grid>label{margin:0;min-width:0}
+.office-app .workspace .mw-meetings .mw-visit-drop{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:4px 12px;padding:10px 12px;margin-bottom:10px;align-items:center}
+.office-app .workspace .mw-meetings .mw-visit-drop>p{margin:0;overflow-wrap:anywhere}
+.office-app .workspace .mw-meetings .mw-visit-drop>label{grid-column:2;grid-row:1 / span 2;margin:0;min-width:0}
+.office-app .workspace .mw-meetings input[type=file]{padding:4px 6px;min-height:32px;margin-top:3px;font-size:12px}
+@media(max-width:720px){
+ .office-app .workspace .mw-meetings>.page-heading{flex-direction:row;gap:8px;padding:10px}
+ .office-app .workspace .mw-meetings>.page-heading>div:first-child{width:100%}
+ .office-app .workspace .mw-meetings>.page-heading h1{font-size:20px}
+ .office-app .workspace .mw-meetings .confirmed-employee{margin:0;flex:1;min-width:0}
+ .office-app .workspace .mw-meetings .confirmed-employee select{width:100%;min-width:0}
+ .office-app .workspace .mw-meetings :is(button,input:not([type=file]),select){min-height:44px;height:auto}
+ .office-app .workspace .mw-meetings .role-form-grid{grid-template-columns:1fr}
+ .office-app .workspace .mw-meetings .mw-visit-drop{grid-template-columns:1fr;gap:6px;padding:10px}
+ .office-app .workspace .mw-meetings .mw-visit-drop>label{grid-column:auto;grid-row:auto}
+ .office-app .workspace .mw-meetings .mw-table-actions{gap:6px}
+}
