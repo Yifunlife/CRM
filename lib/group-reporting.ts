@@ -8,7 +8,7 @@ const customerKeys=['id','name','owner_id','grade','created','company','market']
 export async function groupSnapshot(db:D1Database,quotes?:D1Database){
  const users=(await db.prepare("SELECT id,name,email,role,active,permissions,trade_scopes FROM crm_users WHERE active=1 AND role IN ('admin','ceo','management','sales') ORDER BY role,id").all<any>()).results;
  const [leadDates,quoteDates]=await Promise.all([
-  db.prepare('SELECT id,entered,created,next_date,status,country FROM crm_leads').all<any>(),
+  db.prepare('SELECT l.id,l.entered,l.created,l.next_date,l.status,l.country,l.original_owner,u.name AS owner_name FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id').all<any>(),
   db.prepare('SELECT id,created FROM crm_sales_quote_links').all<any>()
  ]);
  const leadMeta=new Map(leadDates.results.map((r:any)=>[r.id,r]));
@@ -26,7 +26,7 @@ export async function groupSnapshot(db:D1Database,quotes?:D1Database){
    const data:any=raw;
    viewers.push({...user,allowed:true,personal:data.personal,markets,
     people:data.people.map((r:any)=>pick(r,['id','name','role','active','company'])),
-    customers:data.all_customers.map((r:any)=>({...pick(r,customerKeys),acquired:acquired.get(r.id)||null,country:leadMeta.get(r.id)?.country||'',status:leadMeta.get(r.id)?.status||'',next_date:leadMeta.get(r.id)?.next_date||null})),
+    customers:data.all_customers.map((r:any)=>({...pick(r,customerKeys),acquired:acquired.get(r.id)||null,owner_name:leadMeta.get(r.id)?.owner_name||leadMeta.get(r.id)?.original_owner||'待分配',country:leadMeta.get(r.id)?.country||'',status:leadMeta.get(r.id)?.status||'',next_date:leadMeta.get(r.id)?.next_date||null})),
     projects:data.projects.map((r:any)=>({...pick(r,['project_id','lead_id','owner_id','name','customer_name','stage','stage_at','expected_date','currency','amount_minor','created','company','market','blocker','next_action']),deal_id:r.details?.deal_id||null})),
     quotes:data.quotes.map((r:any)=>({...pick(r,['id','project_id','owner_id','lead_id']),created:created.get(r.id)||null,summary:pick(r.summary||{},['available','currency','amount_minor'])})),
     deals:data.deals.map((r:any)=>pick(r,['id','lead_id','owner_id','customer_name','order_number','deal_date','currency','total_minor','received_minor','outstanding_minor','receipt_currency_mismatch','company','market'])),
@@ -45,5 +45,5 @@ export async function groupSnapshot(db:D1Database,quotes?:D1Database){
  }
  const records=Object.fromEntries(Object.entries(tables).map(([key,table])=>[key,[...table.values()]]));
  const admin=users.find((u:any)=>u.role==='admin');
- return {schemaVersion:1,source:'yifun-crm',generated_at:new Date().toISOString(),admin_viewer_id:admin?.id||null,stage_labels:PROJECT_STAGES,delivery_stages:DELIVERY_STAGES,records,viewers};
+ return {schemaVersion:1,projectionRevision:2,source:'yifun-crm',generated_at:new Date().toISOString(),admin_viewer_id:admin?.id||null,stage_labels:PROJECT_STAGES,delivery_stages:DELIVERY_STAGES,records,viewers};
 }
