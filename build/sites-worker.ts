@@ -1,3 +1,4 @@
+import {groupSnapshot} from '../lib/group-reporting';
 import {runScheduledWorkflow} from '../lib/workflow-scheduler';
 import {WorkerEntrypoint} from 'cloudflare:workers';
 import {syncQuotationChange} from '../lib/workflow-events';
@@ -10,6 +11,14 @@ export class QuoteWorkflow extends WorkerEntrypoint<Cloudflare.Env>{
     if(!this.env.DB||!this.env.QUOTE_DB||this.env.CRM_BACKEND_ORIGIN)throw Error('CRM bindings unavailable');
     return syncQuotationChange(this.env.DB,this.env.QUOTE_DB,quoteId);
   }
+}
+
+export class CRMReporting extends WorkerEntrypoint<Cloudflare.Env>{
+ async fetch(request:Request){
+  if(request.method!=='GET'||new URL(request.url).pathname!=='/snapshot')return new Response(null,{status:404});
+  if(!this.env.DB||this.env.CRM_BACKEND_ORIGIN)return new Response(null,{status:503});
+  return Response.json(await groupSnapshot(this.env.DB,this.env.QUOTE_DB),{headers:{'Cache-Control':'no-store'}});
+ }
 }
 
 export default {

@@ -1,0 +1,18 @@
+import {readFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
+let source=readFileSync('scripts/test-role-workspace.mjs','utf8').replace("'./test-form-intake.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/scripts/test-form-intake.mjs').href));
+source=source.replace("from 'typescript'",'from '+JSON.stringify(import.meta.resolve('typescript')));
+source+=`\nconst {groupSnapshot}=await import(moduleURL('lib/group-reporting.ts'));
+sqlite.prepare("UPDATE crm_users SET trade_scopes=? WHERE id=?").run(JSON.stringify(["domestic","foreign"]),"sales");
+const groupBefore=snapshot();
+sqlite.exec("UPDATE crm_users SET password='NEVER_EXPORT_CREDENTIALS'");
+const projection=await groupSnapshot(db);
+assert.equal(projection.source,'yifun-crm');assert.equal(projection.schemaVersion,1);
+assert.ok(projection.viewers.find(v=>v.id===projection.admin_viewer_id)?.allowed);
+const personalProjection=projection.viewers.find(v=>v.id==='sales');
+assert.ok(personalProjection.allowed);assert.ok(personalProjection.customers.every(id=>projection.records.customers.find(c=>c.id===id)?.owner_id==='sales'));
+const encoded=JSON.stringify(projection);for(const key of ['NEVER_EXPORT_CREDENTIALS','fingerprint','raw_snapshot','access_token'])assert.ok(!encoded.includes(key),key);
+assert.ok(projection.viewers.every(v=>!Object.hasOwn(v,'permissions')));
+assert.equal(snapshot(),groupBefore,'read-only reporting preserves business records');
+console.log('PASS private CRM projection, personal ownership, safe field allowlist and read-only report.');\n`;
+await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
