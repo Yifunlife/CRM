@@ -73,3 +73,15 @@ if(process.env.SALES_HOME_FIXTURE)writeFileSync(process.env.SALES_HOME_FIXTURE,J
 console.log('PASS: personal scoping with broad permissions, read-only snapshots, grouped due/first/new-inquiry queues, paused review, historical performance ownership, cancelled entries, currency separation, handovers, stage projects and calendar boundaries.');
 
 assert.equal(homeCustomer({...base,cohort:"new",assignment_category:"historical"},at).tags.length,0,"historical backfill after cutoff must not generate synthetic first-contact tasks");
+
+add('dual-sleep','sales','已联系待回复','2026-10-01',{'偏好联系方式':'WhatsApp'});
+sqlite.exec("UPDATE crm_leads SET cohort='new',phone='61400000000',email='dual@example.invalid' WHERE id='dual-sleep'");
+for(const [id,method] of [['dual-wa','WhatsApp'],['dual-email','邮件']])sqlite.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,'dual-sleep','sales','线上发送已确认｜actual receipt',?,'','2026-10-01T02:00:00Z')").run(id,method);
+const sleepingHome=await salesHomeEndpoint(db,sales,'sales-home','GET');
+assert.equal(sleepingHome.contact_reminders.find(r=>r.id==='dual-sleep').kind,'dormant');
+assert(!sleepingHome.todos.some(r=>r.id==='dual-sleep'),'dormant contacts do not appear as overdue/scheduling work even with an old manual date');
+sqlite.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('dual-reply','dual-sleep','sales','客户线上回复｜actual reply','系统收信','','2026-10-28T02:00:00Z')").run();
+const repliedHome=await salesHomeEndpoint(db,sales,'sales-home','GET');
+assert(!repliedHome.contact_reminders.some(r=>r.id==='dual-sleep'),'actual reply exits dormancy');
+assert(repliedHome.todos.some(r=>r.id==='dual-sleep'),'normal planned follow-up becomes visible again after actual reply');
+console.log('PASS: sleeping contacts leave today/overdue work; a real reply restores ordinary follow-up.');

@@ -34,8 +34,9 @@ export async function salesHomeEndpoint(db:D1Database,user:any,path:string,metho
  const historicalIds=new Set(assignments.filter(l=>l.assignment_category!=='new').map(l=>l.id));
  const tasks=taskResult.results.map(t=>({...t,mine:t.owner_id===user.id,due:t.due_at?salesDay(t.due_at):'',next_date:t.next_followup?salesDay(t.next_followup):''}));
  const contact_reminders=await contactFollowups(db,user.id,leadResult.results.filter(lead=>!dealMap.has(lead.id)).map(lead=>({...lead,assignment_category:lead.assigned_at?assignmentCategory(lead):categories.get(lead.id)})),at);
+ const dormantIds=new Set(contact_reminders.filter(r=>r.kind==='dormant').map(r=>r.id));
  return {at,today,month,timezone:'Asia/Shanghai',customer_count:rows.length,contact_reminders,
-  todos:rows.filter(r=>r.tags.length&&(!historicalIds.has(r.id)||r.tags.some(t=>['inquiry','today','overdue'].includes(t)))).sort(sortHomeCustomers),historical_review_count:historicalIds.size,
+  todos:rows.filter(r=>!dormantIds.has(r.id)&&r.tags.length&&(!historicalIds.has(r.id)||r.tags.some(t=>['inquiry','today','overdue'].includes(t)))).sort(sortHomeCustomers),historical_review_count:historicalIds.size,
   projects:rows.filter(r=>['replied','design','negotiation'].includes(r.stage)||(r.stage==='unverified'&&r.status==='正在沟通')||r.handover_pending>0).sort((a,b)=>Number(b.handover_pending>0)-Number(a.handover_pending>0)||sortHomeCustomers(a,b)),
   tasks,handovers:handoverResult.results.map(h=>({...h,incoming:h.to_id===user.id})),
   performance:{...performance,contracts,receipts:receipts.results,refunds:refunds.results}

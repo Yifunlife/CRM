@@ -1,5 +1,6 @@
 import {customerLeadSQL} from './contact-kind';
 import {salesHomeEndpoint} from './sales-home-server';
+import {contactFollowups} from './contact-followup-server';
 import {assignmentReminders,teamAssignmentSummary} from './assignment-reminders';
 import {AllocationError} from './allocation-server';
 import {can,authorizedLead,id,now,hasAdminPermissions} from './crm';
@@ -163,8 +164,9 @@ export async function refreshSalesSuite(db:D1Database,source?:D1Database,at=now(
  const projects=await list(db,"SELECT p.*,l.owner_id,l.name AS customer_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND p.next_date<>'' AND p.stage NOT IN ('won','lost')");
  for(const p of projects.filter(p=>p.next_date<=suiteDay(at))){for(const recipient of new Set([p.owner_id,...(p.next_date<suiteDay(at)?leaders.map(u=>u.id):[])])){if(!users.some(u=>u.id===recipient&&u.role!=='followup'))continue;notices.push({key:'project:'+p.project_id+':'+p.next_date+':'+recipient,project_id:p.project_id,lead_id:p.lead_id,task_id:null,recipient,title:(p.stage==='paused'?'项目到期复查：':'项目到期跟进：')+p.name,content:p.customer_name+'｜'+p.next_action+'\n日期：'+p.next_date});}}
  if(scanDormant){
- const dormant=await list(db,`SELECT l.*,${dormantFields} FROM crm_leads l WHERE ${customerLeadSQL()} AND l.owner_id IS NOT NULL`);
- for(const l of dormant){const reason=dormantReason(l,at);if(!reason||!users.some(u=>u.id===l.owner_id&&u.role!=='followup')||tasks.some(t=>t.lead_id===l.id&&t.kind==='revival'))continue;
+ const dormant=await list(db,`SELECT l.*,${dormantFields},(SELECT MAX(p.updated) FROM crm_customer_pool p WHERE p.lead_id=l.id AND p.state='已入CRM' AND (l.last_contact='' OR p.updated>l.last_contact)) AS inquiry_at FROM crm_leads l WHERE ${customerLeadSQL()} AND l.owner_id IS NOT NULL`);
+ const stopped=new Set((await Promise.all([...new Set<string>(dormant.map(l=>l.owner_id))].map(owner=>contactFollowups(db,owner,dormant.filter(l=>l.owner_id===owner),at)))).flat().filter(r=>r.kind==='dormant').map(r=>r.id));
+ for(const l of dormant){const reason=dormantReason(l,at);if(stopped.has(l.id)||!reason||!users.some(u=>u.id===l.owner_id&&u.role!=='followup')||tasks.some(t=>t.lead_id===l.id&&t.kind==='revival'))continue;
   notices.push({key:'dormant:'+l.id+':'+l.owner_id+':'+[l.last_contact,l.note_at,l.assigned_at,l.created].filter(Boolean).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],project_id:null,lead_id:l.id,task_id:null,recipient:l.owner_id,title:'沉睡客户待跟进：'+l.name,content:reason+'。请核查原沟通，记录跟进结果或安排复查日期。'});
  }
  }

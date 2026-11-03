@@ -22,9 +22,12 @@
 .personal-contact-followup small{display:block;margin-top:4px;line-height:1.5}
 .personal-contact-action{display:block;margin:6px 0 3px}
 .personal-contact-followup button{white-space:normal;word-break:keep-all}
-.personal-contact-followup .personal-todo-late small{color:#9f2d27}.personal-contact-followup .personal-todo-soon small{color:#805000}
-.office-app .workspace .personal-contact-followup .personal-todo-late td{background:#fff0ef}.office-app .workspace .personal-contact-followup .personal-todo-soon td{background:#fff6e3}
-.personal-contact-followup .personal-todo-late .badge{background:#ffe0e2;color:#a4262c}.personal-contact-followup .personal-todo-soon .badge{background:#fff6e3;color:#805000}
+.personal-dormant-customers summary{cursor:pointer}.personal-dormant-customers summary small{margin-bottom:4px}
+.office-app .workspace .personal-contact-followup .personal-contact-dormant td{background:#f5f7f9;color:#424242}
+.personal-contact-dormant .badge{background:#e9edf3;color:#424242}
+.personal-contact-followup .personal-todo-soon small{color:#805000}
+.office-app .workspace .personal-contact-followup .personal-todo-soon td{background:#fff6e3}
+.personal-contact-followup .personal-todo-soon .badge{background:#fff6e3;color:#805000}
 @media(max-width:720px){
  .personal-contact-followup table{min-width:0}.personal-contact-followup thead{display:none}.personal-contact-followup tbody{display:block}
  .personal-contact-followup tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:12px 0;border-bottom:1px solid var(--line,#dbe3ee)}

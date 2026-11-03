@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');s=s.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');s=s.replaceAll("'./contact-followup-server'",JSON.stringify(moduleURL('lib/contact-followup-server.ts')));s=s.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),pure=module('lib/sales-suite.ts'),err='data:text/javascript,export class AllocationError extends Error{constructor(message,status=400){super(message);this.status=status;}}';
 const source=module('lib/sales-quote-source.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err});
 const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./sales-home-server'":moduleURL('lib/sales-home-server.ts'),"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
@@ -94,3 +94,10 @@ sqlite.prepare("UPDATE crm_leads SET next_date='2026-11-01' WHERE id='sleep-test
 sqlite.prepare("UPDATE crm_leads SET next_date='',last_contact='2026-10-28T12:00:00Z' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,0);
 sqlite.prepare("UPDATE crm_leads SET last_contact='',owner_id='other' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,1);assert.equal(sleeping()[0].recipient_id,'other');
 console.log('PASS: dormant boundary, follow-up and reassignment suppression, future review, no-demand exclusion, automatic owner reminder, read persistence, deduplication and preserved customer rows.');
+
+// Confirmed dual-channel non-response stops the automatic dormant-revival prompt.
+sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,phone,email,status,cohort) VALUES('stop-contact','Stop contact','Meta','sales','{}','stop-contact','2026-09-01','61400000000','stop@example.invalid','已联系待回复','new')").run();
+for(const [key,method] of [['wa','WhatsApp'],['mail','邮件']])sqlite.prepare("INSERT INTO crm_notes(id,lead_id,user_id,method,content,next_step,created) VALUES(?,'stop-contact','sales',?,'线上发送已确认｜Actual receipt','','2026-09-02T00:00:00Z')").run('stop-'+key,method);
+await refreshSalesSuite(db,undefined,checkAt);
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE lead_id='stop-contact' AND resolved_at='' AND dedupe_key LIKE 'dormant:%'").get().n,0,'no automatic contact/wakeup prompt after confirmed dual-channel dormancy');
+console.log('PASS: confirmed seven-day dual-channel dormant contacts are excluded from automatic revival prompts.');
