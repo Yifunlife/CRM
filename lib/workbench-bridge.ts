@@ -210,7 +210,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
   for(const key of ['project','stage','projectStatus','customerType','nextAction','followStatus','closeDate','amount','lostReason','notes','contact','organization','city','role','currency']){
    const remote=key==='stage'?String(Number(profile.stage)||1):String((profile as any)[key]||''),local=String(client?.[key]??'');values[key]=key==='stage'?Number(remote):remote;
    if(!client)continue;
-   if(base&&typeof base[key]!=='undefined'&&local!==String(base[key])&&remote===String(base[key])){
+   if((base&&typeof base[key]!=='undefined'&&local!==String(base[key])&&remote===String(base[key]))||(!remote&&!!local)){
     try{validateCustomerProfile({[key]:local});}catch{conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'本地档案字段需核对'});continue;}
     const changed:any=await db.prepare("UPDATE crm_leads SET detail=json_set(detail,?,?,'$._profile_revision',COALESCE(json_extract(detail,'$._profile_revision'),0)+1) WHERE id=? AND owner_id=? AND detail=? RETURNING detail").bind('$._customer_profile.'+key,local,lead.id,owner,lead.detail).first();
     if(changed){lead.detail=changed.detail;values[key]=key==='stage'?(Number(local)||1):local;}else conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,reason:'CRM档案刚被修改'});
