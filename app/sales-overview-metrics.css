@@ -25,24 +25,24 @@
 }
 :root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts {
   float: none;
-  display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 :root .office-app .workspace .content .sales-overview .so-market-count {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   justify-content: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0 4px;
-  padding: 3px 6px;
-  border-radius: 4px;
+  padding: 0;
   line-height: 1.5;
+  white-space: nowrap;
 }
-:root .office-app .workspace .content .sales-overview .so-market-count b { margin-left: auto; font-size: 15px; font-weight: 600; }
-:root .office-app .workspace .content .sales-overview .so-market-count[data-market=foreign] { color: #145397; background: #f0f6ff; }
-:root .office-app .workspace .content .sales-overview .so-market-count[data-market=domestic] { color: #17634b; background: #eef9f3; }
-:root .office-app .workspace .content .sales-overview .so-market-counts:has(> :only-child) { grid-template-columns: 1fr; }
+:root .office-app .workspace .content .sales-overview .so-market-count + .so-market-count { border-inline-start: 1px solid var(--metric-line); padding-inline-start: 12px; }
+:root .office-app .workspace .content .sales-overview .so-market-count b { font-size: 14px; font-weight: 600; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=foreign] b { color: #145397; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=domestic] b { color: #17634b; }
 :root .office-app .workspace .content .sales-overview .so-metric .ui-currencies { gap: 2px; font-size: 16px; }
 :root .office-app .workspace .content .sales-overview .so-metric .ui-currencies > span { white-space: normal; overflow-wrap: anywhere; }
 :root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=USD] { color: #145397; }
@@ -51,5 +51,6 @@
 @media (max-width: 720px) {
   :root .office-app .workspace .content .sales-overview .so-metric > strong { font-size: 20px; }
   :root .office-app .workspace .content .sales-overview .so-metric:has(.ui-currencies > [data-currency]) > strong { grid-column: 1 / -1; text-align: left; }
-  :root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts { grid-template-columns: 1fr; gap: 3px; }
+  :root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts { flex-direction: column; gap: 2px; }
+  :root .office-app .workspace .content .sales-overview .so-market-count + .so-market-count { border: 0; padding: 0; }
 }
