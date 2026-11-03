@@ -29,3 +29,18 @@ const list:any=await contractTemplateEndpoint({role:'sales'},'role-workspace/tem
 await assert.rejects(()=>contractTemplateEndpoint({role:'sales'},'role-workspace/templates/generate','POST',{templateId:'template-2',values:{}}),/填写/);
 assert.ok(contractFields('template-1').some(f=>f.key==='layoutDate'));
 console.log('Domestic contracts: generation, escaping, totals, validation, sanitization and access checks passed.');
+const manualTerms='签订后支付30%定金，计人民币37037.04元。\n发货前以转账方式支付70%尾款，计人民币86419.75元。\n双方约定：<核对> & 确认';
+for(const id of ['template-1','template-2','template-3']){
+ const r=generateDomesticContract(id,{...values,paymentTerms:manualTerms}),parts=unzipSync(Buffer.from(r.data,'base64')),xml=strFromU8(parts['word/document.xml']);
+ assert.equal(r.paymentTerms,manualTerms);assert.equal(r.payments.length,0);assert.ok(r.paragraphs.join('\n').includes(manualTerms));assert.ok(xml.includes('30%定金'));assert.ok(xml.includes('&lt;核对&gt; &amp; 确认'));assert.ok(xml.includes('<w:br/>'));
+ assert.ok(!xml.includes('支付50%定金'));assert.ok(!xml.includes('45%的发货款'));assert.ok(!xml.includes('支付100%设计费'));
+ assert.ok(r.paragraphs.some(p=>p.includes('违约')));assert.ok(r.paragraphs.some(p=>p.includes('1001 7189')||p.includes('6217 0011')));
+ for(const invalid of ['', 'x'.repeat(3001),'bad\x01text','{{amount}}'])assert.throws(()=>generateDomesticContract(id,{...values,paymentTerms:invalid}));
+}
+console.log('PASS: all domestic manual payment clauses replace original Word text and preview, preserve other terms/accounts, escape XML and line breaks, and omit obsolete fixed payment splits.');
+for(const id of ['template-1','template-2','template-3'])for(const shares of [['100'],['30','70'],['30','60','10'],['25','25','25','25']]){
+ const stages=['signing','dispatch','arrival','acceptance'],paymentPlan=shares.map((percent,i)=>({milestone:stages[i],percent})),r=generateDomesticContract(id,{...values,paymentPlan}),xml=strFromU8(unzipSync(Buffer.from(r.data,'base64'))['word/document.xml']);
+ assert.equal(r.payments.length,shares.length);assert.equal(r.payments.reduce((sum,p)=>sum+Math.round(Number(p.amount)*100),0),12345679);assert.ok(xml.includes('合同签订后支付合同总金额的'+shares[0]+'%'));assert.ok(r.paragraphs.join('\n').includes(r.paymentTerms));assert.ok(!xml.includes('45%的发货款'));
+ assert.throws(()=>generateDomesticContract(id,{...values,paymentPlan:[{milestone:'signing',percent:'80'}]}),/100%/);
+}
+console.log('PASS: every domestic Word contract uses the selected 1–4 installments and calculated amounts; invalid percentage totals rejected by the generator.');

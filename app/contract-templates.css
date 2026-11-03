@@ -4,3 +4,7 @@
 
 
 .contract-templates .contract-line{padding:14px 0;border-top:1px solid #d8e2ef}.contract-templates .contract-line>button{margin-top:8px}.contract-templates .contract-line label{min-width:0}.contract-templates .contract-line input{display:block;margin-top:4px}
+
+.contract-templates .contract-field-wide{grid-column:1/-1}
+
+.contract-templates .contract-payment-plan{padding-block:8px}.contract-templates .payment-count{max-width:180px}.contract-templates .payment-installments{display:grid;gap:12px;margin-top:12px}.contract-templates .payment-installment{display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,160px) minmax(100px,160px);gap:12px;align-items:end}.contract-templates .payment-installment label{margin:0}.contract-templates .payment-percent{display:flex;align-items:center;gap:8px}.contract-templates .payment-amount{display:flex;flex-direction:column;gap:8px;padding-bottom:8px;min-width:0}.contract-templates .payment-amount output{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.contract-templates .contract-payment-plan>p{margin-bottom:0}@media(max-width:600px){.contract-templates .payment-installment{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px}.contract-templates .payment-installment>label:first-child{grid-column:1/-1}.contract-templates .payment-amount{padding-bottom:8px}.contract-templates .payment-installments{gap:20px}}
