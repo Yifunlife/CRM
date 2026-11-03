@@ -1,5 +1,7 @@
 .customer-service .service-setup,.customer-service .service-detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 .customer-service .service-actions{display:flex;gap:8px;flex-wrap:wrap}
+.customer-service .service-company-cloud .section-heading{flex-wrap:wrap;align-items:flex-start}
+.customer-service .service-company-cloud p{max-width:75ch;overflow-wrap:anywhere}
 .customer-service .service-toggle{display:flex;align-items:center;gap:8px;margin:12px 0}
 .customer-service .service-toggle input{width:auto}
 .customer-service .service-qr{width:240px;max-width:100%;margin-top:16px}

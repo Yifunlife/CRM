@@ -13,6 +13,7 @@ export async function linkedEndpoint(db:D1Database,user:any,actor:any,path:strin
  if(path.startsWith('linked/send-status/')&&method==='GET'){const command:any=await db.prepare('SELECT state FROM crm_linked_commands WHERE id=? AND owner_id=?').bind(user.id+':'+path.slice('linked/send-status/'.length),user.id).first();if(!command)fail('发送记录不存在',404);return {status:command.state};}
  if(!row?.enabled||!online(row))fail('本人扫码连接服务未就绪，请联系管理员启动连接服务',503);
  if(path==='linked/connect'&&method==='POST'){
+  if(user.role==='admin'&&await db.prepare('SELECT owner_id FROM crm_cloud_connections WHERE owner_id=? AND active=1').bind(user.id).first())fail('本账号已启用官方接入，请先停止官方接入再使用扫码连接',409);
   if(row.status==='connected')return {ok:true};
   await db.prepare("UPDATE crm_linked_devices SET desired=CASE WHEN status='awaiting_scan' THEN 'reconnect' ELSE 'connect' END,error='' WHERE owner_id=?").bind(user.id).run();return {ok:true};
  }

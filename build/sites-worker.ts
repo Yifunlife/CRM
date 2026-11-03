@@ -14,7 +14,7 @@ export class QuoteWorkflow extends WorkerEntrypoint<Cloudflare.Env>{
 
 export default {
   async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
-    await runScheduledWorkflow(_event.scheduledTime,env);
+    await runScheduledWorkflow(_event.scheduledTime,env,_event.cron);
   },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     // Keep the original company URL and desktop bridge working after cutover.

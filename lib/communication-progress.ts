@@ -1,8 +1,8 @@
 import {digest} from './crm';
 import {salesState,salesSummary} from './sales-pipeline';
-export async function recordCommunication(db:D1Database,owner:string,leadId:string,event:string,content:string,incoming:boolean,occurred:string){
+export async function recordCommunication(db:D1Database,owner:string,leadId:string,event:string,content:string,incoming:boolean,occurred:string,noteId=''){
  const stamp=Date.parse(occurred);if(!Number.isFinite(stamp)||stamp>Date.now()+300000)throw new Error('沟通发生时间无效');
- const at=new Date(stamp).toISOString(),key='communication-'+await digest(owner+':'+event);
+ const at=new Date(stamp).toISOString(),key=noteId||'communication-'+await digest(owner+':'+event);
  for(let attempt=0;attempt<3;attempt++){
   const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=? AND owner_id=?').bind(leadId,owner).first();if(!lead)return;
   if(await db.prepare('SELECT id FROM crm_notes WHERE id=?').bind(key).first())return;

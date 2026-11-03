@@ -1,9 +1,10 @@
+import {retryCompanyCloudIntake} from './company-cloud-intake';
 import { refreshFollowupNotifications } from './followup-notifications';
 import { syncGoogleForms } from './google-form-sync';
 import { refreshSalesSuite } from './sales-suite-server';
 
 // Business synchronization belongs to successful operations, never this clock.
-export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.Env){
+export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.Env,cron=''){
  if(env.CRM_BACKEND_ORIGIN)return;
  const db=env.DB;if(!db)throw new Error('CRM database binding is missing');
  const runId=crypto.randomUUID();
@@ -11,6 +12,7 @@ export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.E
  const step=async(module:string,operation:string,run:()=>Promise<unknown>)=>{
   const started=Date.now();try{await run();emit(module,operation,'completed',started);}catch(error){emit(module,operation,'failed',started);throw error;}
  };
+ if(cron==='*/5 * * * *'){await step('whatsapp','pending-company-intake',()=>retryCompanyCloudIntake(db));return;}
  const at=new Date(scheduledTime).toISOString(),utc=at.slice(11,16);
  if(utc==='00:00'){
   // Run both independent reminder families even if one fails; retain failure logs.
