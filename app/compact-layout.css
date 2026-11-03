@@ -103,10 +103,6 @@
 :root .office-app .workspace .content .daily-first-contact .section-heading p { flex: 1 1 360px; }
 :root .office-app .workspace .content .daily-first-contact .first-contact-summary { margin: 6px 0; }
 :root .office-app .workspace .content .daily-first-contact td small { display: inline; margin: 0 0 0 6px; }
-:root .office-app .workspace .content .daily-first-contact details > summary { padding: 0; }
-:root .office-app .workspace .content .daily-first-contact ul { margin-top: 4px; }
-:root .office-app .workspace .content .daily-first-contact li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding-block: 4px; }
-:root .office-app .workspace .content .daily-first-contact li > span { margin: 0; }
 
 @media (max-width: 720px) {
   :root .office-app .workspace .content { padding: 10px; }
@@ -117,7 +113,6 @@
   :root .office-app .workspace .content .customer-original-inquiry > dl { grid-template-columns: 1fr; }
   :root .office-app .workspace .content .daily-first-contact tr { padding-block: 8px; gap: 4px 12px; }
   :root .office-app .workspace .content .daily-first-contact td { padding: 0; }
-  :root .office-app .workspace .content .daily-first-contact details > summary { padding-block: 10px; }
 }
 @media (max-width: 720px), (pointer: coarse) {
   :root .office-app .workspace .content :is(button,button.text,input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,summary) { min-height: 44px; }
