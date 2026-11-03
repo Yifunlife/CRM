@@ -45,3 +45,62 @@
 .confirmed-allocation .op-adjust-fields :is(select,textarea){width:100%;font-size:13px;margin-top:5px}
 .confirmed-allocation .op-adjust-error{color:#a42020;margin-top:10px}
 @media(max-width:600px){.confirmed-allocation .op-adjust-fields{grid-template-columns:1fr}}
+
+/* Keep status and actions on one line so they do not stretch every staff row. */
+:root .office-app .workspace .confirmed-allocation .op-distribution-table{min-width:920px}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td){padding:6px 8px;line-height:1.35}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):first-child{width:13%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(2){width:14%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(n+3):nth-child(-n+5){width:5%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(6){width:25%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(7){width:12%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(8){width:21%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table button[data-adjust-person]{margin:0;min-height:28px;padding:3px 6px;line-height:1.3}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table small{margin-top:2px;line-height:1.35}
+@media(pointer:coarse){:root .office-app .workspace .confirmed-allocation .op-distribution-table button[data-adjust-person]{min-height:44px}}
+
+:root .office-app .workspace .confirmed-allocation .op-distribution-table .op-state-select{width:86px;height:28px;min-height:28px;margin:0;padding:2px 6px;font-size:12px;font-weight:500;border-color:var(--line);border-radius:4px}
+@media(pointer:coarse){:root .office-app .workspace .confirmed-allocation .op-distribution-table .op-state-select{height:44px;min-height:44px}}
+
+/* Keep supporting information readable instead of fading it into grey. */
+:root .office-app .workspace .confirmed-allocation{--muted:#314c70}
+:root .office-app .workspace .confirmed-allocation :is(small,.small,.muted){color:#314c70;font-weight:500}
+:root .office-app .workspace .confirmed-allocation .op-status-grey{background:#eaf1fb;color:#264b82}
+
+/* Group staff identity, counts, receipts and assessment into clear reading columns. */
+:root .office-app .workspace .confirmed-allocation .op-board-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+:root .office-app .workspace .confirmed-allocation .op-board-toolbar h2{margin:0 0 6px}
+:root .office-app .workspace .confirmed-allocation .op-board-toolbar p{margin:0;color:#314c70;font-size:13px}
+:root .office-app .workspace .confirmed-allocation .op-board-toolbar strong{color:#17365b}
+:root .office-app .workspace .confirmed-allocation .op-board-controls{display:flex;align-items:center;gap:16px}
+:root .office-app .workspace .confirmed-allocation .op-board-controls label{display:flex;align-items:center;gap:8px;white-space:nowrap;margin:0;font-size:12px}
+:root .office-app .workspace .confirmed-allocation .op-board-controls select{width:172px;margin:0}
+:root .office-app .workspace .confirmed-allocation .op-policy-state{font-size:12px;font-weight:600;color:#264b82;white-space:nowrap}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td){padding:8px;vertical-align:middle;font-size:13px}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):first-child{width:17%}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(2){width:11%}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(n+3):nth-child(-n+5){width:6%;text-align:right}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(6){width:23%}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(7){width:19%}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(8){width:12%;text-align:right}
+:root .office-app .workspace .confirmed-allocation .op-board-table thead th{background:#eaf1fb;color:#17365b;font-size:12px;border-bottom:1px solid #c8d7e8}
+:root .office-app .workspace .confirmed-allocation .op-board-table thead th>span{display:block;font-size:11px;font-weight:500;margin-top:2px}
+:root .office-app .workspace .confirmed-allocation .op-board-table :is(th,td):nth-child(5){padding-right:20px}
+:root .office-app .workspace .confirmed-allocation .op-board-table tbody tr:hover{background:#f5f8fc}
+:root .office-app .workspace .confirmed-allocation .op-board-table .op-person-name{font-weight:600}
+:root .office-app .workspace .confirmed-allocation .op-board-cash{display:grid;gap:2px;width:max-content;max-width:100%}
+:root .office-app .workspace .confirmed-allocation .op-board-cash>div{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;align-items:baseline}
+:root .office-app .workspace .confirmed-allocation .op-board-cash span{font-size:11px;color:#314c70}
+:root .office-app .workspace .confirmed-allocation .op-board-cash strong{font-size:13px;font-weight:500;text-align:right;white-space:nowrap}
+:root .office-app .workspace .confirmed-allocation .op-unregistered{color:#314c70;font-size:12px}
+:root .office-app .workspace .confirmed-allocation .op-assessment-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+:root .office-app .workspace .confirmed-allocation .op-board-table button[data-adjust-person]{font-size:12px;padding:4px 8px;background:#fff;border:1px solid #c8d7e8}
+:root .office-app .workspace .confirmed-allocation .op-board-table tfoot{background:#f3f7fc;font-weight:600}
+:root .office-app .workspace .confirmed-allocation .op-board-table tfoot :is(th,td){border-top:1px solid #c8d7e8}
+:root .office-app .workspace .confirmed-allocation .op-board-notes{margin-top:12px;color:#314c70;font-size:12px}
+:root .office-app .workspace .confirmed-allocation .op-board-notes p{margin:4px 0}
+:root .office-app .workspace .confirmed-allocation .op-execution summary{display:list-item;align-items:center;justify-content:space-between;gap:16px;font-size:13px;font-weight:600;color:#17365b}
+:root .office-app .workspace .confirmed-allocation .op-execution summary span{font-size:12px;font-weight:500;color:#314c70}
+:root .office-app .workspace .confirmed-allocation .op-execution summary span{float:right}
+@media(max-width:1050px){:root .office-app .workspace .confirmed-allocation .op-board-toolbar{align-items:flex-start;flex-direction:column;gap:12px}}
+@media(max-width:600px){:root .office-app .workspace .confirmed-allocation .op-board-controls{align-items:flex-start;flex-direction:column;gap:8px}:root .office-app .workspace .confirmed-allocation .op-execution summary{flex-wrap:wrap;gap:8px}}

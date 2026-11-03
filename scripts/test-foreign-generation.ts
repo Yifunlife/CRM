@@ -20,3 +20,27 @@ assert.throws(()=>generateForeignContract('template-10',{...values,items:[]}),/�
 for(const id of ['template-8','template-10','template-12','template-14','template-15']){for(const count of [1,2,30]){const r=generateForeignContract(id,{...values,received:'0',items:Array.from({length:count},(_,i)=>({description:'Item '+(i+1),quantity:'0.1',unitPrice:'0.05'}))});assert.equal(r.amount,(count/100).toFixed(2));writeFileSync(out+'/'+id+'-'+count+'-rows.xlsx',Buffer.from(r.data,'base64'));}}
 const list:any=await contractTemplateEndpoint({role:'sales'},'role-workspace/templates','GET');assert.equal(list.items.length,12);assert.ok(list.items.every((t:any)=>t.fields?.length));assert.equal(list.items.filter((t:any)=>t.market==='外贸'&&t.hasItems).length,5);assert.equal(list.items.filter((t:any)=>t.market==='外贸'&&t.format==='docx').length,4);assert.ok(list.items.every((t:any)=>!t.data));await assert.rejects(()=>contractTemplateEndpoint({role:'followup'},'role-workspace/templates/generate','POST',{templateId:'template-4',values}),/权限/);
 console.log('PASS: all 9 company templates generate; four DOCX slots/English amounts/payment splits; five XLSX dynamic 1/2/3/30 rows, precise cent rounding and formulas; artwork intact; validation and access; domestic metadata retained.');
+const manualTerms='30% by bank transfer within 5 business days.\n70% before dispatch. Confirm <schedule> & amounts.';
+for(const id of ids){
+ const r=generateForeignContract(id,{...values,paymentTerms:manualTerms}),parts=unzipSync(Buffer.from(r.data,'base64'));
+ assert.equal(r.paymentTerms,manualTerms);assert.ok(r.paragraphs.join('\n').includes(manualTerms));
+ if(r.format==='docx'){
+  const xml=strFromU8(parts['word/document.xml']);assert.ok(xml.includes('30% by bank transfer'));assert.ok(xml.includes('&lt;schedule&gt; &amp; amounts.'));assert.ok(xml.includes('<w:br/>'));
+  assert.ok(!xml.includes('pay a 50% deposit'));assert.ok(!xml.includes('pay the remaining 50% balance'));assert.ok(!xml.includes('pay 100% of the total design fee'));
+  assert.ok(r.payments.every(p=>!p.label.includes('50%')&&!p.label.includes('100%')));
+ }else{
+  const sheet=strFromU8(parts['xl/worksheets/sheet1.xml']),refs=['template-10','template-15'].includes(id)?['B19']:id==='template-8'?['B13','A20']:id==='template-14'?['B15','B23']:['B15','B22'];
+  for(const ref of refs){const cell=sheet.match(new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*>[\\s\\S]*?<\\/c>'))?.[0];assert.ok(cell?.includes('30% by bank transfer'),id+' '+ref+' uses manual terms');}
+  assert.ok(sheet.includes('wrapText')||strFromU8(parts['xl/styles.xml']).includes('wrapText="1"'));assert.ok(sheet.includes('customHeight="1"'));
+ }
+ for(const invalid of ['', 'x'.repeat(3001),'bad\x01text','{{amount}}'])assert.throws(()=>generateForeignContract(id,{...values,paymentTerms:invalid}));
+}
+console.log('PASS: manual payment clauses replace defaults in all 4 foreign Word contracts and all 5 Excel forms, including duplicate cells and shifted rows; summary, multiline XML and validation remain consistent.');
+for(const id of ids)for(const shares of [['100'],['30','70'],['30','60','10'],['25','25','25','25']]){
+ const stages=['signing','dispatch','arrival','acceptance'],paymentPlan=shares.map((percent,i)=>({milestone:stages[i],percent})),r=generateForeignContract(id,{...values,paymentPlan}),parts=unzipSync(Buffer.from(r.data,'base64'));
+ assert.equal(r.payments.filter(p=>p.label.startsWith('第')).length,shares.length);assert.equal(r.payments.filter(p=>p.label.startsWith('第')).reduce((sum,p)=>sum+Math.round(Number(p.amount)*100),0),Math.round(Number(r.amount)*100));
+ assert.ok(r.paragraphs.join('\n').includes('After signing this Contract, Party A shall pay '+shares[0]+'%'));
+ const xml=strFromU8(parts[r.format==='docx'?'word/document.xml':'xl/worksheets/sheet1.xml']);assert.ok(xml.includes('After signing this Contract, Party A shall pay '+shares[0]+'%'));assert.ok(!xml.includes('pay a 50% deposit'));assert.ok(!xml.includes('pay the remaining 50% balance'));
+ assert.throws(()=>generateForeignContract(id,{...values,paymentPlan:[{milestone:'signing',percent:'80'}]}),/100%/);
+}
+console.log('PASS: all foreign Word/Excel outputs match the selected installment count, translated milestones, percentages and amounts, with separate installation fees preserved.');

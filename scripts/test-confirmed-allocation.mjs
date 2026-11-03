@@ -5,6 +5,7 @@ import {moduleURL,database} from './test-form-intake.mjs';
 const {performanceTier,adjustedShares}=await import(moduleURL('lib/allocation-performance.ts'));
 const {allocationPerformanceEndpoint:endpoint}=await import(moduleURL('lib/allocation-performance-server.ts'));
 const {confirmedAllocationImport:importForm}=await import(moduleURL('lib/allocation-confirmed-import.ts'));
+const {allocationManagementEndpoint}=await import(moduleURL('lib/allocation-management.ts'));
 const {distribute}=await import(moduleURL('lib/allocation-server.ts'));
 const {monthNow,nextMonth}=await import(moduleURL('lib/allocation.ts'));
 const month=monthNow(),previous=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1)).toISOString().slice(0,7);
@@ -31,6 +32,22 @@ await assert.rejects(call('adjustment','POST',{month,user_id:'foreign',mode:'man
 await call('adjustment','POST',{month,user_id:'foreign',mode:'auto',assessment:'pending',tier:'0',reason:'',version:1});assert.equal((await call('staff')).rows.find(p=>p.id==='foreign').performance.manual,false);
 await assert.rejects(call('policy','POST',{mode:'performance',version:'stale'}),e=>e.status===409);
 report=await call('staff');await call('policy','POST',{mode:'performance',version:report.configVersion});assert.equal(JSON.parse(sql.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").get().payload).performance.started,month);
+// Inline status changes only modify the selected roster member and retain allocation settings.
+const savedPayload=()=>sql.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").get().payload;
+const stateCall=(body,u=manager,actor=u)=>endpoint(db,u,actor,'allocation/management/state','POST',body,new URL('https://test/'));
+const basePayload=savedPayload(),stateBody={user_id:'foreign',state:'请假',version:basePayload},stateAudit=count('crm_workflow_audit');
+for(const u of [ops,sales,{id:'other',role:'management'}])await assert.rejects(stateCall(stateBody,u),e=>e.status===403);
+await assert.rejects(stateCall(stateBody,manager,{id:'other',role:'management'}),e=>e.status===403);
+await assert.rejects(stateCall({...stateBody,state:'停用'}),e=>e.status===400);
+await assert.rejects(stateCall({...stateBody,version:'stale'}),e=>e.status===409);
+await assert.rejects(stateCall({...stateBody,user_id:manager.id}),e=>e.status===400);
+sql.prepare("UPDATE crm_users SET active=0 WHERE id='foreign'").run();await assert.rejects(stateCall(stateBody),e=>e.status===400);sql.prepare("UPDATE crm_users SET active=1 WHERE id='foreign'").run();
+assert.equal(savedPayload(),basePayload);assert.equal(count('crm_workflow_audit'),stateAudit);
+for(const state of ['请假','暂停','参与']){const before=JSON.parse(savedPayload()),audit=count('crm_workflow_audit');await stateCall({user_id:'foreign',state,version:savedPayload()});const after=JSON.parse(savedPayload());assert.deepEqual(after,{...before,members:before.members.map(m=>m.user_id==='foreign'?{...m,state}:m)});assert.equal(count('crm_workflow_audit'),audit+1);assert.equal((await call('staff')).rows.find(p=>p.id==='foreign').state,state);}
+const statusRecords=await allocationManagementEndpoint(db,manager,manager,'allocation/management/records','GET',{},new URL('https://test/'));assert.equal(statusRecords.rows.filter(r=>r.kind==='修改接收状态').length,3);assert(statusRecords.rows.some(r=>r.detail==='暂停 → 参与'));
+const auditAfter=count('crm_workflow_audit');await stateCall({user_id:'foreign',state:'参与',version:savedPayload()});assert.equal(count('crm_workflow_audit'),auditAfter,'same state has no duplicate audit');
+const raced={...db,batch:async stmts=>{const c=JSON.parse(savedPayload());c.rule.automatic=false;sql.prepare("UPDATE crm_allocation_configs SET payload=? WHERE scope='all'").run(JSON.stringify(c));return db.batch(stmts);}};
+await assert.rejects(endpoint(raced,manager,manager,'allocation/management/state','POST',{user_id:'foreign',state:'暂停',version:savedPayload()},new URL('https://test/')),e=>e.status===409);assert.equal(count('crm_workflow_audit'),auditAfter);assert.equal(JSON.parse(savedPayload()).members.find(m=>m.user_id==='foreign').state,'参与');sql.prepare("UPDATE crm_allocation_configs SET payload=? WHERE scope='all'").run(basePayload);
 const form={confirmed_flow:true,allocation_management:true,allocate:false,confirm_allocate:true,form_source:'whatsapp',filename:'test.csv',rows:[{'客户名称':'US customer','邮箱':'one@example.invalid','客资市场':'外贸','所在国家/地区':'US'},{'客户名称':'CN customer','邮箱':'two@example.invalid','客资市场':'内贸','所在国家/地区':'CN'},{'客户名称':'same customer','邮箱':'ONE@example.invalid','客资市场':'外贸'},{'客户名称':'scope unknown','邮箱':'scope@example.invalid'},{'客户名称':'missing contact'}]};
 const n=count('crm_leads');const preview=await importForm(db,ops,ops,{...form,preview:true});assert.equal(count('crm_leads'),n);assert.equal(preview.inserted,2);assert.equal(preview.skipped,1);assert.equal(preview.reviewed,2);
 await assert.rejects(importForm(db,sales,sales,form),e=>e.status===403);
@@ -47,4 +64,4 @@ assert.equal(await distribute(db,weighted,'all',manager.id),40);
 const counts=sql.prepare("SELECT owner_id,COUNT(*) n FROM crm_leads WHERE id LIKE 'weighted-%' GROUP BY owner_id").all();assert(counts.find(r=>r.owner_id===manager.id).n>counts.find(r=>r.owner_id==='foreign').n*3,'actual assignment SQL redistributes reduced leads to the normal recipient');
 const historical=await importForm(db,ops,ops,{...form,rows:[{'客户名称':'Old source','邮箱':'old@example.invalid','客资市场':'外贸','录入日期':'2026-10-01'}]});assert.equal(historical.autoAssigned,0);assert.equal(sql.prepare("SELECT entered FROM crm_leads WHERE email='old@example.invalid'").get().entered,'2026-10-01');assert.equal(sql.prepare("SELECT cohort FROM crm_leads WHERE email='old@example.invalid'").get().cohort,'historical');
 assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
-console.log('PASS: receipt thresholds and missing data; 20/50/80/review and one-tier recovery; redistribution; scoped recipient selection; manual overrides/restore/conflicts; zero-write previews; operations WhatsApp intake; dedup/replay; existing ownership retained; no foreign-key errors.');
+console.log('PASS: inline roster status saves, role/actor guards, inactive/non-member rejection, stale/racing update protection, unchanged other settings and status audit records; receipt thresholds and missing data; 20/50/80/review and one-tier recovery; redistribution; scoped recipient selection; manual overrides/restore/conflicts; zero-write previews; operations WhatsApp intake; dedup/replay; existing ownership retained; no foreign-key errors.');

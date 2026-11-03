@@ -1,0 +1,56 @@
+/* Keep each total beside its title, with a separate, consistent market breakdown. */
+:root .office-app .workspace .content .sales-overview .so-metric {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-content: start;
+  align-items: baseline;
+  gap: 6px 10px;
+  min-height: 0;
+  padding: 8px 10px;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > span { min-width: 0; line-height: 1.5; }
+:root .office-app .workspace .content .sales-overview .so-metric > strong {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.35;
+  text-align: right;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > small {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  line-height: 1.5;
+}
+:root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts {
+  float: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+:root .office-app .workspace .content .sales-overview .so-market-count {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0 4px;
+  padding: 0;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+:root .office-app .workspace .content .sales-overview .so-market-count + .so-market-count { border-inline-start: 1px solid var(--metric-line); padding-inline-start: 12px; }
+:root .office-app .workspace .content .sales-overview .so-market-count b { font-size: 14px; font-weight: 600; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=foreign] b { color: #145397; }
+:root .office-app .workspace .content .sales-overview .so-market-count[data-market=domestic] b { color: #17634b; }
+:root .office-app .workspace .content .sales-overview .so-metric .ui-currencies { gap: 2px; font-size: 16px; }
+:root .office-app .workspace .content .sales-overview .so-metric .ui-currencies > span { white-space: normal; overflow-wrap: anywhere; }
+:root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=USD] { color: #145397; }
+:root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=CNY] { color: #17634b; }
+:root .office-app .workspace .content .sales-overview .so-metric .so-empty-amount { font-size: 14px; font-weight: 500; }
+@media (max-width: 720px) {
+  :root .office-app .workspace .content .sales-overview .so-metric > strong { font-size: 20px; }
+  :root .office-app .workspace .content .sales-overview .so-metric:has(.ui-currencies > [data-currency]) > strong { grid-column: 1 / -1; text-align: left; }
+  :root .office-app .workspace .content .sales-overview .so-metric > small > .so-market-counts { flex-direction: column; gap: 2px; }
+  :root .office-app .workspace .content .sales-overview .so-market-count + .so-market-count { border: 0; padding: 0; }
+}
