@@ -7,4 +7,18 @@
 
 .contract-templates .contract-field-wide{grid-column:1/-1}
 
+.office-app .workspace .contract-templates > .page-heading {
+  padding: 8px 16px;
+  margin-bottom: 8px;
+}
+.office-app .workspace .contract-templates > details.panel:not([open]) {
+  padding: 4px 16px;
+  margin-bottom: 8px;
+}
+.office-app .workspace .contract-templates > details.panel:not([open]) > summary {
+  padding: 6px 0;
+  margin: 0;
+  line-height: 24px;
+}
+
 .contract-templates .contract-payment-plan{padding-block:8px}.contract-templates .payment-count{max-width:180px}.contract-templates .payment-installments{display:grid;gap:12px;margin-top:12px}.contract-templates .payment-installment{display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,160px) minmax(100px,160px);gap:12px;align-items:end}.contract-templates .payment-installment label{margin:0}.contract-templates .payment-percent{display:flex;align-items:center;gap:8px}.contract-templates .payment-amount{display:flex;flex-direction:column;gap:8px;padding-bottom:8px;min-width:0}.contract-templates .payment-amount output{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.contract-templates .contract-payment-plan>p{margin-bottom:0}@media(max-width:600px){.contract-templates .payment-installment{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px}.contract-templates .payment-installment>label:first-child{grid-column:1/-1}.contract-templates .payment-amount{padding-bottom:8px}.contract-templates .payment-installments{gap:20px}}
