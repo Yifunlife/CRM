@@ -126,7 +126,9 @@ async function recordOnlineContact(db:D1Database,owner:string,desktop:string,eve
  const noteId='online-'+await digest(owner+':'+lead.id+':'+event),at=new Date(timestamp).toISOString();
  const existing=await db.prepare('SELECT id FROM crm_notes WHERE id=?').bind(noteId).first();if(existing)return;
  const method=incoming?'系统收信':channel==='email'?'邮件':'WhatsApp';
- await db.batch([db.prepare('INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)').bind(noteId,lead.id,owner,(incoming?'客户线上回复':'线上发送已确认')+'｜'+clean(text,12000)+'\n沟通凭据：'+event,method,'',at),db.prepare("UPDATE crm_leads SET status=CASE WHEN status IN ('待首次联系','已联系待回复','正在沟通') THEN ? ELSE status END,last_contact=CASE WHEN last_contact>? THEN last_contact ELSE ? END WHERE id=? AND owner_id=?").bind(incoming?'正在沟通':lead.status==='正在沟通'?'正在沟通':'已联系待回复',at,at,lead.id,owner)]);
+ const statements=[db.prepare('INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)').bind(noteId,lead.id,owner,(incoming?'客户线上回复':'线上发送已确认')+'｜'+clean(text,12000)+'\n沟通凭据：'+event,method,'',at),db.prepare("UPDATE crm_leads SET status=CASE WHEN status IN ('待首次联系','已联系待回复','正在沟通') THEN ? ELSE status END,last_contact=CASE WHEN last_contact>? THEN last_contact ELSE ? END WHERE id=? AND owner_id=?").bind(incoming?'正在沟通':lead.status==='正在沟通'?'正在沟通':'已联系待回复',at,at,lead.id,owner)];
+ if(!incoming)statements.push(db.prepare("INSERT OR IGNORE INTO crm_lead_notifications(id,dedupe_key,lead_id,recipient_id,title,content,created) SELECT ?,?,id,owner_id,?,?,? FROM crm_leads WHERE id=? AND owner_id=?").bind(noteId,'workbench-sent:'+noteId,'已发送信息 · '+lead.name,'工作台已通过'+method+'发送信息。',at,lead.id,owner));
+ await db.batch(statements);
 }
 
 const fields={name:'name',country:'country',whatsapp:'phone',email:'email',grade:'grade',nextContact:'next_date',source:'source'} as const;

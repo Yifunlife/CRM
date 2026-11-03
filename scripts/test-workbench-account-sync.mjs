@@ -56,17 +56,53 @@ sqlite.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,
 await bridgeDeviceEndpoint(db,req,{heartbeat:true,status:{whatsapp:true,email:true,autoFirstContact:true}});
 await run({clients:[{id:'automatic-desktop',name:'Automatic new',whatsapp:'16145550009',messages:[]}],bindings:[],scenes:[]});
 const automatic=sqlite.prepare("SELECT * FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_first_contact')=1").get();assert.equal(automatic.state,'queued');
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,0,'queued automatic contact is not a sent notice');
 sqlite.prepare('UPDATE crm_workbench_commands SET created=? WHERE id=?').run(Date.now()-120000,automatic.id);
 const firstClaim=await bridgeDeviceEndpoint(db,req,{});assert.equal(firstClaim.command.id,automatic.id,'automatic work persists while the desktop is disconnected');
 assert.equal((await bridgeDeviceEndpoint(db,req,{})).command,null,'a claimed send is never replayed');
 await bridgeDeviceEndpoint(db,req,{result:{id:automatic.id,state:'done',value:{status:'sent',messageId:'verified-first-message',text:'Approved one'}}});
 assert.equal(sqlite.prepare("SELECT status FROM crm_leads WHERE id='automatic-new'").get().status,'已联系待回复');
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='automatic-new'").get().n,1);
+const sentNotice=sqlite.prepare("SELECT * FROM crm_lead_notifications WHERE lead_id='automatic-new'").get();
+assert.equal(sentNotice.title,'已发送信息 · Automatic new');assert.equal(sentNotice.content,'工作台已通过WhatsApp发送信息。');assert.equal(sentNotice.recipient_id,'mark');assert.equal(sentNotice.read_at,'');assert.equal(sentNotice.created,sqlite.prepare("SELECT last_contact FROM crm_leads WHERE id='automatic-new'").get().last_contact);
 await bridgeDeviceEndpoint(db,req,{result:{id:automatic.id,state:'done',value:{status:'sent',messageId:'verified-first-message',text:'Approved one'}}});
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='automatic-new'").get().n,1);
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,1,'replayed success creates one notification');
 await run({clients:[{id:'automatic-desktop',name:'Automatic new',whatsapp:'16145550009',messages:[]}],bindings:[],scenes:[]});
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_first_contact')=1").get().n,1);
 console.log('PASS: background sync queues automatic first contact, offline persistence, single claim, confirmed receipt updates contact state once, no repeat on subsequent sync');
+
+// Notifications follow confirmed outgoing contact, with the same inbox permissions and read controls.
+const {notificationEndpoint}=await import(moduleURL('lib/followup-notifications.ts'));
+for(const [suffix,state,value,expected] of [
+ ['failed','failed',{error:'not sent'},1],
+ ['uncertain','uncertain',{status:'uncertain'},1],
+ ['skipped','done',{status:'skipped'},1],
+ ['missing-receipt','done',{status:'sent'},1],
+ ['email','done',{status:'confirmed_sent',messageId:'verified-email',text:'Approved email'},2],
+]){
+ const jobId='notice-'+suffix,payload={...JSON.parse(automatic.payload),channel:'email'};
+ sqlite.prepare("INSERT INTO crm_workbench_commands(id,owner_id,desktop_id,kind,payload,state,created,updated,actor_id) VALUES(?,'mark','automatic-desktop','send',?,'running',?,?,'mark')").run(jobId,JSON.stringify(payload),Date.now(),Date.now());
+ await bridgeDeviceEndpoint(db,req,{result:{id:jobId,state,value}});
+ assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,expected,suffix+' notification count');
+}
+assert.equal(sqlite.prepare("SELECT content FROM crm_lead_notifications WHERE content LIKE '%邮件%'").get().content,'工作台已通过邮件发送信息。');
+const markUser={id:'mark',role:'ceo'},otherUser={id:'other',role:'sales'};
+let inbox=await notificationEndpoint(db,markUser,markUser,'followup-notifications','GET',{});assert.equal(inbox.notifications.length,2);
+assert.equal((await notificationEndpoint(db,otherUser,otherUser,'followup-notifications','GET',{})).notifications.length,0);
+await assert.rejects(notificationEndpoint(db,otherUser,otherUser,'followup-notifications/read','POST',{id:sentNotice.id}),e=>e.status===404);
+await notificationEndpoint(db,markUser,markUser,'followup-notifications/read','POST',{id:sentNotice.id});
+assert.ok(sqlite.prepare('SELECT read_at FROM crm_lead_notifications WHERE id=?').get(sentNotice.id).read_at);
+assert.equal((await notificationEndpoint(db,markUser,markUser,'followup-notifications/read-all','POST',{})).updated,1);
+console.log('PASS: WhatsApp/email sent notices, duplicate/failed/uncertain/skipped/missing-receipt suppression, recipient isolation and read controls');
+const receipt={requestId:'desktop-auto-receipt',clientId:'automatic-desktop',channel:'whatsapp',recipient:'16145550009',status:'sent',confirmation:'Verified desktop send',confirmedAt:new Date(Date.now()-1000).toISOString()};
+for(let i=0;i<2;i++)await bridgeDeviceEndpoint(db,req,{contact_receipts:[receipt]});
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,3,'desktop receipts also produce one sent notice');
+assert.equal(sqlite.prepare('SELECT created FROM crm_lead_notifications WHERE created=?').get(receipt.confirmedAt).created,receipt.confirmedAt);
+sqlite.prepare("UPDATE crm_leads SET owner_id='other' WHERE id='automatic-new'").run();
+await assert.rejects(bridgeDeviceEndpoint(db,req,{contact_receipts:[{...receipt,requestId:'after-transfer'}]}),e=>e.status===403);
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,3,'a transferred lead cannot create a previous-owner notice');
+console.log('PASS: desktop receipt notification, confirmed timestamp, replay suppression and transfer revocation');
 
 // An already queued job must be rejected at dispatch even if classification bypassed the save API.
 sqlite.prepare("INSERT INTO crm_leads(id,name,phone,owner_id,source,detail,fingerprint,created,status) VALUES('revoked-colleague','Colleague','16145550010','mark','Meta','{\"偏好联系方式\":\"by_whats_app\"}','revoked-colleague',?,'待首次联系')").run(assignedAt);
