@@ -7,6 +7,8 @@
 
 .customer-dossier .dossier-edit-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .customer-dossier .dossier-editing-state{font-size:13px;color:var(--muted);white-space:nowrap}
+.customer-dossier .dossier-profile-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.customer-dossier .dossier-profile-heading .dossier-edit,.customer-dossier .dossier-profile-heading .dossier-edit-actions{margin-bottom:0;margin-inline-start:auto}
 .office-app .workspace .customer-dossier .dossier-edit{min-height:36px;padding:7px 14px;font-weight:600}
 .customer-dossier .dossier-edit:focus-visible,.customer-dossier .dossier-edit-actions button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 @media(max-width:760px){.customer-dossier .dossier-edit-actions{width:100%;justify-content:flex-end;margin-bottom:8px}.customer-dossier .dossier-editing-state{flex:1 1 100%}.office-app .workspace .customer-dossier .dossier-edit,.customer-dossier .dossier-edit-actions button{min-height:44px}}

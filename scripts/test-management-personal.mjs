@@ -38,6 +38,14 @@ try{
  await request('manager','grade',{view:'personal',body:{id:'manager-lead',grade:'A'}});
  assert.equal((await request('manager','leads/manager-lead')).data.grade,'A','company view reads the same updated customer');
  assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_leads').get().n,3,'no duplicate customer is created');
+ const owned=(await request('manager','leads/manager-lead')).data;
+ const profileBody={id:owned.id,revision:owned.detail._profile_revision||0,base:Object.fromEntries(['name','country','phone','email','grade','next_date'].map(key=>[key,owned[key]])),country:owned.country,method:'WhatsApp',source_note:'',contacts:[],profile:{city:'Sydney'}};
+ await request('manager','role-workspace/customer',{body:profileBody});
+ assert.equal((await request('manager','leads/manager-lead')).data.detail._customer_profile.city,'Sydney','company-view own-customer save persists');
+ const audit=sql.prepare("SELECT created_by,payload FROM crm_workflow_audit WHERE kind='更新客户档案' AND entity_id='manager-lead'").get();assert.equal(audit.created_by,'manager');assert.equal(JSON.parse(audit.payload).after.profile.city,'Sydney');
+ await request('manager','role-workspace/customer',{body:profileBody,status:409});
+ await request('manager','role-workspace/customer',{body:{...profileBody,id:'other-lead'},status:403});
+ assert.equal(sql.prepare("SELECT detail FROM crm_leads WHERE id='other-lead'").get().detail,'{}','other customers remain unchanged');
  await request('manager','grade',{view:'personal',body:{id:'other-lead',grade:'A'},status:404});
  const preview=(await request('admin','role-preview',{body:{target_id:'manager'}})).response.headers.get('set-cookie').split(';')[0];
  assert.equal((await request('admin','me',{cookie:preview,view:'personal'})).data.id,'manager');

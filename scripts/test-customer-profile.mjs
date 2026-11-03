@@ -36,3 +36,20 @@ console.log('PASS customer dossier: real fields, snapshot fallbacks, partial sav
 
 assert.equal(customerContractNumber({id:'internal-id',detail:{_customer_code:'AU20261102',_workbench:{desktop_id:'AU20261102'}}}), '');
 assert.equal(customerContractNumber({deals:[{order_number:'YF-001',cancelled:0},{order_number:'VOID',cancelled:1},{order_number:'YF-002',cancelled:0},{order_number:'YF-001',cancelled:0}]}),'YF-001、YF-002');
+
+// Company-view management keeps the same own-customer editing available in personal view.
+const ownManager={...management,permissions:{customers_all:true,customers_edit:false}};
+sql.prepare("UPDATE crm_leads SET owner_id='manager' WHERE id='lead'").run();
+const originalDetail=JSON.parse(row().detail),auditCount=sql.prepare('SELECT COUNT(*) n FROM crm_workflow_audit').get().n;
+await post({...payload(),name:'管理者维护的客户',profile:{city:'Sydney'}},ownManager);
+assert.equal(row().name,'管理者维护的客户');assert.equal(customerProfile(row()).city,'Sydney');
+assert.equal(row().owner_id,'manager');assert.equal(row().source,'Meta');assert.equal(notes(),notesBefore);
+assert.deepEqual(JSON.parse(row().detail)._workbench,originalDetail._workbench);
+assert.deepEqual(JSON.parse(row().detail)._sales_progress,originalDetail._sales_progress);
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_workflow_audit').get().n,auditCount+1);
+const saved=row();
+await assert.rejects(()=>post(payload(),{...ownManager,id:'other-manager'}),e=>e.status===403);
+await assert.rejects(()=>post(payload(),{id:'manager',role:'sales',permissions:{customers_edit:false}}),e=>e.status===403);
+await assert.rejects(()=>post(payload(),{id:'manager',role:'followup'}),e=>e.status===403);
+assert.deepEqual(row(),saved);
+console.log('PASS management own-customer editing from company view; other-owner, read-only sales and followup writes remain denied, with original data and history preserved.');

@@ -1,3 +1,8 @@
+import {can} from './crm';
+
+// Management's company view retains the own-customer maintenance available in personal view.
+export function canEditCustomerProfile(user:any,lead:any){return can(user,'customers_edit')||user?.role==='management'&&!!user.id&&lead?.owner_id===user.id;}
+
 export const CUSTOMER_PROJECT_STAGES=['客户沟通/客户分级','设计单成交','报价环节','设备单成交','工程下单/施工图','工程安装图','货品装箱运输','安装与指导','售后'];
 export const CUSTOMER_PROJECT_STATUSES=['交涉中','进行中','已暂停','已交付','已丢单'];
 export const CUSTOMER_FOLLOW_STATUSES=['未安排','今日跟进','本周跟进','等待客户','等待内部','已完成','已逾期'];
