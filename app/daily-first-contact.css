@@ -15,4 +15,26 @@
 .daily-first-contact ul{list-style:none;margin:10px 0 0;padding:0}
 .daily-first-contact li{padding:6px 0;border-bottom:1px solid var(--line)}
 .daily-first-contact li>span{display:block;font-size:12px;color:var(--muted);margin-top:3px}
-@media(max-width:720px){.sales-overview .daily-first-contact table{min-width:0}.daily-first-contact thead{display:none}.daily-first-contact tbody{display:block}.daily-first-contact tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:12px 0;border-bottom:1px solid var(--line)}.office-app .sales-overview .daily-first-contact td{border:0;padding:0;min-height:0;height:auto;background:transparent;white-space:normal;overflow-wrap:anywhere}.daily-first-contact td:first-child{grid-column:1/-1;font-weight:600}.daily-first-contact td[data-label]::before{content:attr(data-label);display:block;font-size:12px;color:var(--muted);margin-bottom:4px}.daily-first-contact li button{min-height:44px}}
+
+.daily-first-contact .first-contact-empty-label{display:none}
+.daily-first-contact .first-contact-summary-content{display:inline-block;vertical-align:top}
+.daily-first-contact .first-contact-summary-content>span{display:block}
+.daily-first-contact .first-contact-summary-content small{font-weight:400}
+@media(max-width:720px){
+ .sales-overview .daily-first-contact table{min-width:0}
+ .daily-first-contact thead{display:none}
+ .daily-first-contact tbody{display:block}
+ :root .office-app .workspace .content .daily-first-contact tr{display:block;padding:8px 0;border-bottom:1px solid var(--line)}
+ :root .office-app .workspace .content .daily-first-contact td{display:block;border:0;padding:0;min-height:0;height:auto;background:transparent;white-space:normal;overflow-wrap:anywhere}
+ :root .office-app .workspace .content .daily-first-contact td:first-child{padding:4px 0 8px;font-weight:600}
+ .daily-first-contact td[data-label]::before{display:none}
+ :root .office-app .workspace .content .daily-first-contact td[data-label]{border-top:1px solid var(--line)}
+ :root .office-app .workspace .content .daily-first-contact details>summary{padding:8px 0;min-height:44px}
+ .daily-first-contact .first-contact-summary-content{display:inline-flex;align-items:baseline;justify-content:space-between;gap:8px;width:calc(100% - 1.25em)}
+ :root .office-app .workspace .content .daily-first-contact .first-contact-summary-content small{margin:0;font-weight:400;text-align:right}
+ .daily-first-contact .first-contact-empty{display:flex;align-items:center;gap:6px;min-height:44px}
+ .daily-first-contact .first-contact-empty-label{display:inline}
+ :root .office-app .workspace .content .daily-first-contact li{display:block;padding:4px 0}
+ .daily-first-contact li button{min-height:44px}
+ .daily-first-contact .section-heading{gap:4px}
+}
