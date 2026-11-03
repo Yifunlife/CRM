@@ -52,7 +52,7 @@ export async function queueFirstContacts(db:D1Database,owner:string){
   const fallback=fallbackAllowed(config,lead,prior);
   const channel=fallback?'email':preferredContact(lead.detail);if(!channel||!status[channel])continue;
   const recipient=channel==='email'?emailKey(lead.email):phoneKey(lead.phone);if(!recipient)continue;
-  if(prior.some(job=>{if(fallback)return !whatsappNotSent(job,lead);if(job.state!=='failed')return true;try{return !['号码位数异常或与表单国家冲突','请配置已批准的压缩公司介绍PDF'].includes(JSON.parse(job.result).error);}catch{return true;}}))continue;
+  if(prior.some(job=>{if(fallback)return !whatsappNotSent(job,lead);if(job.state!=='failed')return true;try{const error=JSON.parse(job.result).error;return !phoneFailures.has(error)&&error!=='请配置已批准的压缩公司介绍PDF';}catch{return true;}}))continue;
   const commandId='first-'+channel+'-'+await digest(owner+':'+lead.id+':'+lead.country+':'+recipient);
   if(await db.prepare('SELECT id FROM crm_workbench_commands WHERE id=?').bind(commandId).first())continue;
   if(await db.prepare("SELECT id FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind IN ('send','material') AND state IN ('queued','running','uncertain')").bind(owner,lead.desktop_id).first())continue;
