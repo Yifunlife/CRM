@@ -85,3 +85,11 @@ const repliedHome=await salesHomeEndpoint(db,sales,'sales-home','GET');
 assert(!repliedHome.contact_reminders.some(r=>r.id==='dual-sleep'),'actual reply exits dormancy');
 assert(repliedHome.todos.some(r=>r.id==='dual-sleep'),'normal planned follow-up becomes visible again after actual reply');
 console.log('PASS: sleeping contacts leave today/overdue work; a real reply restores ordinary follow-up.');
+
+add('accepted-normal','sales','已联系待回复','2026-10-29',{'偏好联系方式':'WhatsApp',_contact_verified:{first_at:'2026-10-20T02:00:00Z',followup_mode:'normal'},_sales_progress:{first:{email:{at:'2026-10-20T02:00:00Z',note:'Confirmed prior email'}}}});
+sqlite.exec("UPDATE crm_leads SET phone='61400000001',email='accepted@example.invalid',cohort='historical',last_contact='2026-10-20T02:00:00Z' WHERE id='accepted-normal'");
+const acceptedHome=await salesHomeEndpoint(db,sales,'sales-home','GET');
+assert(!acceptedHome.contact_reminders.some(r=>r.id==='accepted-normal'),'accepted actual-channel contacts have no first-contact or preference review reminder');
+assert(acceptedHome.todos.some(r=>r.id==='accepted-normal'&&r.tags.includes('today')),'normal scheduled customer follow-up remains available');
+assert.equal(JSON.parse(sqlite.prepare("SELECT detail FROM crm_leads WHERE id='accepted-normal'").get().detail)['偏好联系方式'],'WhatsApp','the original customer preference is preserved');
+console.log('PASS: accepted actual-channel contact leaves first-contact reminders while retaining normal planned customer follow-up and original enquiry preferences.');
