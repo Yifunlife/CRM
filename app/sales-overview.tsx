@@ -24,7 +24,7 @@ export default function SalesOverview({api,user,openLead,openOrder,openProject,n
  const dailyBranch=owner.startsWith('company:')?owner.slice(8):'',dailyMarkets=boardMarkets(user),dailyMarket=dailyBranch?'外贸':cardMarket||(dailyMarkets.length===2?'全部':dailyMarkets[0]||'');
  const all=data?.all,summary=all?.summary,people=all?.people||[],customers=all?.all_customers||[],deals=all?.deals||[],projects=all?.projects||[],orders=all?.orders||[],quotes=all?.quotes||[];
  const staff=[...people,...(all?.followup_people||[])];
- const items=[...(data?.interventions.items||[]),...(data?.monitor.items||[])].filter((i:any)=>i.level!=='历史对齐'&&(!i.owner_id||people.some((p:any)=>p.id===i.owner_id)));
+ const items=[...(data?.interventions.items||[]),...(data?.monitor.items||[])].filter((i:any)=>!i.id.startsWith('device:')&&i.level!=='历史对齐'&&(!i.owner_id||people.some((p:any)=>p.id===i.owner_id)));
  function marketCounts(field:string,unit:string,grade=''){return <>{markets.map(name=>{const report=name==='内贸'?data.domestic:data.foreign,value=grade?report.summary[field][grade]:report.summary[field];return <span key={name}>{name} {value||0} {unit}</span>;})}</>;}
  function goal(name:string,id=''){
   const currency=name==='内贸'?'CNY':'USD',report=name==='内贸'?data?.domestic:data?.foreign;
