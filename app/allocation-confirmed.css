@@ -45,3 +45,18 @@
 .confirmed-allocation .op-adjust-fields :is(select,textarea){width:100%;font-size:13px;margin-top:5px}
 .confirmed-allocation .op-adjust-error{color:#a42020;margin-top:10px}
 @media(max-width:600px){.confirmed-allocation .op-adjust-fields{grid-template-columns:1fr}}
+
+/* Keep status and actions on one line so they do not stretch every staff row. */
+:root .office-app .workspace .confirmed-allocation .op-distribution-table{min-width:920px}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td){padding:6px 8px;line-height:1.35}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):first-child{width:13%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(2){width:14%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(n+3):nth-child(-n+5){width:5%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(6){width:25%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(7){width:12%}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table :is(th,td):nth-child(8){width:21%}
+:root .office-app .workspace .confirmed-allocation .op-receipt-line,:root .office-app .workspace .confirmed-allocation .op-tier-line{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap}
+:root .office-app .workspace .confirmed-allocation .op-receipt-line>div{white-space:nowrap}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table button[data-adjust-person]{margin:0;min-height:28px;padding:3px 6px;line-height:1.3}
+:root .office-app .workspace .confirmed-allocation .op-distribution-table small{margin-top:2px;line-height:1.35}
+@media(pointer:coarse){:root .office-app .workspace .confirmed-allocation .op-distribution-table button[data-adjust-person]{min-height:44px}}
