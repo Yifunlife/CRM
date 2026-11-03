@@ -4,3 +4,5 @@
 
 
 .contract-templates .contract-line{padding:14px 0;border-top:1px solid #d8e2ef}.contract-templates .contract-line>button{margin-top:8px}.contract-templates .contract-line label{min-width:0}.contract-templates .contract-line input{display:block;margin-top:4px}
+
+.contract-templates .contract-field-wide{grid-column:1/-1}.contract-templates .contract-field textarea{width:100%;min-width:0;resize:vertical;line-height:1.6}

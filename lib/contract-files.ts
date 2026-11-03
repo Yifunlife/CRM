@@ -22,19 +22,24 @@ export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|un
  const leadId=url.searchParams.get('lead_id')||'',lead=await access(db,user,leadId);
  if(req.method==='GET'){
   const rows=await db.prepare('SELECT e.id,e.project_id,e.payload,e.created,u.name AS uploaded_by,p.name AS project_name FROM crm_sales_events e LEFT JOIN crm_users u ON u.id=e.created_by LEFT JOIN crm_sales_projects p ON p.project_id=e.project_id WHERE e.lead_id=? AND e.kind=? ORDER BY e.created DESC,e.id').bind(leadId,kind).all();
-  const projects=await db.prepare('SELECT project_id,name FROM crm_sales_projects WHERE lead_id=? ORDER BY updated DESC').bind(leadId).all();
-  return json({lead:{id:lead.id,name:lead.name},can_upload:editable(user,lead),projects:projects.results,items:rows.results.map((r:any)=>{const f=parse(r.payload);return {id:r.id,name:f.name,size:f.size,status:f.status,project_id:r.project_id,project_name:r.project_name,created:r.created,uploaded_by:r.uploaded_by,url:'/api/contract-files/'+r.id};})});
+  const projects=await db.prepare('SELECT project_id,name,details FROM crm_sales_projects WHERE lead_id=? ORDER BY updated DESC').bind(leadId).all();
+  const deals=attachment?[]:(await db.prepare('SELECT order_number FROM crm_deals WHERE lead_id=? AND cancelled=0 ORDER BY deal_date DESC,created DESC').bind(leadId).all()).results;
+  const projectRows=projects.results.map((p:any)=>({project_id:p.project_id,name:p.name,contract_no:parse(p.details).contract_no||''}));
+  const contractNumbers=[...new Set([...deals.map((d:any)=>d.order_number),...projectRows.map(p=>p.contract_no),...rows.results.map((r:any)=>parse(r.payload).contract_no)].filter(Boolean))];
+  return json({lead:{id:lead.id,name:lead.name},can_upload:editable(user,lead),projects:projectRows,contract_numbers:contractNumbers,items:rows.results.map((r:any)=>{const f=parse(r.payload);return {id:r.id,name:f.name,size:f.size,status:f.status,contract_no:f.contract_no||'',project_id:r.project_id,project_name:r.project_name,created:r.created,uploaded_by:r.uploaded_by,url:'/api/contract-files/'+r.id};})});
  }
  if(req.method!=='PUT')fail('不支持此合同操作',405);if(!editable(user,lead))fail('只有客户所属业务员或管理员可以上传合同',403);if(!bucket)return fail('文件存储尚未连接',503);
  const name=(url.searchParams.get('name')||'').replace(/[\x00-\x1f/\\]/g,'_').slice(0,200),size=Number(req.headers.get('content-length')),status=url.searchParams.get('status')||'',projectId=url.searchParams.get('project_id')||null;
+ const contractNo=(url.searchParams.get('contract_no')||'').trim();
+ if(!attachment&&(!contractNo||contractNo.length>100||/[\x00-\x1f\x7f]/.test(contractNo)))fail('请填写合同编号，最多100个字符');
  if(!(attachment?/\.(pdf|docx?|xlsx?|csv|pptx?|png|jpe?g|webp|dwg|dxf|zip|txt)$/i:/\.(pdf|docx?|xlsx?|png|jpe?g|webp)$/i).test(name))fail('请选择 PDF、文档、图片或支持的项目文件');if(!attachment&&!['已填写','已签署'].includes(status))fail('请选择合同状态');if(!Number.isSafeInteger(size)||size<=0||size>100*1024*1024||!req.body)fail('请选择不超过100MB的客户文件',413);
  if(projectId&&!await db.prepare('SELECT project_id FROM crm_sales_projects WHERE project_id=? AND lead_id=?').bind(projectId,leadId).first())fail('项目不属于所选客户');
  const id=crypto.randomUUID(),key=(attachment?'customer-attachments/':'customer-contracts/')+leadId+'/'+id,time=new Date().toISOString();
  try{
   const object=await bucket.put(key,req.body,{httpMetadata:{contentType:'application/octet-stream'}});if(!object||object.size!==size)fail('上传长度不一致，请重试');
   const latest=await access(db,user,leadId);if(!editable(user,latest))fail('客户上传权限已变化，请刷新重试',403);
-  const result=await db.prepare('INSERT INTO crm_sales_events(id,project_id,lead_id,kind,payload,occurred_at,created,created_by) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?) AND (? IS NULL OR EXISTS(SELECT 1 FROM crm_sales_projects WHERE project_id=? AND lead_id=?))').bind(id,projectId,leadId,kind,JSON.stringify({object_key:key,name,size,status}),time,time,actor.id,leadId,latest.owner_id,projectId,projectId,leadId).run();
+  const result=await db.prepare('INSERT INTO crm_sales_events(id,project_id,lead_id,kind,payload,occurred_at,created,created_by) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?) AND (? IS NULL OR EXISTS(SELECT 1 FROM crm_sales_projects WHERE project_id=? AND lead_id=?))').bind(id,projectId,leadId,kind,JSON.stringify({object_key:key,name,size,status,...(!attachment?{contract_no:contractNo}:{})}),time,time,actor.id,leadId,latest.owner_id,projectId,projectId,leadId).run();
   if(!result.meta.changes)fail('客户或项目已变化，请刷新重试',409);
  }catch(error){await bucket.delete(key);throw error;}
- return json({id,name,url:'/api/contract-files/'+id});
+ return json({id,name,...(!attachment?{contract_no:contractNo}:{}),url:'/api/contract-files/'+id});
 }
