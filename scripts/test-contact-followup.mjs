@@ -25,7 +25,10 @@ for(const status of ['正在沟通','已成交','已结束','暂停跟进'])asse
 for(const changes of [{detail:{...lead.detail,_sales_progress:{reply_at:sent}}},{detail:{...lead.detail,_sales_progress:{stage:'design'}}},{review:1}])assert.equal(check(changes,both),null);
 assert.equal(check({}, {...both,reply_at:sent}),null);
 assert.equal(check({email:''},{whatsapp:sent}).kind,'review');
-assert.equal(check({detail:{}},{whatsapp:sent}).kind,'review');
+assert.equal(check({detail:{}},{whatsapp:sent}),null,'confirmed outreach does not require reviewing a missing preference');
+assert.equal(check({detail:{}},{email:sent}),null);
+assert.equal(check({status:'待首次联系',detail:{}},{}).kind,'review','an uncontacted new customer still needs a channel');
+assert.equal(check({detail:{'偏好联系方式':'email'}},{whatsapp:sent}).kind,'review','a stated preference with only the other channel recorded still needs review');
 assert.equal(check({}, {whatsapp:'not-a-time'}).first_at,'','invalid and missing receipts cannot start timers');
 assert.equal(check({}, {whatsapp:'2026-11-04T02:00:00Z'}).first_at,'','future receipt ignored');
 assert.equal(check({cohort:'historical'},{}),null,'historical contacts without evidence do not become new leads');

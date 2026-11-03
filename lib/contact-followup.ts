@@ -22,7 +22,7 @@ export function contactFollowup(lead:any,evidence:Evidence,at:string){
  if(evidence.unknown_history)return result('review','先核对客户沟通历史','部分历史记录的收发方向或时间尚待核对，暂不判定客户未回复');
  const seven=first?new Date(Date.parse(first)+168*hour).toISOString():'';
  if(sent.whatsapp&&sent.email&&now>=Date.parse(seven))return result('dormant','已标记沉睡客户，无需继续联系','邮件和 WhatsApp 均已成功联系，首次成功联系满 7 天仍未记录回复，停止联系提醒',seven,5);
- if(!preferred)return result('review','核对客户首选联系方式','请查看原始咨询，确认首选邮件还是 WhatsApp');
+ if(!preferred)return first?null:result('review','核对客户首选联系方式','请查看原始咨询，确认首选邮件还是 WhatsApp');
  if(!lead[preferred==='email'?'email':'phone'])return result('review','核对并补充首选'+label(preferred)+'联系方式','缺少首选方式的有效联系资料，请先查看客户档案');
  if(!first){
   if(lead.status!=='待首次联系')return result('review','核对首次成功联系时间','尚无可靠的成功发送记录，暂不计算 24 小时或 7 天');

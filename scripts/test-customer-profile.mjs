@@ -3,7 +3,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {moduleURL,database} from './test-form-intake.mjs';
 const {roleWorkspaceEndpoint:call}=await import(moduleURL('lib/role-workspace-server.ts'));
-const {customerProfile,validateCustomerProfile}=await import(moduleURL('lib/customer-profile.ts'));
+const {customerProfile,validateCustomerProfile,customerContractNumber}=await import(moduleURL('lib/customer-profile.ts'));
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
 for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
 const db=database(sql),sales={id:'sales',role:'sales'},other={id:'other',role:'sales'},admin={id:'admin',role:'admin'},management={id:'manager',role:'management'};
@@ -33,3 +33,6 @@ await post({id:'lead',revision:JSON.parse(row().detail)._profile_revision,countr
 assert.equal(row().last_contact,'2026-10-02T01:00:00.000Z');assert.equal(notes(),notesBefore);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_deals').get().n,0);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_receipts').get().n,0);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_workbench_commands').get().n,0);assert(sql.prepare("SELECT COUNT(*) n FROM crm_workflow_audit WHERE kind='更新客户档案'").get().n>0);
 assert.equal(customerProfile({...row(),notes:[{next_step:'后续真实跟进',created:'2099-01-01'}]}).nextAction,'后续真实跟进','a later real follow-up supersedes an earlier saved plan');
 console.log('PASS customer dossier: real fields, snapshot fallbacks, partial saves, explicit clears, original-source/owner/history/file preservation, stale revision/column rejection, validation, sales isolation, legacy compatibility, and no messages/deals/receipts created.');
+
+assert.equal(customerContractNumber({id:'internal-id',detail:{_customer_code:'AU20261102',_workbench:{desktop_id:'AU20261102'}}}), '');
+assert.equal(customerContractNumber({deals:[{order_number:'YF-001',cancelled:0},{order_number:'VOID',cancelled:1},{order_number:'YF-002',cancelled:0},{order_number:'YF-001',cancelled:0}]}),'YF-001、YF-002');

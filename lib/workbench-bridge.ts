@@ -178,7 +178,6 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
  const allLinks=(await db.prepare('SELECT w.*,l.owner_id AS current_owner FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id WHERE w.owner_id=? OR l.owner_id=?').bind(owner,owner).all<any>()).results;
  const conflicts:any[]=[...imported.conflicts],updates:any[]=[],bindings:any[]=[],blocked=new Set(allLinks.filter(l=>l.current_owner!==owner||l.owner_id!==owner).map(l=>l.desktop_id));
  const used=new Set<string>();
- for(const client of clients.filter((c:any)=>/^[A-Z]{2}\d{8}(?:-\d+)?$/.test(c.id))){const link=allLinks.find(l=>l.desktop_id===client.id&&l.owner_id===owner&&l.current_owner===owner),lead=link&&rows.find(l=>l.id===link.lead_id);if(lead)await ensureCustomerCode(db,lead,client.id);}
  for(const lead of rows){
   const existing=allLinks.find(l=>l.lead_id===lead.id);
   if(existing&&existing.owner_id!==owner){conflicts.push({lead_id:lead.id,reason:'原沟通归属需要核对'});continue;}
