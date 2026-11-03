@@ -1,5 +1,5 @@
 'use client';
-import {CONTACT_GRADES,contactGradeLabel} from '../lib/contact-kind';
+import {CONTACT_GRADES,contactGradeLabel,isColleague} from '../lib/contact-kind';
 import {useEffect,useId,useState,type ReactNode} from 'react';
 import {Pencil,ArrowRight} from 'lucide-react';
 import CustomerInquiry from './customer-inquiry';
@@ -65,6 +65,6 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
     {field('next_date','下次联系',lead.next_date,'date')}{select('profile_followStatus','跟进状态',profile.followStatus,CUSTOMER_FOLLOW_STATUSES)}
    </div>{actions()}</fieldset></form></section>{followup}</div>}
    {tab==='文件归档'&&<div className="dossier-stack" id="dossier-panel-3" role="tabpanel" aria-labelledby="dossier-tab-3"><section className="panel dossier-section"><h2>合同归档</h2><ContractFiles key={lead.id} api={api} leadId={lead.id}/></section><section className="panel dossier-section"><h2>客户附件</h2><ContractFiles key={lead.id+':attachments'} api={api} leadId={lead.id} attachment/></section></div>}
-  </div><div className="dossier-sidebar" role="complementary" aria-label="客户档案摘要"><section className="panel"><h2>当前客户摘要</h2><dl><div><dt>客户等级</dt><dd>{contactGradeLabel(lead.grade)||'未评级'}</dd></div><div><dt>项目状态</dt><dd>{profile.projectStatus||lead.status||'待确认'}</dd></div><div><dt>负责人</dt><dd>{owner}</dd></div><div><dt>最近联系</dt><dd>{date(lead.last_contact||detail._workbench?.lastContact)}</dd></div></dl></section><section className="panel"><h2>下一次跟进</h2><div className="dossier-next"><strong>{lead.next_date||'未安排'}</strong><p>{profile.nextAction||'填写下一步动作和联系日期'}</p></div><button type="button" disabled={busy} onClick={()=>{if(editing&&tab!=='跟进'){E('请先保存或取消当前修改');return;}onTab('跟进');if(editable)edit();}}>{editable?'填写跟进安排':'查看跟进安排'}<ArrowRight size={15}/></button></section></div></div>
+  </div><div className="dossier-sidebar" role="complementary" aria-label="客户档案摘要"><section className="panel"><h2>当前客户摘要</h2><dl><div><dt>客户等级</dt><dd>{contactGradeLabel(lead.grade)||'未评级'}</dd></div><div><dt>项目状态</dt><dd>{isColleague(lead.grade)?'同事':profile.projectStatus||lead.status||'待确认'}</dd></div><div><dt>负责人</dt><dd>{owner}</dd></div><div><dt>最近联系</dt><dd>{date(lead.last_contact||detail._workbench?.lastContact)}</dd></div></dl></section><section className="panel"><h2>下一次跟进</h2><div className="dossier-next"><strong>{lead.next_date||'未安排'}</strong><p>{profile.nextAction||'填写下一步动作和联系日期'}</p></div><button type="button" disabled={busy} onClick={()=>{if(editing&&tab!=='跟进'){E('请先保存或取消当前修改');return;}onTab('跟进');if(editable)edit();}}>{editable?'填写跟进安排':'查看跟进安排'}<ArrowRight size={15}/></button></section></div></div>
  </div>;
 }
