@@ -36,6 +36,13 @@ for(const issue_state of ['failed','uncertain','running','queued'])assert.equal(
 assert.equal(check({}, {whatsapp:sent,last_sent:sent,issue_at:'2026-10-01T02:00:00Z',issue_state:'failed'}).kind,'alternate','older failure does not override later success');
 assert.equal(check({}, {whatsapp:sent,unknown_history:1}).kind,'review');
 
+const accepted={...lead.detail,_contact_verified:{first_at:sent,followup_mode:'normal'},_sales_progress:{first:{email:{at:sent,note:'Verified existing email'}}}};
+assert.equal(check({detail:accepted},{email:sent}),null,'an approved actual channel continues normal follow-up without a preference review');
+assert.equal(check({detail:{...accepted,'偏好联系方式':'邮件',_sales_progress:{first:{whatsapp:{at:sent}}}}},{whatsapp:sent}),null);
+assert.equal(check({detail:accepted},{...both}),null,'accepted normal follow-up does not become dormant from the original first-contact timer');
+assert.equal(check({detail:accepted},{email:sent,last_sent:sent,issue_at:at,issue_state:'failed'}).kind,'review','later genuine send failures are still visible');
+assert.equal(check({detail:{...lead.detail,_contact_verified:{followup_mode:'normal'}}},{}).kind,'review','a marker without confirmed contact evidence cannot hide an unresolved first contact');
+
 const sql=new DatabaseSync(':memory:');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
 for(const id of ['sales','other'])sql.prepare("INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,'sales','unused',?)").run(id,id,id,at);
 for(const [id,owner] of [['own','sales'],['foreign','other'],['archive-reply','sales'],['uncertain','sales'],['history-reply','sales']])sql.prepare("INSERT INTO crm_leads(id,name,owner_id,source,detail,phone,email,fingerprint,created,cohort,status) VALUES(?,?,?,'Meta',?,'61400000000','own@example.invalid',?,?,'new','已联系待回复')").run(id,id,owner,JSON.stringify(lead.detail),id,at);
