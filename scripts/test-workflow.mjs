@@ -1,8 +1,9 @@
+import {moduleURL} from './test-form-intake.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const url=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const url=(file,replacements={})=>{let source=readFileSync(file,'utf8');source=source.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const crm=url('lib/crm.ts'),calendar=url('lib/china-workdays.ts');
 const {workflowEndpoint,paymentSummary,validateLeadFollowup}=await import(url('lib/workflow-server.ts',{"'./crm'":crm,"'./china-workdays'":calendar,"'./allocation-server'":errors}));

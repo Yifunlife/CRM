@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {assignmentFields,assignmentJoin} from './assignment-reminders';
 import {assignmentCategory} from './assignment-categories';
 import {can} from './crm';
@@ -24,10 +25,10 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,path:string,meth
   return {month,rows};
  }
  const todos:any[]=[];
- if(can(u,'leads_allocate')||u.role==='admin'){const rows=(await db.prepare("SELECT id,name,source,created FROM crm_leads WHERE owner_id IS NULL AND review=0 AND cohort='new' AND original_owner='' ORDER BY created").all<any>()).results;for(const r of rows)todos.push({id:'assign:'+r.id,kind:'待分配',name:r.name,owner:r.source,reason:'尚无负责人',date:r.created,lead_id:r.id,page:'工作台',action:'分配'});}
+ if(can(u,'leads_allocate')||u.role==='admin'){const rows=(await db.prepare("SELECT id,name,source,created FROM crm_leads WHERE COALESCE(grade,'') NOT IN ('Yifun Staff','同事') AND owner_id IS NULL AND review=0 AND cohort='new' AND original_owner='' ORDER BY created").all<any>()).results;for(const r of rows)todos.push({id:'assign:'+r.id,kind:'待分配',name:r.name,owner:r.source,reason:'尚无负责人',date:r.created,lead_id:r.id,page:'工作台',action:'分配'});}
  const projects=(await db.prepare("SELECT p.project_id,p.lead_id,p.name,p.blocker,p.next_date,p.next_action,u.name AS owner_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id LEFT JOIN crm_users u ON u.id=l.owner_id WHERE p.stage NOT IN ('won','lost') AND (trim(p.blocker)<>'' OR (p.next_date<>'' AND p.next_date<?))").bind(suiteDay()).all<any>()).results;
  for(const p of projects)todos.push({id:'project:'+p.project_id,kind:p.blocker?.trim()?'需协调':'需督办',name:p.name,owner:p.owner_name,reason:p.blocker||'跟进逾期 · '+p.next_action,date:p.next_date,project_id:p.project_id,lead_id:p.lead_id,action:p.blocker?.trim()?'协调':'督办'});
- const waiting=(await db.prepare(`SELECT l.id,l.name,l.owner_id,u.name AS owner_name,${assignmentFields} FROM crm_leads l JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE l.review=0 AND l.status NOT IN ('暂停跟进','已结束','已成交') AND a.created IS NOT NULL AND date(a.created,'+8 hours')<? AND NOT EXISTS(SELECT 1 FROM crm_notes n WHERE n.lead_id=l.id AND n.user_id=l.owner_id AND n.created>=a.created AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信'))`).bind(suiteDay()).all<any>()).results;
+ const waiting=(await db.prepare(`SELECT l.id,l.name,l.owner_id,u.name AS owner_name,${assignmentFields} FROM crm_leads l JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE ${customerLeadSQL()} AND l.review=0 AND l.status NOT IN ('暂停跟进','已结束','已成交') AND a.created IS NOT NULL AND date(a.created,'+8 hours')<? AND NOT EXISTS(SELECT 1 FROM crm_notes n WHERE n.lead_id=l.id AND n.user_id=l.owner_id AND n.created>=a.created AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信'))`).bind(suiteDay()).all<any>()).results;
  for(const l of waiting)if(assignmentCategory(l)==='new')todos.push({id:'waiting:'+l.id,kind:'需督办',name:l.name,owner:l.owner_name,reason:'此前分配后仍无跟进记录',date:l.assigned_at,lead_id:l.id,action:'督办'});
  const reviews=(await db.prepare("SELECT e.id,e.lead_id,e.payload,l.name FROM crm_sales_events e JOIN crm_leads l ON l.id=e.lead_id WHERE e.kind='申请归属复核' AND NOT EXISTS(SELECT 1 FROM crm_sales_events r WHERE r.kind='归属复核结论' AND json_extract(r.payload,'$.review_id')=e.id)").all<any>()).results;
  for(const r of reviews)todos.push({id:'review:'+r.id,kind:'待确认',name:r.name,reason:JSON.parse(r.payload).reason,lead_id:r.lead_id,page:'客户经营',action:'核实'});

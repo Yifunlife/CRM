@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');s=s.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),pure=module('lib/sales-suite.ts'),err='data:text/javascript,export class AllocationError extends Error{constructor(message,status=400){super(message);this.status=status;}}';
 const source=module('lib/sales-quote-source.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err});
 const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./sales-home-server'":moduleURL('lib/sales-home-server.ts'),"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));

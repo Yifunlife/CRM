@@ -1,9 +1,10 @@
+import {CONTACT_GRADES,cancelColleagueFirstContacts} from '../contact-kind';
 import {customerInquiry} from '../customer-inquiry';
 import {customerPage} from '../customer-page';
 import { assignmentCategory } from '../assignment-categories';
 import { assignmentFields,assignmentJoin } from '../assignment-reminders';
 import { closingOutcome } from '../attribution-server';
-import { authorizedLead,can,clean,GRADES,id,now,STATUSES } from '../crm';
+import { authorizedLead,can,clean,id,now,STATUSES } from '../crm';
 import { customerChange,customerChanges } from '../customer-changes';
 import { validateLeadFollowup } from '../workflow-server';
 import type { ApiContext } from './context';
@@ -32,7 +33,7 @@ export async function customerRecords({db,req,path,write,body,user,actor}:ApiCon
   if (path === "grade" && req.method === "POST") {
    const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
-   if (!["",...GRADES].includes(body.grade)) throw new Problem("请选择VIP、A、B、C或未评级");
-   await db.batch([customerChange(db,actor,body.id,'grade',body.grade),db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id)]);return json({ok:true});
+   if (!["",...CONTACT_GRADES].includes(body.grade)) throw new Problem("请选择有效客户等级或同事");
+   await db.batch([customerChange(db,actor,body.id,'grade',body.grade),db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id),cancelColleagueFirstContacts(db,body.id)]);return json({ok:true});
   }
 }

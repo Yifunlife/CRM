@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {boardLeadVisible} from './market-access';
 import {BUSINESS_SCOPES} from './allocation';
 import {can,emailKey,phoneKey,now} from './crm';
@@ -21,7 +22,7 @@ const pairKey=(a:string,b:string)=>JSON.stringify([a,b].sort());
 
 export async function customerEntryMonitor(db:D1Database,user:any,options?:{rule:number;page:number}){
  if(options&&(!Number.isInteger(options.rule)||options.rule<1||options.rule>6||!Number.isInteger(options.page)||options.page<1))throw new AllocationError('请选择有效规则和页码',400);
- const all=can(user,'customers_all'),args=all?[]:[user.id],where=all?'1=1':'l.owner_id=?';
+ const all=can(user,'customers_all'),args=all?[]:[user.id],where=customerLeadSQL()+' AND '+(all?'1=1':'l.owner_id=?');
  const [leads,pool,reviews,accounts]=await Promise.all([
   list(db,`SELECT l.id,l.name,l.country,l.phone,l.email,l.source,l.channel,l.business_scope,l.entered,l.created,l.cohort,l.owner_id,l.original_owner,l.review,u.id AS existing_owner,u.name AS owner_name,u.active AS owner_active,u.role AS owner_role,s.subject_id,
    json_object('_sales_company',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$._sales_company'),'公司名称',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.公司名称'),'platform',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.platform'),'来源渠道',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源渠道'),'来源平台',json_extract(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.来源平台')) AS detail,

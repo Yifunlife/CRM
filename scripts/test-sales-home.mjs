@@ -1,8 +1,9 @@
+import {moduleURL} from './test-form-intake.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');source=source.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const at='2026-10-29T02:00:00.000Z',pure=module('lib/sales-pipeline.ts'),calendar=module('lib/china-workdays.ts');
 const home=module('lib/sales-home.ts',{"'./sales-pipeline'":pure,"'./china-workdays'":calendar});
 const {homeCustomer}=await import(home);

@@ -1,3 +1,4 @@
+import {CONTACT_GRADES,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {reportAcquiredDay} from './report-acquired-day';
 import {accountTradeScopes,isSalesPerson,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
 import {projectFinancials} from './personal-work';
@@ -28,7 +29,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const branch=salesCompanyName(url.searchParams.get('branch'));if(!['',...SALES_COMPANIES].some(c=>c===branch)||branch&&market!=='外贸')fail('分公司选择无效');
   const where=all?'1=1':'l.owner_id=?',args=all?[]:[u.id];
   const [rawLeads,rawProjects,rawDeals,rawQuotes,rawOrders,rawInquiries,people,rawReceipts]=await Promise.all([
-   list(db,`SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.entered,l.created,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_leads l WHERE ${where}`,args),
+   list(db,`SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.entered,l.created,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_leads l WHERE ${where} AND ${customerLeadSQL()}`,args),
    list(db,`SELECT p.*,l.name AS customer_name,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
    list(db,`SELECT d.*,l.name AS customer_name,l.country,l.source,l.detail AS lead_detail,l.business_scope AS lead_scope,c.currency,c.total_minor FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0 AND ${all?'1=1':'d.owner_id=?'}`,args),
    list(db,`SELECT q.*,p.lead_id,l.owner_id,l.country,l.source,l.detail AS lead_detail,l.business_scope FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id WHERE ${where}`,args),
@@ -71,15 +72,15 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const contacts=body.contacts.map((c:any)=>({name:text(c.name,200),role:text(c.role||'',200),phone:text(c.phone||'',100),email:text(c.email||'',200)}));if(contacts.some((c:any)=>!c.name))fail('请填写联系人姓名');
   const country=text(body.country,100),method=text(body.method,100),sourceNote=text(body.source_note||'',1000);
   const company=salesCompanyName(body.company??before._sales_company);if(!['',...SALES_COMPANIES].some(c=>c===company))fail('分公司选择无效');
-  const name=body.name===undefined?lead.name:text(body.name,200),phone=body.phone===undefined?lead.phone:text(body.phone,100),email=body.email===undefined?lead.email:text(body.email,200),grade=body.grade===undefined?lead.grade:text(body.grade,10),nextDate=body.next_date===undefined?lead.next_date:text(body.next_date,10);
-  if(!name)fail('请填写客户姓名');if(grade!==lead.grade&&grade&&!GRADES.includes(grade))fail('客户等级无效');
+  const name=body.name===undefined?lead.name:text(body.name,200),phone=body.phone===undefined?lead.phone:text(body.phone,100),email=body.email===undefined?lead.email:text(body.email,200),grade=body.grade===undefined?lead.grade:text(body.grade,20),nextDate=body.next_date===undefined?lead.next_date:text(body.next_date,10);
+  if(!name)fail('请填写客户姓名');if(grade!==lead.grade&&grade&&!CONTACT_GRADES.includes(grade))fail('客户等级无效');
   if(email!==lead.email&&email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('邮箱格式无效');
   if(nextDate!==lead.next_date&&nextDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)||!Number.isFinite(Date.parse(nextDate))||new Date(nextDate).toISOString().slice(0,10)!==nextDate))fail('下次联系日期无效');
   let profile:any;try{profile=body.profile===undefined?undefined:validateCustomerProfile(body.profile);}catch(e){fail((e as Error).message);}
   const after={...before,_sales_company:company,_profile_revision:(before._profile_revision||0)+1,_contacts:contacts,'偏好联系方式':method,'客户来源说明':sourceNote,...(profile?{_customer_profile:{...before._customer_profile,...profile,...(Object.hasOwn(profile,'nextAction')?{nextActionAt:now()}:{})}}:{})};
   const previous={name:lead.name,country:lead.country,phone:lead.phone,email:lead.email,grade:lead.grade,next_date:lead.next_date,company:before._sales_company||'',contacts:before._contacts,method:before['偏好联系方式'],source_note:before['客户来源说明'],profile:before._customer_profile};
   const updated={name,country,phone,email,grade,next_date:nextDate,company,contacts,method,source_note:sourceNote,profile:after._customer_profile};
-  const results=await db.batch([db.prepare('UPDATE crm_leads SET name=?,country=?,phone=?,email=?,grade=?,next_date=?,detail=? WHERE id=? AND detail=? AND owner_id IS ? AND name=? AND country=? AND phone=? AND email=? AND grade=? AND next_date=?').bind(name,country,phone,email,grade,nextDate,JSON.stringify(after),lead.id,lead.detail,lead.owner_id,lead.name,lead.country,lead.phone,lead.email,lead.grade,lead.next_date),db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),'更新客户档案',lead.id,JSON.stringify({before:previous,after:updated}),now(),actor.id)]);
+  const results=await db.batch([db.prepare('UPDATE crm_leads SET name=?,country=?,phone=?,email=?,grade=?,next_date=?,detail=? WHERE id=? AND detail=? AND owner_id IS ? AND name=? AND country=? AND phone=? AND email=? AND grade=? AND next_date=?').bind(name,country,phone,email,grade,nextDate,JSON.stringify(after),lead.id,lead.detail,lead.owner_id,lead.name,lead.country,lead.phone,lead.email,lead.grade,lead.next_date),db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),'更新客户档案',lead.id,JSON.stringify({before:previous,after:updated}),now(),actor.id),cancelColleagueFirstContacts(db,lead.id)]);
   if(!results[0].meta.changes)fail('客户资料或归属已变化，请刷新',409);return {ok:true};
  }
  const match=path.match(/^followup\/orders\/([^/]+)\/business-process$/);

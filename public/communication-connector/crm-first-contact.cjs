@@ -5,7 +5,7 @@ async function firstContact({phonePolicy,command,config,getClient,clients,read,d
  const p=command.payload,id=command.desktop_id;
  if(!config.autoFirstContact||!p.auto_first_contact||config.owner_id!==config.autoFirstContact.owner_id||!Number.isFinite(Date.parse(p.assigned_at))||!Number.isFinite(Date.parse(config.autoFirstContact.assigned_from))||Date.parse(p.assigned_at)<Date.parse(config.autoFirstContact.assigned_from))throw Error('自动首联未授权或分配时间早于启用时间');
  let phone=p.recipient_key;
- const guard=()=>{const c=getClient(id);return active()&&!!c&&!c.deleted&&!c.group&&String(c.owner).toLowerCase()===String(config.localOwner).toLowerCase()&&c.name===p.name&&c.country===p.country&&(p.channel==='email'?email(c.email)===p.recipient_key:[p.recipient_key,phone].includes(digits(c.whatsapp)))&&![draft(id,'email'),draft(id,'whatsapp')].some(d=>String(d?.draft||'').trim()||d?.chinesePending);};
+ const guard=()=>{const c=getClient(id);return active()&&!!c&&!c.deleted&&!c.group&&!['Yifun Staff','同事'].includes(c.grade)&&String(c.owner).toLowerCase()===String(config.localOwner).toLowerCase()&&c.name===p.name&&c.country===p.country&&(p.channel==='email'?email(c.email)===p.recipient_key:[p.recipient_key,phone].includes(digits(c.whatsapp)))&&![draft(id,'email'),draft(id,'whatsapp')].some(d=>String(d?.draft||'').trim()||d?.chinesePending);};
  if(!guard())throw Error('客户资料、归属或人工草稿已变化，自动首联未发送');
  const c=getClient(id);
  const receipts=['whatsapp-outbox.json','crm-mail-outbox.json','outlook-graph-outbox.json','outlook-web-outbox.json','mac-mail-outbox.json','winnie-email-outreach.json'].flatMap(name=>read(name,[]));

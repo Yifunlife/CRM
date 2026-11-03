@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {assignmentReminders,assignmentFields,assignmentJoin} from './assignment-reminders';
 import {assignmentCategory} from './assignment-categories';
 import {AllocationError} from './allocation-server';
@@ -16,7 +17,7 @@ export async function salesHomeEndpoint(db:D1Database,user:any,path:string,metho
    (SELECT n.content FROM crm_notes n WHERE n.lead_id=l.id ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS last_note,
    (SELECT n.next_step FROM crm_notes n WHERE n.lead_id=l.id ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS next_step,
    (SELECT MAX(p.updated) FROM crm_customer_pool p WHERE p.lead_id=l.id AND p.state='已入CRM' AND (l.last_contact='' OR p.updated>l.last_contact)) AS inquiry_at
-   FROM crm_leads l ${assignmentJoin} WHERE l.owner_id=?`).bind(user.id).all<any>(),
+   FROM crm_leads l ${assignmentJoin} WHERE ${customerLeadSQL()} AND l.owner_id=?`).bind(user.id).all<any>(),
   db.prepare(`SELECT d.id,d.lead_id,EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) AS has_order FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE l.owner_id=? AND d.cancelled=0`).bind(user.id).all<any>(),
   db.prepare(`SELECT t.id,t.order_id,t.title,t.next_action,t.due_at,t.next_followup,t.owner_id,u.name AS owner_name,o.order_number FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id JOIN crm_users u ON u.id=t.owner_id WHERE t.status='待处理' AND o.archived=0 AND l.owner_id=? AND (t.owner_id=? OR o.commercial_id=?) ORDER BY t.due_at,t.id`).bind(user.id,user.id,user.id).all<any>(),
   db.prepare(`SELECT h.id,h.kind,h.reason,h.to_id,h.created,a.name AS from_name,b.name AS to_name FROM crm_workflow_handovers h JOIN crm_users a ON a.id=h.from_id JOIN crm_users b ON b.id=h.to_id WHERE h.state='待接收' AND (h.to_id=? OR h.from_id=?) ORDER BY h.created,h.id`).bind(user.id,user.id).all<any>(),

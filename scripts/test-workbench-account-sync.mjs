@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
+import {moduleURL} from './test-form-intake.mjs';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const storage='data:text/javascript,'+encodeURIComponent('export const readJson=async s=>JSON.parse(s);export const storeJson=async v=>JSON.stringify(v);');
 const crm=moduleUrl('lib/crm.ts');
-const autoUrl=moduleUrl('lib/auto-first-contact.ts',{"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts'))});
-const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
+const autoUrl=moduleURL('lib/auto-first-contact.ts');
+const {bridgeDeviceEndpoint}=await import(moduleUrl('lib/workbench-bridge.ts',{"'./contact-kind'":JSON.stringify(moduleURL('lib/contact-kind.ts')),"'./customer-code'":JSON.stringify(moduleURL('lib/customer-code.ts')),"'./customer-profile'":JSON.stringify(moduleURL('lib/customer-profile.ts')),"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storage),"'./crm'":JSON.stringify(crm),"'./allocation-server'":JSON.stringify(errors)}));
 const {digest}=await import(crm),sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async s=>Promise.all(s.map(x=>x.run()))};
@@ -25,6 +26,12 @@ const base=Object.fromEntries(Object.keys(r.updates[0].values).map(k=>[k,String(
 r=await run({clients:[local],bindings:[{lead_id:'mark-lead',desktop_id:'native-one',base}],scenes:[]});
 assert.equal(sqlite.prepare("SELECT country FROM crm_leads WHERE id='mark-lead'").get().country,'Australia');
 assert.equal(sqlite.prepare("SELECT grade FROM crm_leads WHERE id='mark-lead'").get().grade,'A');
+const gradeBase={...r.updates.find(x=>x.lead_id==='mark-lead').values};
+sqlite.prepare("UPDATE crm_leads SET grade='Yifun Staff' WHERE id='mark-lead'").run();
+let staffSync=await run({clients:[local],bindings:[{lead_id:'mark-lead',desktop_id:'native-one',base:gradeBase}],scenes:[]});
+assert.equal(sqlite.prepare("SELECT grade FROM crm_leads WHERE id='mark-lead'").get().grade,'Yifun Staff','a stale desktop grade cannot undo the web colleague classification');
+assert.equal(staffSync.updates.find(x=>x.lead_id==='mark-lead').values.grade,'Yifun Staff');
+sqlite.prepare("UPDATE crm_leads SET grade='A' WHERE id='mark-lead'").run();
 const missing=await run({clients:[],bindings:[],scenes:[]});assert.equal(missing.updates.some(x=>x.lead_id==='mark-lead'),false,'missing linked client is not recreated');
 const common=r.updates.find(x=>x.lead_id==='mark-lead').values;
 sqlite.prepare("UPDATE crm_leads SET name='CRM changed' WHERE id='mark-lead'").run();
@@ -60,3 +67,13 @@ assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_notes WHERE lead_id='aut
 await run({clients:[{id:'automatic-desktop',name:'Automatic new',whatsapp:'16145550009',messages:[]}],bindings:[],scenes:[]});
 assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_first_contact')=1").get().n,1);
 console.log('PASS: background sync queues automatic first contact, offline persistence, single claim, confirmed receipt updates contact state once, no repeat on subsequent sync');
+
+// An already queued job must be rejected at dispatch even if classification bypassed the save API.
+sqlite.prepare("INSERT INTO crm_leads(id,name,phone,owner_id,source,detail,fingerprint,created,status) VALUES('revoked-colleague','Colleague','16145550010','mark','Meta','{\"偏好联系方式\":\"by_whats_app\"}','revoked-colleague',?,'待首次联系')").run(assignedAt);
+sqlite.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('revoked-assignment','revoked-colleague','mark','mark',?,'full-first-v1')").run(assignedAt);
+await run({clients:[{id:'colleague-desktop',name:'Colleague',whatsapp:'16145550010',grade:'D',messages:[]}],bindings:[],scenes:[]});
+assert.equal(sqlite.prepare("SELECT state FROM crm_workbench_commands WHERE json_extract(payload,'$.crm_lead_id')='revoked-colleague'").get().state,'queued');
+sqlite.prepare("UPDATE crm_leads SET grade='Yifun Staff' WHERE id='revoked-colleague'").run();
+assert.equal((await bridgeDeviceEndpoint(db,req,{})).command,null);
+assert.equal(sqlite.prepare("SELECT state FROM crm_workbench_commands WHERE json_extract(payload,'$.crm_lead_id')='revoked-colleague'").get().state,'failed');
+console.log('PASS: web colleague classification survives stale sync; queued colleague first contact cannot be dispatched.');

@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {customerInquiry} from './customer-inquiry';
 import {reportPeriod} from './report-period';
 import {customerMarket} from './operations-dashboard';
@@ -31,7 +32,7 @@ export async function salesWorkflowEndpoint(db:D1Database,u:any,actor:any,path:s
  }
 
  if(path==='sales-management/customers'&&method==='GET'){
-  const all=can(u,'customers_all'),owner=url.searchParams.get('owner')||'',state=url.searchParams.get('state')||'',where=(all?'1=1':'l.owner_id=?')+(owner?' AND l.owner_id=?':'')+(state?' AND l.status=?':''),args=[...(all?[]:[u.id]),...(owner?[owner]:[]),...(state?[state]:[])],q=url.searchParams.get('q')||'',page=Math.max(1,Number(url.searchParams.get('page')||1));if(!Number.isSafeInteger(page))fail('页码无效');
+  const all=can(u,'customers_all'),owner=url.searchParams.get('owner')||'',state=url.searchParams.get('state')||'',where=customerLeadSQL()+' AND '+(all?'1=1':'l.owner_id=?')+(owner?' AND l.owner_id=?':'')+(state?' AND l.status=?':''),args=[...(all?[]:[u.id]),...(owner?[owner]:[]),...(state?[state]:[])],q=url.searchParams.get('q')||'',page=Math.max(1,Number(url.searchParams.get('page')||1));if(!Number.isSafeInteger(page))fail('页码无效');
   const search=q?' AND (l.name LIKE ? OR l.country LIKE ?)':'',queryArgs=[...args,...(q?['%'+q+'%','%'+q+'%']:[])];
   const [counts,rows,total,meetings,groups,owners,allocationSummary]=await Promise.all([
    list(db,`SELECT l.status,COUNT(*) AS count FROM crm_leads l WHERE ${where} GROUP BY l.status`,args),

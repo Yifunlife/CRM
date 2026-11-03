@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {assignmentCategory} from './assignment-categories';
 export const assignmentFields=`a.created AS assigned_at,a.policy AS assignment_policy,
  CASE WHEN a.policy='' AND trim(l.original_owner)<>''
@@ -15,7 +16,7 @@ export async function assignmentReminders(db:D1Database,user:any){
  (SELECT json_object('created',n.created,'author',u.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE n.lead_id=l.id ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
  ${assignmentFields}
  FROM crm_leads l ${assignmentJoin}
- WHERE l.owner_id=? AND l.review=0
+ WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0
  ) SELECT * FROM owned l WHERE (l.assigned_at IS NOT NULL OR l.status='待首次联系')
  AND NOT EXISTS(SELECT 1 FROM crm_notes n WHERE n.lead_id=l.id AND n.user_id=l.owner_id
  AND n.created>=COALESCE(l.assigned_at,l.created) AND trim(n.content)<>'' AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信'))
@@ -26,14 +27,14 @@ export async function teamAssignmentSummary(db:D1Database,month:string,owner='')
  const people=(await db.prepare(`SELECT u.id,u.name,u.role,u.active FROM crm_users u
  WHERE (u.role IN ('sales','ceo','management') OR EXISTS(SELECT 1 FROM crm_assignments a WHERE a.owner_id=u.id))
  AND (?='' OR u.id=?) ORDER BY u.active DESC,u.name`).bind(owner,owner).all<any>()).results;
- const allocatedEvents=(await db.prepare(`SELECT a.owner_id,a.lead_id,l.cohort,a.created AS allocated_at,${assignmentFields} FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE l.review=0 AND strftime('%Y-%m',a.created,'+8 hours')=? ORDER BY a.created,a.rowid`).bind(month).all<any>()).results;
+ const allocatedEvents=(await db.prepare(`SELECT a.owner_id,a.lead_id,l.cohort,a.created AS allocated_at,${assignmentFields} FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE ${customerLeadSQL()} AND l.review=0 AND strftime('%Y-%m',a.created,'+8 hours')=? ORDER BY a.created,a.rowid`).bind(month).all<any>()).results;
  const allocated=[...new Map(allocatedEvents.map(a=>[a.owner_id+':'+a.lead_id,a])).values()].filter(a=>assignmentCategory(a)==='new');
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const leads=(await db.prepare(`SELECT l.id,l.name,l.country,l.source,l.status,l.cohort,l.next_date,l.owner_id,u.name AS owner_name,
  ${assignmentFields},
  (SELECT json_object('created',n.created,'author',p.name,'content',n.content,'method',n.method) FROM crm_notes n JOIN crm_users p ON p.id=n.user_id WHERE n.lead_id=l.id AND n.method NOT IN ('归属核正','表单咨询','系统导入','自动分配','系统收信') ORDER BY n.created DESC,n.rowid DESC LIMIT 1) AS latest_note,
  EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS won
- FROM crm_leads l JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE l.review=0`).all<any>()).results;
+ FROM crm_leads l JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin} WHERE ${customerLeadSQL()} AND l.review=0`).all<any>()).results;
  const deals=(await db.prepare("SELECT d.owner_id,c.currency,c.total_minor FROM crm_deals d LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0 AND substr(d.deal_date,1,7)=?").bind(month).all<any>()).results;
  return Promise.all(people.map(async u=>{
   const ids=new Set(allocated.filter(a=>a.owner_id===u.id).map(a=>a.lead_id)),pending=await assignmentReminders(db,u),pendingIds=new Set(pending.map(l=>l.id));

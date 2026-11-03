@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {allocationRecipientMarket} from './allocation-intake';
 import {customerMarket} from './operations-dashboard';
 import {allocationWeights} from './allocation-server';
@@ -14,7 +15,7 @@ export async function allocationMediaSummary(db:D1Database,user:any,today=suiteD
  const summary:any=await customerAllocationSummary(db,user,today),all=can(user,'customers_all');
  const events=(await db.prepare(`SELECT a.owner_id,a.lead_id,l.source,l.channel,l.detail,l.country,l.business_scope,${assignmentFields},
  (SELECT raw FROM crm_form_submissions s WHERE s.lead_id=l.id AND s.kind='new' ORDER BY s.occurred,s.id LIMIT 1) original
- FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE l.review=0 AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'}`).bind(...(all?[]:[user.id])).all<any>()).results;
+ FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE ${customerLeadSQL()} AND l.review=0 AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'}`).bind(...(all?[]:[user.id])).all<any>()).results;
  if(market){for(const row of summary.rows){row.today=0;row.month=0;row.cumulative=0;}summary.today=0;summary.month=0;summary.cumulative=0;}
  const seen=new Set<string>();summary.media={today:{},month:{},cumulative:{}};
  for(const r of summary.rows)r.media={today:{},month:{},cumulative:{}};
@@ -32,7 +33,7 @@ export async function allocationMediaSummary(db:D1Database,user:any,today=suiteD
  }
  return summary;
 }
-const eligible="cohort='new' AND owner_id IS NULL AND original_owner='' AND review=0";
+const eligible="COALESCE(grade,'') NOT IN ('Yifun Staff','同事') AND cohort='new' AND owner_id IS NULL AND original_owner='' AND review=0";
 function identifiers(value:any,label:string,max:number){if(!Array.isArray(value)||!value.length||value.length>max||value.some(v=>typeof v!=='string'||!v||v.length>200)||new Set(value).size!==value.length)throw new Problem(label);return [...value].sort() as string[];}
 async function manualPlan(db:D1Database,body:any){
  const ids=identifiers(body.ids,'每次选择1至200位客户',200),recipients=identifiers(body.recipients,'请选择有效接收人员',100);

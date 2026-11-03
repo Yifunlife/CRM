@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {boardLeadVisible} from './market-access';
 import {canViewAllMarkets,canSetManagement,boardMarkets,can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
@@ -14,7 +15,7 @@ export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,p
  if(path==='sales-management/report'&&method==='GET'){
   const [people,leads,links,deals,receipts,targets]=await Promise.all([
    list(db,"SELECT id,name,role,active,trade_scopes FROM crm_users WHERE role='sales' OR (role IN ('management','ceo') AND trade_scopes<>'[]') OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) ORDER BY name"),
-   list(db,'SELECT id,name,owner_id,grade,created,entered,country,source,business_scope,detail FROM crm_leads'),
+   list(db,'SELECT id,name,owner_id,grade,created,entered,country,source,business_scope,detail FROM crm_leads l WHERE '+customerLeadSQL()),
    list(db,'SELECT lead_id,subject_id FROM crm_customer_subject_links'),
    list(db,'SELECT d.*,c.currency,c.total_minor FROM crm_deals d LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0'),
    list(db,'SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r WHERE r.cancelled=0'),

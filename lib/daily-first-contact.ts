@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {boardMarkets,can,canViewAllMarkets,now} from './crm';
 import {isSalesPerson,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
 import {allocationPoliciesSQL} from './allocation-priority';
@@ -20,7 +21,7 @@ export async function dailyFirstContact(db:D1Database,user:any,url:URL,at=now())
     WHERE n.lead_id=l.id AND n.user_id=l.owner_id AND n.created>=a.created AND n.created<=? AND COALESCE(e.created,t.created,n.created)<=?
     AND trim(n.content)<>'' AND n.method IN ('WhatsApp','邮件','电话','线上会议','到访公司','其他','首次WhatsApp','首次邮件')) completed_at
    FROM crm_leads l JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)
-   WHERE l.review=0 AND a.policy IN ${allocationPoliciesSQL} AND a.created<=?`).bind(at,at,at).all<any>(),
+   WHERE l.review=0 AND ${customerLeadSQL()} AND a.policy IN ${allocationPoliciesSQL} AND a.created<=?`).bind(at,at,at).all<any>(),
   db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<{payload:string}>()
  ]);
  const members:Record<string,string>=Object.fromEntries((settings?JSON.parse(settings.payload).members:[]).map((m:any)=>[m.user_id,m.state]));

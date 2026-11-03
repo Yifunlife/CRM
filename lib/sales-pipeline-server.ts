@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {assignmentFields,assignmentJoin} from './assignment-reminders';
 import {assignmentCategory} from './assignment-categories';
 import {authorizedLead,can,clean,id,now} from './crm';
@@ -15,7 +16,7 @@ export async function salesPipelineEndpoint(db:D1Database,user:any,actor:any,pat
  if(!path.startsWith('sales-pipeline'))return undefined;
  const timestamp=now();
  if(path==='sales-pipeline'&&method==='GET'){
-  const all=can(user,'customers_all'),where=all?'':' WHERE l.owner_id=?',args=all?[]:[user.id];
+  const all=can(user,'customers_all'),where=' WHERE '+customerLeadSQL()+(all?'':' AND l.owner_id=?'),args=all?[]:[user.id];
   const leads=(await db.prepare(`SELECT l.*,u.name AS owner_name,${assignmentFields} FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id ${assignmentJoin}${where}`).bind(...args).all<any>()).results;
   const deals=(await db.prepare('SELECT d.id,d.lead_id,EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.deal_id=d.id) AS has_order FROM crm_deals d JOIN crm_leads l ON l.id=d.lead_id WHERE d.cancelled=0'+(all?'':' AND l.owner_id=?')).bind(...args).all<any>()).results;
   const orders=await visibleOrders(db,user);

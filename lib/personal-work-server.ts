@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {allocationPerformance} from './allocation-performance-server';
 import {authorizedLead,canSetManagement,can,clean,id,now,STATUSES} from './crm';
 import {AllocationError} from './allocation-server';
@@ -11,7 +12,7 @@ const parse=(v:string)=>JSON.parse(v||'{}');
 const event=(db:D1Database,actor:any,lead:any,kind:string,payload:any,revision?:string)=>db.prepare("INSERT INTO crm_sales_events(id,lead_id,kind,payload,occurred_at,created,created_by) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?)"+(revision===undefined?'':" AND COALESCE((SELECT id FROM crm_sales_events WHERE lead_id=? AND kind=? AND json_extract(payload,'$.entity')=? ORDER BY created DESC,rowid DESC LIMIT 1),'')=?")).bind(id(),lead.id,kind,JSON.stringify(payload),now(),now(),actor.id,lead.id,lead.owner_id,...(revision===undefined?[]:[lead.id,kind,payload.entity,revision]));
 async function customer(db:D1Database,u:any,key:any){const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(clean(key,100)).first();if(!lead||!authorizedLead(u,lead))fail('客户不存在或无权查看',404);return lead;}
 async function entries(db:D1Database,u:any,leadId=''){
- return (await list(db,`SELECT e.*,l.name AS customer_name,l.owner_id,l.status FROM crm_sales_events e JOIN crm_leads l ON l.id=e.lead_id WHERE e.kind IN ('业务员跟进记录','业务员开业计划','业务员重点项目') AND ${u.role==='sales'||!can(u,'customers_all')?'l.owner_id=?':'1=1'}${leadId?' AND l.id=?':''} ORDER BY e.created DESC,e.rowid DESC`,[...(u.role==='sales'||!can(u,'customers_all')?[u.id]:[]),...(leadId?[leadId]:[])])).map(e=>({...e,payload:parse(e.payload)}));
+ return (await list(db,`SELECT e.*,l.name AS customer_name,l.owner_id,l.status FROM crm_sales_events e JOIN crm_leads l ON l.id=e.lead_id WHERE e.kind IN ('业务员跟进记录','业务员开业计划','业务员重点项目') AND ${u.role==='sales'||!can(u,'customers_all')?'l.owner_id=?':'1=1'} AND ${leadId?'1=1':customerLeadSQL()}${leadId?' AND l.id=?':''} ORDER BY e.created DESC,e.rowid DESC`,[...(u.role==='sales'||!can(u,'customers_all')?[u.id]:[]),...(leadId?[leadId]:[])])).map(e=>({...e,payload:parse(e.payload)}));
 }
 export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('personal-work/'))return undefined;
@@ -85,13 +86,13 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const newLeads=await list(db,`SELECT l.id,l.name,l.country,l.source,l.channel,l.status,
    EXISTS(SELECT 1 FROM crm_workbench_links w WHERE w.lead_id=l.id AND w.owner_id=l.owner_id) AS workbench_added,
    (SELECT CASE WHEN c.state='done' AND json_extract(c.result,'$.status') IN ('sent','confirmed_sent') THEN 'sent' WHEN c.state='done' AND json_extract(c.result,'$.status')='skipped' THEN 'skipped' ELSE c.state END FROM crm_workbench_commands c WHERE c.owner_id=l.owner_id AND json_extract(c.payload,'$.crm_lead_id')=l.id AND json_extract(c.payload,'$.auto_first_contact')=1 ORDER BY c.created DESC LIMIT 1) AS first_contact_state
-   FROM crm_leads l WHERE l.owner_id=? AND l.review=0 AND (
+   FROM crm_leads l WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND (
     (l.cohort='new' AND date(l.created,'+8 hours')=?) OR EXISTS(
      SELECT 1 FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id
      AND a.policy IN ('full-first-v1','manual-v1','equal-v1','equal-global-v1') AND date(a.created,'+8 hours')=?))
    ORDER BY l.created DESC,l.id`,[u.id,today,today]);
-  const tasks=await list(db,"SELECT t.id,t.title,t.status,t.due_at,t.next_action,t.lead_id,t.order_id FROM crm_sales_tasks t JOIN crm_leads l ON l.id=t.lead_id WHERE t.owner_id=? AND l.owner_id=? AND t.status IN ('open','done') AND date(t.due_at,'+8 hours')<=? ORDER BY t.due_at",[u.id,u.id,today]);
-  const orderTasks=await list(db,"SELECT t.status FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id WHERE t.owner_id=? AND l.owner_id=? AND date(t.due_at,'+8 hours')<=? AND t.status IN ('待处理','已解决')",[u.id,u.id,today]);
+  const tasks=await list(db,"SELECT t.id,t.title,t.status,t.due_at,t.next_action,t.lead_id,t.order_id FROM crm_sales_tasks t JOIN crm_leads l ON l.id=t.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND t.owner_id=? AND l.owner_id=? AND t.status IN ('open','done') AND date(t.due_at,'+8 hours')<=? ORDER BY t.due_at",[u.id,u.id,today]);
+  const orderTasks=await list(db,"SELECT t.status FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND t.owner_id=? AND l.owner_id=? AND date(t.due_at,'+8 hours')<=? AND t.status IN ('待处理','已解决')",[u.id,u.id,today]);
   if(managesAllocation){const allocation=await allocationPerformance(db);for(const person of allocation.rows.filter(p=>p.performance.tier==='review'))reminders.push({id:'allocation-review:'+person.id,lead_id:'',page:'分配管理',name:person.name,title:'持续未达标，需管理层处理调岗',date:today,label:'调岗待办',rank:0,kind:'岗位调整'});}
   return {today,newLeads,reminders:reminders.sort((a,b)=>a.rank-b.rank||a.date.localeCompare(b.date)),priorities:[...priority].filter(([,v])=>v).map(([k])=>k),tasks,taskCompletion:{total:tasks.length+orderTasks.length,done:tasks.filter(t=>t.status==='done').length+orderTasks.filter(t=>t.status==='已解决').length}};
  }

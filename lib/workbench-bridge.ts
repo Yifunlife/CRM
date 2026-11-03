@@ -1,3 +1,4 @@
+import {CONTACT_GRADES,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {ensureCustomerCode} from './customer-code';
 import {customerProfile,validateCustomerProfile} from './customer-profile';
 import {queueFirstContacts,autoContactAllowed} from './auto-first-contact';
@@ -113,7 +114,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 1").bind(device.owner_id).first();
  if(!next)return {command:null};
  try{await ownedDesktop(db,device.owner_id,next.desktop_id);const automatic=JSON.parse(next.payload);if(automatic.auto_first_contact&&!await autoContactAllowed(db,device.owner_id,automatic))throw new AllocationError('自动首联条件已变化',409);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch{await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
- const claimed:any=await db.prepare("UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' RETURNING id").bind(timestamp,next.id).first();
+ const claimed:any=await db.prepare(`UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' AND (COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=json_extract(crm_workbench_commands.payload,'$.crm_lead_id') AND ${customerLeadSQL()})) RETURNING id`).bind(timestamp,next.id).first();
  return {command:claimed?{id:next.id,desktop_id:next.desktop_id,kind:next.kind,payload:JSON.parse(next.payload)}:null};
 }
 
@@ -140,7 +141,7 @@ async function uploadNewWorkbenchClients(db:D1Database,owner:string,clients:any[
  const person:any=await db.prepare('SELECT name FROM crm_users WHERE id=? AND active=1').bind(owner).first();
  for(const desktop of ids){
   const c=clients.find(c=>c.id===desktop),p=phoneKey(c.whatsapp),e=emailKey(c.email),reject=(reason:string)=>conflicts.push({desktop_id:desktop,reason});
-  if(desktop.startsWith('crm-')||!c.name||c.grade&&!['VIP','A','B','C','D'].includes(c.grade)){reject('本地客户资料需核对，未新建');continue;}
+  if(desktop.startsWith('crm-')||!c.name||c.grade&&!CONTACT_GRADES.includes(c.grade)){reject('本地客户资料需核对，未新建');continue;}
   if(p&&!/^\d{8,15}$/.test(p)||e&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){reject('本地联系方式需核对，未新建');continue;}
   const expected='wb-'+await digest(owner+':'+desktop),priorLink=links.find(l=>l.owner_id===owner&&l.desktop_id===desktop);
   const exact=contacts.find(l=>l.id===expected),matches=contacts.filter(l=>p&&phoneKey(l.phone)===p||e&&emailKey(l.email)===e);
@@ -201,10 +202,10 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
    if(base&&typeof base[key]==='string'){
     if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'两端均已修改，请核对'});continue;}
     if(local!==base[key]&&remote===base[key]){
-     if(key==='name'&&!local||key==='grade'&&local&&!['VIP','A','B','C','D'].includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
+     if(key==='name'&&!local||key==='grade'&&local&&!CONTACT_GRADES.includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
      if(['whatsapp','email'].includes(key)&&local&&(await db.prepare('SELECT id,phone,email FROM crm_leads WHERE id<>?').bind(lead.id).all<any>()).results.some(r=>key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
      const changed:any=await db.prepare(`UPDATE crm_leads SET ${column}=? WHERE id=? AND owner_id=? AND ${column}=? RETURNING id`).bind(local,lead.id,owner,remote).first();
-     if(changed){values[key]=local;lead[column]=local;}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});
+     if(changed){values[key]=local;lead[column]=local;if(key==='grade')await cancelColleagueFirstContacts(db,lead.id).run();}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});
     }
    }else if(local&&remote&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'首次关联的两端内容不同，请核对'});}
   }

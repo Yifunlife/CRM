@@ -3,7 +3,7 @@ export const MODULES={
  intake:{name:'客资进入',entry:'lib/api/intake.ts',tests:['confirmed-intake','form-intake','customer-pool']},
  history:{name:'历史归属对齐',entry:'lib/historical-alignment.ts',tests:['confirmed-intake','confirmed-cohort']},
  allocation:{name:'客资分配',entry:'lib/allocation-server.ts',tests:['confirmed-allocation','global-allocation','assignment-reminders','assignment-sync']},
- customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['sales-access','customer-progress','customer-identity','customer-page']},
+ customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['colleague-contact','sales-access','customer-progress','customer-identity','customer-page']},
  communication:{name:'客户沟通',entry:'lib/communication-progress.ts',tests:['communication-progress','linked-whatsapp','cloud-communication']},
  projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite','project-markets']},
  quotes:{name:'报价确认接收',entry:'lib/confirmation/quotes.ts',tests:['workflow-confirmations']},

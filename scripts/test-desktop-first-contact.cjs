@@ -16,6 +16,7 @@ const run=async(overrides={})=>{
  await assert.rejects(run({args:{active:()=>false}}),/工作区|客户资料/);
  await assert.rejects(run({args:{draft:()=>({draft:'human draft'})}}),/草稿/);
  await assert.rejects(run({client:{owner:'Other'}}),/归属/);
+ for(const grade of ['Yifun Staff','同事'])await assert.rejects(run({client:{grade}}),/客户资料/);
  await assert.rejects(run({payload:{assigned_at:'2026-11-02T11:00:00Z'}}),/分配时间/);
  await assert.rejects(run({client:{country:'EG',whatsapp:'+96569309607'},payload:{country:'EG',recipient_key:'96569309607'}}),/国家冲突/);
  await assert.rejects(run({args:{clients:()=>[{id:'duplicate',whatsapp:'16145551234'}]}}),/号码与其他客户重合/);

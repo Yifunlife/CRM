@@ -1,3 +1,4 @@
+import {customerLeadSQL} from './contact-kind';
 import {can} from './crm';
 import {assignmentFields} from './assignment-reminders';
 import {suiteDay} from './sales-suite';
@@ -7,7 +8,7 @@ export async function customerAllocationSummary(db:D1Database,user:any,today=sui
  const rows=(await db.prepare(`WITH events AS (
   SELECT a.owner_id,a.lead_id,${assignmentFields}
   FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id
-  WHERE l.review=0 AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'}
+  WHERE l.review=0 AND ${customerLeadSQL()} AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'}
  ), counted AS (
   SELECT owner_id,
    COUNT(DISTINCT CASE WHEN date(assigned_at,'+8 hours')=? THEN lead_id END) AS today,

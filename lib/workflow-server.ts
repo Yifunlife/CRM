@@ -1,3 +1,4 @@
+import {isColleague} from './contact-kind';
 import {AllocationError} from './allocation-server';
 import {id,now,clean,authorizedLead,can,hasAdminPermissions} from './crm';
 import {chinaToday,nextChinaWorkday} from './china-workdays';
@@ -27,9 +28,9 @@ export async function workflowEndpoint(db:D1Database,user:any,actor:any,path:str
  if(!path.startsWith('workflow/'))return undefined;
  if(path==='workflow/report'&&method==='GET'){
   const all=can(user,'customers_all'),where=user.role==='followup'?' WHERE 0':all?'':' WHERE l.owner_id=?',args=all||user.role==='followup'?[]:[user.id];
-  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.status,l.cohort,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
+  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.cohort,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
   const issues:any[]=[];const add=(kind:string,entity_id:string,name:string,owner:string,issue:string,due='')=>issues.push({kind,entity_id,name,owner,issue,due});
-  for(const l of leads){
+  for(const l of leads.filter(l=>!isColleague(l.grade))){
    if(l.status==='已成交'&&!l.deal_count)add('customer',l.id,l.name,l.owner_name,'已成交但无有效成交单，待核查');
    if(l.deal_count&&!['已成交','已结束'].includes(l.status))add('customer',l.id,l.name,l.owner_name,'已有成交仍在跟进，核查是否复购');
    if(l.owner_id&&l.owner_active===0)add('customer',l.id,l.name,l.owner_name,'负责人停用，待交接');

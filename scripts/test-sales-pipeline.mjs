@@ -1,8 +1,9 @@
+import {moduleURL} from './test-form-intake.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const module=(file,replacements={})=>{let source=readFileSync(file,'utf8');source=source.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,JSON.stringify(to));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const pure=module('lib/sales-pipeline.ts'),crm=module('lib/crm.ts'),errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const {salesPipelineEndpoint}=await import(module('lib/sales-pipeline-server.ts',{"'./crm'":crm,"'./allocation-server'":errors,"'./sales-pipeline'":pure,"'./assignment-categories'":module('lib/assignment-categories.ts'),"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
 const {salesSummary}=await import(pure);
