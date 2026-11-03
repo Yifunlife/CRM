@@ -10,7 +10,7 @@ const autoUrl=moduleUrl('lib/auto-first-contact.ts',{"'./crm'":JSON.stringify(mo
 const codeUrl=moduleUrl('lib/customer-code.ts',{"'./allocation-server'":JSON.stringify(errors)});
 const bridgeUrl=moduleUrl('lib/workbench-bridge.ts', {"'./customer-code'":JSON.stringify(codeUrl),"'./customer-profile'":JSON.stringify(moduleUrl('lib/customer-profile.ts')),"'./auto-first-contact'":JSON.stringify(autoUrl),"'./object-storage'":JSON.stringify(storageUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)});
 const {bridgeDeviceEndpoint}=await import(bridgeUrl);
-const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'./object-storage'":JSON.stringify(storageUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
+const {viewUser,workbenchEndpoint}=await import(moduleUrl('lib/workbench-server.ts',{"'b7e34925-ec83-4f4e-ad42-04be344dc82b'":"'winnie'","'./object-storage'":JSON.stringify(storageUrl),"'./workbench-bridge'":JSON.stringify(bridgeUrl),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./allocation-server'":JSON.stringify(errors)}));
 const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return sqlite.prepare(this.sql).get(...this.args)||null;}async all(){return {results:sqlite.prepare(this.sql).all(...this.args)};}async run(){return {meta:sqlite.prepare(this.sql).run(...this.args)};}}
 const db={prepare:sql=>new Statement(sql),batch:async statements=>Promise.all(statements.map(s=>s.run()))},admin={id:'admin',role:'admin',name:'Boss'},winnie={id:'winnie',role:'sales'},other={id:'other',role:'sales'},ops={id:'ops',role:'operations'};
@@ -156,7 +156,8 @@ await assert.rejects(resetAccountPassword(db,admin,{id:'winnie',password:'test-p
 await resetAccountPassword(db,admin,{id:'winnie',password:'test-password'});
 const resetAfter=sqlite.prepare("SELECT * FROM crm_users WHERE id='winnie'").get();
 assert(await verifyPassword('test-password',resetAfter.password));
-assert.deepEqual({...resetAfter,password:targetBefore.password},{...targetBefore});
+assert.equal(resetAfter.must_change_password,1);
+assert.deepEqual({...resetAfter,password:targetBefore.password,must_change_password:targetBefore.must_change_password},{...targetBefore});
 assert.deepEqual(sqlite.prepare("SELECT * FROM crm_users WHERE id='other'").get(),otherBefore);
 assert.equal(sqlite.prepare("SELECT count(*) AS n FROM crm_sessions WHERE user_id='winnie'").get().n,0);
 assert(sqlite.prepare("SELECT * FROM crm_sessions WHERE token='reset-other'").get());

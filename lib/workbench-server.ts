@@ -4,7 +4,7 @@ import {id,now,clean,phoneKey,emailKey,digest,permissionDefaults} from './crm';
 import {AllocationError} from './allocation-server';
 export async function viewUser(db:D1Database,actor:any,view:string|null){
  if(!view||view==='boss')return actor;
- if(view==='personal'&&(actor.role==='ceo'||actor.role==='management'&&await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(actor.id).first()))return {...actor,role:'sales',permissions:permissionDefaults('sales'),actor_role:actor.role,personal_business:true};
+ if(view==='personal'&&['ceo','management'].includes(actor.role))return {...actor,role:'sales',permissions:permissionDefaults('sales'),actor_role:actor.role,personal_business:true};
  if(view!=='winnie'||actor.role!=='admin')throw new AllocationError('无权切换此视角',403);
  const target:any=await db.prepare("SELECT id,username,name,role,permissions FROM crm_users WHERE id=COALESCE((SELECT id FROM crm_users WHERE id='b7e34925-ec83-4f4e-ad42-04be344dc82b'),(SELECT id FROM crm_users WHERE username='winnie')) AND role IN ('sales','management') AND active=1").first();
  if(!target)throw new AllocationError('Winnie账号不存在或已停用',409);
