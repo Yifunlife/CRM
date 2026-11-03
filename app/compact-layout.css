@@ -1,0 +1,124 @@
+/* Shared spacing comes after the theme; lazy-loaded modules use the same rhythm. */
+:root .office-app .workspace .content {
+  --crm-space-tight: 4px;
+  --crm-space-control: 8px;
+  --crm-space-section: 10px;
+  --crm-space-page: 12px;
+}
+:root .office-app .workspace .content { padding: 12px 16px; }
+:root .office-app .workspace .content .page-heading {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  gap: 8px 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-direction: row;
+  text-align: left;
+}
+:root .office-app .workspace .content .page-heading h1 { font-size: 24px; line-height: 1.35; margin: 0; }
+:root .office-app .workspace .content .page-heading > div:has(> h1),
+:root .office-app .workspace .content :is(.section-heading,.ss-panelhead,.sm-section-heading,.op-board-toolbar) > div:has(> h2) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+:root .office-app .workspace .content .page-heading > div:has(> h1) { flex: 1 1 280px; }
+:root .office-app .workspace .content .page-heading p {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  flex: 1 1 260px;
+  overflow-wrap: anywhere;
+}
+:root .office-app .workspace .content .page-heading > div:first-child > p { display: block; }
+:root .office-app .workspace .content .panel { padding: 10px 12px; margin-bottom: 10px; }
+:root .office-app .workspace .content .panel .panel { padding: 10px 0 0; }
+:root .office-app .workspace .content :is(.section-heading,.ss-panelhead,.sm-section-heading,.op-board-toolbar) {
+  gap: 4px 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+:root .office-app .workspace .content h2 { margin-bottom: 6px; }
+:root .office-app .workspace .content :is(.section-heading,.ss-panelhead,.sm-section-heading,.op-board-toolbar) h2 { margin: 0; }
+:root .office-app .workspace .content h3 { margin-bottom: 6px; }
+:root .office-app .workspace .content .panel > p:where(.small,.muted):not(.notice) { margin-block: 6px; line-height: 1.5; }
+:root .office-app .workspace .content .panel > p:last-child { margin-bottom: 0; }
+
+/* Short explanations share their heading's line and wrap with the available space. */
+:root .office-app .workspace .content .panel > h2:has(+ p:not([role]):not(.notice):not(.error)),
+:root .office-app .workspace .content .section-heading:has(+ p.small.muted) {
+  display: inline-flex;
+  vertical-align: baseline;
+  margin: 0 12px 6px 0;
+}
+:root .office-app .workspace .content .panel > h2 + p:not([role]):not(.notice):not(.error),
+:root .office-app .workspace .content .section-heading + p.small.muted {
+  display: inline;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+:root .office-app .workspace .content :is(.section-heading,.ss-panelhead,.sm-section-heading,.op-board-toolbar) > div > p {
+  margin: 0;
+  line-height: 1.5;
+}
+:root .office-app .workspace .content :is(.notice,.allocation) { padding: 6px 10px; margin-bottom: 8px; }
+:root .office-app .workspace .content :is(.tabs,.customer-detail-tabs,.followup-tabs,.role-process-tabs,.customer-stage-tabs) { margin-bottom: 8px; gap: 12px; }
+:root .office-app .workspace .content :is(.filters,.ss-toolbar,.role-toolbar,.followup-toolbar,.ops-filters,.am-filters,.mw-filterbar,.sm-filters) { gap: 6px 10px; margin-bottom: 8px; }
+:root .office-app .workspace .content label:where(:not(.checkbox)) { margin-bottom: 8px; }
+:root .office-app .workspace .content :is(.filters,.ss-toolbar,.role-toolbar,.followup-toolbar,.ops-filters,.am-filters,.mw-filterbar,.sm-filters) label { margin-bottom: 0; }
+:root .office-app .workspace .content :is(.form-row,.role-form-grid,.followup-form-grid,.execution-grid,.personal-form-grid,.dossier-grid) { gap: 8px 12px; }
+:root .office-app .workspace .content :is(.form-row,.role-form-grid,.followup-form-grid,.execution-grid,.personal-form-grid,.dossier-grid) > label { margin-bottom: 0; }
+:root .office-app .workspace .content th,
+:root .office-app .workspace .content td { padding: 6px 8px; line-height: 1.5; }
+:root .office-app .workspace .content :is(.empty,.mw-empty,.monitor-empty,.sales-home-empty,.followup-empty) { padding: 12px; }
+:root .office-app .workspace .content .pagination { margin-top: 8px; gap: 8px; }
+:root .office-app .workspace .content :is(.ss-split,.ss-two,.ss-projectlayout,.ss-fields,.customer-followup-layout,.customer-finance-layout,.detail-columns,.dashboard-bottom,.mw-split,.so-split,.service-setup,.service-detail,.dossier-layout,.country-distribution,.meta-trend-grid) { gap: 12px; }
+:root .office-app .workspace .content :is(.role-metrics,.so-metrics,.so-people,.mw-focus-grid,.customer-statistics,.personal-metrics) { margin-bottom: 10px; }
+:root .office-app .workspace .content :is(.role-metric,.so-metric,.so-person,.mw-focus,.team-priorities > button) { padding: 8px 10px; }
+:root .office-app .workspace .content :is(.ss-event,.ss-task,.ss-quote,.ss-forecast,.sales-home-customer,.monitor-item,.followup-task,.followup-file,.followup-event,.team-customer-list article) { padding-block: 8px; }
+:root .office-app .workspace .content :is(.monitor-overview,.personal-performance,.ss-summary,.sales-home-performance,.sm-summary) { gap: 8px 16px; margin-block: 8px; padding-block: 8px; }
+:root .office-app .workspace .content :is(.report-definitions,.role-method,.followup-footnote,.monitor-rules,.op-import-summary,.ft-caption) { margin-block: 6px; }
+:root .office-app .workspace .content :is(.role-method,.report-definitions) > summary { padding-block: 4px; }
+:root .office-app .workspace .content :is(.am-tabs,.am-recipients,.am-preview,.am-mapping,.dossier-toolbar) { margin-block: 8px; gap: 8px 12px; }
+:root .office-app .workspace .content :is(.am-preview,.fb-editor,.followup-task-form) { padding: 10px 12px; }
+:root .office-app .workspace .content .customer-dossier .dossier-section :is(h2,h3) { margin-bottom: 6px; }
+:root .office-app .workspace .content .customer-dossier .dossier-section hr { margin: 12px 0 10px; }
+:root .office-app .workspace .content .customer-dossier .dossier-section .small.muted { margin-top: 6px; }
+:root .office-app .workspace .content .customer-dossier .panel + details { margin-top: 10px; }
+:root .office-app .workspace .content .customer-dossier :is(.dossier-stack,.dossier-sidebar,.personal-work-stack) { gap: 10px; }
+:root .office-app .workspace .content .customer-dossier .dossier-sidebar dl { gap: 6px; }
+:root .office-app .workspace .content .customer-original-inquiry { padding-block: 6px; margin-bottom: 8px; }
+:root .office-app .workspace .content .customer-original-inquiry > dl { grid-template-columns: repeat(3,minmax(0,1fr)); }
+:root .office-app .workspace .content .customer-detail.customer-detail-dossier > .page-heading { padding: 0; }
+:root .office-app .workspace .content :is(.contract-templates,.contract-files) > details.panel:not([open]) { padding-block: 4px; }
+
+:root .office-app .workspace .content .daily-first-contact { margin-block: 10px; }
+:root .office-app .workspace .content .daily-first-contact .section-heading > div { flex: 1 1 420px; }
+:root .office-app .workspace .content .daily-first-contact .section-heading h2 { flex-shrink: 0; }
+:root .office-app .workspace .content .daily-first-contact .section-heading p { flex: 1 1 360px; }
+:root .office-app .workspace .content .daily-first-contact .first-contact-summary { margin: 6px 0; }
+:root .office-app .workspace .content .daily-first-contact td small { display: inline; margin: 0 0 0 6px; }
+:root .office-app .workspace .content .daily-first-contact details > summary { padding: 0; }
+:root .office-app .workspace .content .daily-first-contact ul { margin-top: 4px; }
+:root .office-app .workspace .content .daily-first-contact li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding-block: 4px; }
+:root .office-app .workspace .content .daily-first-contact li > span { margin: 0; }
+
+@media (max-width: 720px) {
+  :root .office-app .workspace .content { padding: 10px; }
+  :root .office-app .workspace .content .page-heading { padding: 8px 10px; }
+  :root .office-app .workspace .content .page-heading h1 { font-size: 20px; }
+  :root .office-app .workspace .content .page-heading > div:has(> h1) { flex-basis: auto; }
+  :root .office-app .workspace .content .panel { padding: 10px; }
+  :root .office-app .workspace .content .customer-original-inquiry > dl { grid-template-columns: 1fr; }
+  :root .office-app .workspace .content .daily-first-contact tr { padding-block: 8px; gap: 4px 12px; }
+  :root .office-app .workspace .content .daily-first-contact td { padding: 0; }
+  :root .office-app .workspace .content .daily-first-contact details > summary { padding-block: 10px; }
+}
+@media (max-width: 720px), (pointer: coarse) {
+  :root .office-app .workspace .content :is(button,button.text,input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,summary) { min-height: 44px; }
+}

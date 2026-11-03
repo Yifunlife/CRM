@@ -6,6 +6,7 @@ import "./crm-density.css";
 import "./ui-polish.css";
 import "./microsoft365.css";
 import "./role-preview.css";
+import "./compact-layout.css";
 
 export const metadata: Metadata = {
   title: "亦玩客资管理",
