@@ -266,8 +266,9 @@ body,
 .office-app .workspace .so-goal .mw-progress > span { background: #12846b; }
 .office-app .workspace .so-goal:last-child .mw-progress > span { background: #6a4cb2; }
 .office-app .workspace .personal-metrics > [data-metric] { background: #e4effd; color: #174f8b; border-color: #c5daf2; }
-.office-app .workspace .personal-metrics > :is([data-metric='成交订单'],[data-metric='成交金额'],[data-metric='已收金额'],[data-metric='到期事项完成度']) { background: #ddf2e7; color: #1c6548; border-color: #bfdccb; }
+.office-app .workspace .personal-metrics > :is([data-metric='成交订单'],[data-metric='成交金额'],[data-metric='已收金额'],[data-metric='到期事项完成度'][data-completion-state='complete']) { background: #ddf2e7; color: #1c6548; border-color: #bfdccb; }
 .office-app .workspace .personal-metrics > :is([data-metric='报价金额'],[data-metric='报价项目'],[data-metric='未收金额']) { background: #ffedd5; color: #824806; border-color: #efd2ac; }
+.office-app .workspace .personal-metrics > [data-metric='到期事项完成度'][data-completion-state='pending'] { background: #ffedd5; color: #824806; border-color: #efd2ac; }
 .office-app .workspace .personal-metrics > :is([data-metric='业绩目标'],[data-metric='业绩完成率']) { background: #ece3fa; color: #643e95; border-color: #d9c9ec; }
 .office-app .workspace .personal-metrics > [data-metric] > span { color: inherit; }
 .office-app .workspace .crm-status { padding: 4px 8px; border-radius: 5px; font-weight: 600; }
