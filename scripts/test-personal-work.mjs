@@ -89,3 +89,13 @@ assert.equal(personalTodoDue(today,today),true);
 assert.equal(personalTodoDue(addDays(today,-1),today),true);
 assert.equal(personalTodoDue('invalid',today),false);
 console.log('PASS: first contact waiting for reply, missing dates and future tasks stay out of today; real today and overdue follow-ups remain.');
+
+sql.prepare("UPDATE crm_sales_projects SET next_date=?,next_action='Review design' WHERE project_id='p'").run(today);
+assert.equal((await get('report')).projects.find(p=>p.project_id==='p').next_action,'Review design');
+assert.equal((await get('report',other)).projects.length,0,'project reminders remain owner scoped even for a broadly permitted salesperson');
+sql.prepare("UPDATE crm_sales_projects SET stage='won' WHERE project_id='p'").run();
+assert.equal((await get('report')).projects.some(p=>p.project_id==='p'),false,'completed sales projects leave next-step reminders');
+const currentPlan=(await get('customer?id=mine')).plans.find(p=>p.entity==='sales:p');
+await post('plan',{id:'mine',revision:currentPlan.revision,plan:{...plan,opening:addDays(today,-1),phase:4,remaining:0}});
+assert.equal((await get('report')).reminders.some(r=>r.id==='opening:sales:p'),false,'an opening plan with its last phase completed does not remain overdue');
+console.log('PASS: owner-scoped project next actions, completed sales projects and completed opening plans automatically leave current reminders.');

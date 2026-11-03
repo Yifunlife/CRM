@@ -42,3 +42,5 @@
  .personal-leads-table td:nth-child(5){grid-column:2;grid-row:1;align-self:center}
  .personal-lead-receipts{margin:0}
 }
+
+.next-step-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.next-step-toolbar p{margin:0}.next-step-toolbar label{flex:0 0 130px}.personal-contact-followup .personal-todo-late small{color:inherit}@media(max-width:720px){.next-step-toolbar{align-items:flex-start;flex-direction:column}.next-step-toolbar label{flex:auto;width:100%}}
