@@ -9,3 +9,9 @@
 .inquiry-content>p{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
 .mw-original-inquiry{min-width:190px;max-width:280px;white-space:normal}
 @media(max-width:720px){.customer-original-inquiry>dl{grid-template-columns:1fr;gap:8px}.inquiry-content>summary{min-height:36px}}
+
+.customer-management .ui-customer-time{white-space:nowrap;font-size:12px;color:var(--muted,#53647c)}
+.customer-management .customer-inquiry-inline{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.customer-management .customer-inquiry-inline>.inquiry-content{margin:0}
+.customer-management .customer-inquiry-inline>.inquiry-content>summary{padding:0;white-space:nowrap}
+.customer-management .customer-inquiry-inline>.inquiry-content>p{max-width:300px;white-space:pre-wrap}

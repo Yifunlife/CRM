@@ -1,4 +1,5 @@
 'use client';
+import {countryLabel} from '../lib/report-country';
 import {useEffect,useState} from 'react';
 import NextStepReminders from './contact-followup';
 import {nextStepReminders} from '../lib/next-step-reminders';
@@ -7,12 +8,6 @@ import {accountTradeScopes} from '../lib/account-classification';
 import {boardMarkets} from '../lib/crm';
 import {moneyLabel} from '../lib/sales-suite';
 import './personal-work.css';
-const countryNames=new Intl.DisplayNames(['zh-CN'],{type:'region'});
-const countryLabel=(value:string)=>{
- const country=(value||'').trim(),code=country.toUpperCase();
- const name=/^[A-Z]{2}$/.test(code)?countryNames.of(code):null;
- return name&&name!==code?name+' · '+code:country||'国家未填写';
-};
 type Props={api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void;openOrder:(id:string)=>void;openProject:(id:string)=>void;navigate:(page:string)=>void};
 export function PersonalWork({user,api,openLead,openOrder,openProject,navigate}:Props&{user:any}){
  const [data,D]=useState<any>(null),[error,E]=useState(''),[revision,R]=useState(0);

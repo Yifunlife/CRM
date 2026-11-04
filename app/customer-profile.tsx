@@ -1,4 +1,5 @@
 'use client';
+import {countryLabel} from '../lib/report-country';
 import GuidedFollowup from './guided-followup';
 import {CONTACT_GRADES,contactGradeLabel,isColleague} from '../lib/contact-kind';
 import {useEffect,useId,useState,type ReactNode} from 'react';
@@ -32,7 +33,7 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
    await onSaved();S(false);M('保存成功，修改已生效');
   }catch(e:any){E(e.message);}finally{B(false);}
  }
- function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='contract_number'?'成交后显示合同编号':'待补充'}/></label>;}
+ function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input key={name==='country'?String(editing):name} name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={name==='country'&&!editing?countryLabel(value,''):value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='contract_number'?'成交后显示合同编号':'待补充'}/></label>;}
  function select(name:string,label:string,value:string,options:string[]){return <label>{label}<select name={name} defaultValue={value||''} disabled={!editing}><option value="">待确认</option>{value&&!options.includes(value)&&<option value={value}>{value}（原记录）</option>}{options.map(o=><option key={o} value={o}>{contactGradeLabel(o)}</option>)}</select></label>;}
  function actions(header=false){return editable&&(editing?<div className={header?'dossier-edit-actions':'dossier-actions'} role="group" aria-label="客户资料修改操作">{header&&<span className="dossier-editing-state" role="status">编辑中，尚未保存</span>}<button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" form={formId} className="primary" disabled={busy}>{busy?'正在保存…':'保存修改'}</button></div>:header?<button type="button" className="primary dossier-edit" disabled={busy} onClick={edit}><Pencil size={16} aria-hidden="true"/>编辑档案</button>:null);}
  return <div className="customer-dossier">

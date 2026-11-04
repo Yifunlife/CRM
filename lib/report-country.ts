@@ -13,3 +13,10 @@ export function reportCountry(value:unknown):{code:string|null;name:string}{
  if(!code&&raw.includes('('))code=aliases.get(key(raw.split('(')[0]));
  return code?{code,name:code==='AU'?'澳洲':chinese.of(code)||code}:{code:null,name:'国家待核查'};
 }
+
+// Presentation only: never write the combined label back to customer records.
+export function countryLabel(value:unknown,empty='国家待补充'){
+ const raw=String(value||'').trim();if(!raw)return empty;
+ const normalized=raw.replace(/\s*[（(][A-Za-z]{2}[)）]\s*$/,'');
+ const {code}=reportCountry(normalized);return code?`${chinese.of(code)||normalized}（${code}）`:raw;
+}
