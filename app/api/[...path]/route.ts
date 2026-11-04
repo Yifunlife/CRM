@@ -86,7 +86,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(path.startsWith('workbench/')&&write)permissionDenied('customers_edit');
   if((path==='assign'||path==='allocation/distribute')&&!managementAllowed)permissionDenied('leads_allocate');
   if(path==='allocation/report')permissionDenied('performance_view');
-  if(!(managementWrite&&managementAllowed)&&(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project')))permissionDenied('customers_edit');
+  if(!domesticImport&&!(managementWrite&&managementAllowed)&&(['import','import-assignments','business-scope','review','grade'].includes(path)||path==='followup'&&write&&typeof body.id==='string'&&!Object.hasOwn(body,'project')))permissionDenied('customers_edit');
   if(path==='advertising'||path.startsWith('operations/'))permissionDenied(write?'advertising_edit':'advertising_view');
   if(path==='users/permissions'&&req.method==='POST')return json(await setAccountPermissions(db,user,body));
   if(path==='admin/backup' &&req.method==='GET'){if(!['admin','ceo'].includes(actor.role)||!['admin','ceo'].includes(user.role))throw new Problem('没有导出备份权限',403);return databaseBackup(db);}

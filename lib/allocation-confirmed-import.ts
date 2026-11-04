@@ -1,7 +1,7 @@
-import {can,canSetManagement,clean,digest,emailKey,id,now,phoneKey} from './crm';
+import {clean,digest,emailKey,id,now,phoneKey} from './crm';
 import {Problem} from './api/http';
 import {distribute} from './allocation-server';
-export function confirmedImportAllowed(user:any,actor:any,body:any){return user.id===actor.id&&body.confirmed_flow===true&&body.allocation_management===true&&body.allocate===false&&['domestic','whatsapp'].includes(body.form_source)&&(canSetManagement(user)&&canSetManagement(actor)||user.role==='operations'&&actor.role==='operations'&&can(user,'customers_edit'));}
+export function confirmedImportAllowed(user:any,actor:any,body:any){return user?.active!==0&&actor?.active!==0&&user?.id===actor?.id&&user?.role===actor?.role&&['operations','management','ceo','admin'].includes(user?.role)&&body.confirmed_flow===true&&body.allocation_management===true&&body.allocate===false&&['domestic','whatsapp'].includes(body.form_source);}
 export async function confirmedAllocationImport(db:D1Database,user:any,actor:any,body:any){
  if(!confirmedImportAllowed(user,actor,body))throw new Problem('没有此表单导入权限',403);
  if(!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem('每次导入1至3000条');
