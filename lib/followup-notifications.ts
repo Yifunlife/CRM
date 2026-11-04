@@ -60,7 +60,7 @@ export async function notificationEndpoint(db:D1Database,user:any,actor:any,path
   const at=now(),statements=[db.prepare("UPDATE crm_followup_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=?"+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=order_id AND o.logistics_id=recipient_id)':'')).bind(at,user.id,at)];
   statements.push(db.prepare("UPDATE crm_lead_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND l.owner_id=?)").bind(at,user.id,at,user.id));
   if(user.role!=='followup'){
-   statements.push(db.prepare("UPDATE crm_sales_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+'))').bind(at,user.id,at,user.id,user.id));
+   statements.push(db.prepare("UPDATE crm_sales_notifications SET read_at=? WHERE recipient_id=? AND read_at='' AND dedupe_key NOT LIKE 'dormant:%' AND created<=? AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=lead_id AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=task_id AND t.owner_id=?)"+(can(user,'customers_all')?' OR 1=1':'')+'))').bind(at,user.id,at,user.id,user.id));
   }
   const results=await db.batch(statements);return {ok:true,updated:results.reduce((count,result)=>count+Number(result.meta.changes||0),0),read_at:at};
  }

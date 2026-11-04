@@ -17,13 +17,14 @@ followNotice('follow-a','a');followNotice('follow-b','b');followNotice('staff-vi
 leadNotice('lead-a','a');leadNotice('lead-b','b','other');leadNotice('moved-hidden','a','other');leadNotice('already-read','a');
 sql.prepare("UPDATE crm_lead_notifications SET read_at='2026-02-01' WHERE id='already-read'").run();
 salesNotice('sales-a','a');salesNotice('sales-b','b','other');salesNotice('delegated','a','other','delegated-task');salesNotice('sales-hidden','a','other');salesNotice('future','a','own',null,'9999-01-01');
+salesNotice('dormant:legacy','a');
 for(let i=0;i<205;i++)leadNotice('older-'+i,'a');
 const tables=['crm_leads','crm_assignments','crm_notes','crm_followup_orders','crm_sales_tasks'],business=()=>JSON.stringify(tables.map(table=>sql.prepare('SELECT * FROM '+table).all())),before=business();
 const read=(table,id)=>sql.prepare('SELECT read_at FROM '+table+' WHERE id=?').get(id).read_at;
 await assert.rejects(()=>call(db,a,admin,'followup-notifications/read-all','POST',{}),e=>e.status===403);
 const result=await call(db,a,a,'followup-notifications/read-all','POST',{});assert.equal(result.updated,209);
 for(const [table,id] of [['crm_followup_notifications','follow-a'],['crm_lead_notifications','lead-a'],['crm_sales_notifications','sales-a'],['crm_sales_notifications','delegated']])assert.equal(read(table,id),result.read_at);
-for(const [table,id] of [['crm_followup_notifications','follow-b'],['crm_lead_notifications','lead-b'],['crm_lead_notifications','moved-hidden'],['crm_sales_notifications','sales-b'],['crm_sales_notifications','sales-hidden'],['crm_sales_notifications','future']])assert.equal(read(table,id),'');
+for(const [table,id] of [['crm_followup_notifications','follow-b'],['crm_lead_notifications','lead-b'],['crm_lead_notifications','moved-hidden'],['crm_sales_notifications','sales-b'],['crm_sales_notifications','sales-hidden'],['crm_sales_notifications','future'],['crm_sales_notifications','dormant:legacy']])assert.equal(read(table,id),'');
 assert.equal(read('crm_lead_notifications','already-read'),'2026-02-01');assert.equal((await call(db,a,a,'followup-notifications/read-all','POST',{})).updated,0);
 assert.equal((await call(db,staff,staff,'followup-notifications/read-all','POST',{})).updated,1);assert(read('crm_followup_notifications','staff-visible'));assert.equal(read('crm_followup_notifications','staff-hidden'),'');
 assert.equal((await call(db,admin,admin,'followup-notifications/read-all','POST',{recipient_id:'b'})).updated,0);assert.equal(read('crm_lead_notifications','lead-b'),'');
