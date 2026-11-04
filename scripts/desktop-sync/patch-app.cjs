@@ -38,10 +38,14 @@ function patchRenderer(source){
 }
 function patchConnectionPreload(source){
  if(!source.includes("exposeInMainWorld('crmConnection'"))source+="\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";
+ if(!source.includes("'crm:analysis-start'"))source=source.replace("contextBridge.exposeInMainWorld('crmConnection',{","contextBridge.exposeInMainWorld('crmConnection',{analyze:id=>ipcRenderer.invoke('crm:analysis-start',id),analysisStatus:id=>ipcRenderer.invoke('crm:analysis-status',id),");
  if(source.includes("'crm:sync-status'"))return source;
  return source.replace("contextBridge.exposeInMainWorld('crmConnection',{", "contextBridge.exposeInMainWorld('crmConnection',{status:()=>ipcRenderer.invoke('crm:sync-status'),retry:()=>ipcRenderer.invoke('crm:sync-retry'),openLog:()=>ipcRenderer.invoke('crm:sync-log'),onStatus:callback=>{const listener=(_,value)=>callback(value);ipcRenderer.on('crm:synced',listener);return()=>ipcRenderer.removeListener('crm:synced',listener);},");
 }
 function patchRecoveryMain(source){
+ if(!source.includes("ipcMain.handle('crm:analysis-start'"))source+=`\nconst crmAnalysisButton=require('./crm-analysis-button.cjs').createAnalysisButton({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,client:crmBridgeClient,request:(...args)=>fetch(...args)});
+ipcMain.handle('crm:analysis-start',(_,id)=>crmAnalysisButton.start(id));
+ipcMain.handle('crm:analysis-status',(_,id)=>crmAnalysisButton.status(id));\n`;
  if(source.includes("ipcMain.handle('crm:sync-status'"))return source;
  return source+`\nipcMain.handle('crm:sync-status',()=>crmAccountSync?.status()||{state:'disabled',stage:'idle',stale:true});
 ipcMain.handle('crm:sync-retry',()=>crmAccountSync?.retry());

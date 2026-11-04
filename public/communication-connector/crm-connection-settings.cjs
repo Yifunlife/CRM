@@ -4,7 +4,7 @@ function createConnectionSettings({configFile,root,clients,request,pause,start})
  const read=file=>fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):{};
  const write=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true});const tmp=file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(value,null,2),{mode:0o600});fs.renameSync(tmp,file);fs.chmodSync(file,0o600);};
  const labels=()=>[...new Set(clients().filter(c=>!c.deleted&&!c.group).map(c=>String(c.owner||'')))];
- function get(){const old=read(configFile),journal=read(path.join(root(),'.workbench','crm-account-sync.json'));return {origin:old.origin||origin,configured:!!old.enabled&&!!old.token,name:old.name||old.localOwner||'',username:old.username||'',workspace:root(),localOwner:old.localOwner||'',owners:labels(),lastSync:journal.updated_at||''};}
+ function get(){const old=read(configFile),journal=read(path.join(root(),'.workbench','crm-account-sync.json'));return {origin:old.origin||origin,configured:!!old.enabled&&!!old.token,name:old.name||old.localOwner||'',username:old.username||'',workspace:root(),localOwner:old.localOwner||'',owners:labels(),lastSync:journal.updated_at||'',chatUploadMode:old.chatUploadMode||'automatic'};}
  async function identify(input){
   let url;try{url=new URL(String(input.origin||origin));}catch{throw Error('请填写有效的CRM地址');}
   if(url.origin!==origin||url.username||url.password)throw Error('请使用公司的CRM地址：https://yifun-crm.yifunlife.workers.dev');
@@ -33,7 +33,7 @@ function createConnectionSettings({configFile,root,clients,request,pause,start})
    const backup=path.join(workspace,'.workbench','crm-connection-backups',new Date().toISOString().replace(/[:.]/g,'-'));fs.mkdirSync(backup,{recursive:true,mode:0o700});
    for(const [name,file]of [['crm-bridge.json',configFile],['crm-account-sync.json',journalFile]])if(fs.existsSync(file)){fs.copyFileSync(file,path.join(backup,name));fs.chmodSync(path.join(backup,name),0o600);}
    if(journal.upload_initialized!==true){journal.owner_id=identity.owner_id;journal.upload_initialized=true;journal.upload_baseline=clients().map(c=>c.id);journal.created_leads=journal.created_leads||[];}
-   const next={...old,origin,token,owner_id:identity.owner_id,username:identity.username,name:identity.name,workspace,localOwner:owner,enabled:true,accountSync:true,fullHistory:true,historyOnly:false,pullOnly:true,uploadNewLeads:true};
+   const next={...old,origin,token,owner_id:identity.owner_id,username:identity.username,name:identity.name,workspace,localOwner:owner,enabled:true,accountSync:true,fullHistory:old.chatUploadMode!=='manual_summary',historyOnly:false,pullOnly:true,uploadNewLeads:true};
    try{write(journalFile,journal);write(configFile,next);}catch(error){for(const [name,file]of [['crm-bridge.json',configFile],['crm-account-sync.json',journalFile]])if(fs.existsSync(path.join(backup,name)))fs.copyFileSync(path.join(backup,name),file);else if(fs.existsSync(file))fs.unlinkSync(file);throw error;}
    return {...get(),connectedAccount:identity.name||identity.username};
   }finally{start();}

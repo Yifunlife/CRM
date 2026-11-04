@@ -6,8 +6,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {build} from 'esbuild';
 const dir=mkdtempSync(tmpdir()+'/crm-analysis-');
 try{
- const compiled=await build({stdin:{contents:"export {customerAnalysisEndpoint} from './lib/customer-analysis';export {bridgeDeviceEndpoint} from './lib/workbench-bridge';export {digest} from './lib/crm';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'fixture-storage',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env={};'}));}}]});
- writeFileSync(dir+'/module.mjs',compiled.outputFiles[0].text);const {customerAnalysisEndpoint,bridgeDeviceEndpoint,digest}=await import(pathToFileURL(dir+'/module.mjs'));
+ const compiled=await build({stdin:{contents:"export {customerAnalysisEndpoint} from './lib/customer-analysis';export {bridgeDeviceEndpoint} from './lib/workbench-bridge';export {digest} from './lib/crm';export {readJson} from './lib/object-storage';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'fixture-storage',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'const objects=new Map();export const env={BUCKET:{put:async(k,v)=>{objects.set(k,v)},get:async k=>objects.has(k)?{text:async()=>objects.get(k),json:async()=>JSON.parse(objects.get(k))}:null}};'}));}}]});
+ writeFileSync(dir+'/module.mjs',compiled.outputFiles[0].text);const {customerAnalysisEndpoint,bridgeDeviceEndpoint,digest,readJson}=await import(pathToFileURL(dir+'/module.mjs'));
  const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
  class Statement{constructor(q,a=[]){this.q=q;this.a=a;}bind(...a){return new Statement(this.q,a);}async first(){return sql.prepare(this.q).get(...this.a)||null;}async all(){return {results:sql.prepare(this.q).all(...this.a)};}async run(){return {meta:sql.prepare(this.q).run(...this.a)};}}
  const db={prepare:q=>new Statement(q),batch:async list=>{sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}},alice={id:'alice',role:'sales'},bob={id:'bob',role:'sales'},admin={id:'admin',role:'admin'};
@@ -33,6 +33,16 @@ try{
  await device({result:{id:job.id,state:'done',value:{analysis}}});
  assert.deepEqual((await call()).analysis,analysis);assert.deepEqual((await call(undefined,admin)).analysis,analysis,'management reads saved analysis without triggering another call');
  await device({result:{id:job.id,state:'done',value:{analysis}}});assert.equal((await call()).analysis.updatedAt,analysis.updatedAt);
+ const desktopJob=await device({analysis_request:{desktop_id:'desktop',request_id:'fixture-analysis-request-001'}});assert.equal(desktopJob.id,job.id,'desktop button reuses the durable CRM command');
+ const desktopSaved=await device({analysis_status:{desktop_id:'desktop',job_id:job.id}});assert.deepEqual(desktopSaved.analysis,analysis);assert.ok(desktopSaved.synced_at);
+ await assert.rejects(device({analysis_request:{desktop_id:'unowned',request_id:'fixture-another-request-001'}}),e=>e.status===404||e.status===403);
+ await assert.rejects(device({analysis_status:{desktop_id:'desktop',job_id:'analysis-'+'a'.repeat(64)}}),e=>e.status===404);
+ sql.prepare('INSERT INTO crm_cloud_settings(id,value,updated,actor_id) VALUES(?,?,?,?)').run('workbench-sync:alice',JSON.stringify({chat_upload:'manual_summary'}),'now','alice');
+ const originalHistory=sql.prepare('SELECT count(*) n FROM crm_workbench_history').get().n;
+ await device({sync:{clients:[{id:'desktop',name:'Fixture',messages:[{text:'DO NOT UPLOAD RAW CHAT',channel:'whatsapp',speaker:'Customer'}]}],bindings:[],catalog_only:true,full_history:true}});
+ assert.ok(!JSON.stringify(await readJson(sql.prepare("SELECT payload FROM crm_workbench_snapshots WHERE owner_id='alice'").get().payload)).includes('DO NOT UPLOAD RAW CHAT'));
+ assert.equal(sql.prepare('SELECT count(*) n FROM crm_workbench_history').get().n,originalHistory);
+ await assert.rejects(device({history:{desktop_id:'desktop'}}),e=>e.status===403);
  const second=await call({request_id:'fixture-analysis-request-002'});await device({});await device({result:{id:second.id,state:'failed',value:{error:'AI login expired'}}});
  assert.deepEqual((await call()).analysis,analysis);assert.equal((await call()).job.state,'failed');
  assert.equal(JSON.stringify(['crm_leads','crm_notes','crm_workbench_drafts','crm_ai_usage'].map(t=>sql.prepare('SELECT * FROM '+t).all())),before,'manual blockers, communication and cloud quota remain untouched');

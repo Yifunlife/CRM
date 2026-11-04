@@ -63,15 +63,16 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    const workspace=run.workspace,file=path.join(workspace,'.workbench','crm-account-sync.json'),journal=read(file)||{owner_id:config.owner_id,bindings:[],blocked:[]};
    if(journal.owner_id!==config.owner_id)throw Error('此工作台已绑定另一账号，未同步');
    phase(run,'prepare');
+   const uploadChats=config.chatUploadMode!=='manual_summary';
    const local=state(),clients=local.clients.filter(c=>!c.deleted&&!c.group&&String(c.owner||'').toLowerCase()===String(config.localOwner).toLowerCase()&&!journal.blocked.includes(c.id));
    if(config.uploadNewLeads===true&&journal.upload_initialized!==true){journal.upload_baseline=local.clients.map(c=>c.id);journal.upload_initialized=true;write(file,journal);}
    const baseline=new Set(journal.upload_baseline||[]),createdHere=new Set(journal.created_leads||[]),reported=config.pullOnly===true?journal.bindings.filter(b=>createdHere.has(b.desktop_id)):journal.bindings;
    const newClients=config.uploadNewLeads===true?clients.filter(c=>!baseline.has(c.id)&&!c.id.startsWith('crm-')&&!journal.bindings.some(b=>b.desktop_id===c.id)).slice(0,20).map(c=>c.id):[];
    const archives=new Map(),readArchive=c=>{if(!archives.has(c.id))archives.set(c.id,archive(c)||[]);return archives.get(c.id);};
-   const snapshot=clients.map(c=>({...profile(c),messages:(config.fullHistory?[]:readArchive(c).slice(-10)).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
+   const snapshot=clients.map(c=>({...profile(c),messages:(!uploadChats||config.fullHistory?[]:readArchive(c).slice(-10)).map(m=>({channel:m.channel,timestamp:m.timestamp,speaker:m.speaker,text:String(m.text||'').slice(0,2000),key:m.key||m.whatsappKey||m.emailKey||'',outgoing:/^(?:winnie(?:\s+wu)?(?:\s*\(Email\))?|我方|me)$/i.test(m.speaker||'')}))}));
    let bytes=Buffer.byteLength(JSON.stringify(snapshot.map(c=>({...c,messages:[]}))));
    for(const client of snapshot){const size=Buffer.byteLength(JSON.stringify(client.messages));if(bytes+size>1100000)client.messages=[];else bytes+=size;}
-   const result=await post(run,config,{sync:{clients:snapshot,bindings:reported,new_clients:newClients,scenes:scenes(),full_history:config.fullHistory===true,catalog_only:config.historyOnly===true}},'customers');
+   const result=await post(run,config,{sync:{clients:snapshot,bindings:reported,new_clients:newClients,scenes:scenes(),full_history:uploadChats&&config.fullHistory===true,catalog_only:config.historyOnly===true}},'customers');
    assertCurrent(run);
    if(root()!==workspace||result.owner_id!==config.owner_id)throw Error('工作区或账号发生变化，未写入本地');
    for(const uploaded of result.uploaded||[]){baseline.add(uploaded.desktop_id);if(uploaded.created)createdHere.add(uploaded.desktop_id);}
@@ -99,9 +100,9 @@ function createAccountSync({configFile,request,root,state,save,profile,archive,s
    info.lastSuccess=checkpoint.updated_at;info.customers=snapshot.length;info.conflicts=conflicts.length;persist();log('customers_saved',run,{customers:snapshot.length,conflicts:conflicts.length});
    const historyStarted=Date.now();let historyRequests=0;
    const responseHistory=async history=>{historyRequests++;return post(run,config,{history},'history',history.desktop_id);};
-   if(config.fullHistory)await require('./crm-history-sync.cjs').synchronizeHistory({clients:clients.filter(c=>!checkpoint.blocked.includes(c.id)),archive:readArchive,journal:checkpoint,post:responseHistory,checkpoint:()=>{assertCurrent(run);write(file,checkpoint);},active:()=>isCurrent(run),shouldYield:()=>historyRequests>=8||Date.now()-historyStarted>=15000});
+   if(uploadChats&&config.fullHistory)await require('./crm-history-sync.cjs').synchronizeHistory({clients:clients.filter(c=>!checkpoint.blocked.includes(c.id)),archive:readArchive,journal:checkpoint,post:responseHistory,checkpoint:()=>{assertCurrent(run);write(file,checkpoint);},active:()=>isCurrent(run),shouldYield:()=>historyRequests>=8||Date.now()-historyStarted>=15000});
    assertCurrent(run);
-   const pending=config.fullHistory?clients.filter(c=>!checkpoint.blocked.includes(c.id)&&!checkpoint.history?.[c.id]?.complete).length:0;
+   const pending=uploadChats&&config.fullHistory?clients.filter(c=>!checkpoint.blocked.includes(c.id)&&!checkpoint.history?.[c.id]?.complete).length:0;
    info.pendingHistory=pending;
  }
  async function tick(force=false){

@@ -4,7 +4,7 @@ import {resolve} from 'node:path';
 const asar=process.argv[2];if(!asar)throw Error('Usage: node scripts/build-communication-connector.mjs <@electron/asar/lib/asar.js>');
 const directory='public/communication-connector';mkdirSync(directory,{recursive:true});
 await build({entryPoints:['scripts/desktop-sync/setup.cjs'],outfile:directory+'/setup.cjs',bundle:true,platform:'node',format:'cjs',external:['original-fs'],alias:{'@electron/asar':resolve(asar)}});
-for(const [source,name] of [['first-contact-mail.cjs','crm-first-contact-mail.cjs'],['first-contact.cjs','crm-first-contact.cjs'],['account-sync.cjs','crm-account-sync.cjs'],['crm-history-sync.cjs','crm-history-sync.cjs'],['connection-settings.cjs','crm-connection-settings.cjs'],['connection-renderer.js','crm-connection-renderer.js']])copyFileSync('scripts/desktop-sync/'+source,directory+'/'+name);
+for(const [source,name] of [['analysis-button.cjs','crm-analysis-button.cjs'],['analysis-renderer.js','crm-analysis-renderer.js'],['first-contact-mail.cjs','crm-first-contact-mail.cjs'],['first-contact.cjs','crm-first-contact.cjs'],['account-sync.cjs','crm-account-sync.cjs'],['crm-history-sync.cjs','crm-history-sync.cjs'],['connection-settings.cjs','crm-connection-settings.cjs'],['connection-renderer.js','crm-connection-renderer.js']])copyFileSync('scripts/desktop-sync/'+source,directory+'/'+name);
 writeFileSync(directory+'/连接我的工作台.command',`#!/bin/bash
 set -euo pipefail
 CRM_CONNECTOR_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
