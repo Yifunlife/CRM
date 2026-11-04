@@ -78,7 +78,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const contacts=body.contacts.map((c:any)=>({name:text(c.name,200),role:text(c.role||'',200),phone:text(c.phone||'',100),email:text(c.email||'',200)}));if(contacts.some((c:any)=>!c.name))fail('请填写联系人姓名');
   const country=text(body.country,100),method=text(body.method,100),sourceNote=text(body.source_note||'',1000);
   const company=salesCompanyName(body.company??before._sales_company);if(!['',...SALES_COMPANIES].some(c=>c===company))fail('分公司选择无效');
-  const name=body.name===undefined?lead.name:text(body.name,200),phone=body.phone===undefined?lead.phone:text(body.phone,100),email=body.email===undefined?lead.email:text(body.email,200),grade=body.grade===undefined?lead.grade:text(body.grade,20),nextDate=body.next_date===undefined?lead.next_date:text(body.next_date,10);
+  const name=(body.name===undefined?lead.name:text(body.name,200))||'暂无',phone=body.phone===undefined?lead.phone:text(body.phone,100),email=body.email===undefined?lead.email:text(body.email,200),grade=body.grade===undefined?lead.grade:text(body.grade,20),nextDate=body.next_date===undefined?lead.next_date:text(body.next_date,10);
   if(!name)fail('请填写客户姓名');if(grade!==lead.grade&&grade&&!CONTACT_GRADES.includes(grade))fail('客户等级无效');
   if(email!==lead.email&&email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('邮箱格式无效');
   if(nextDate!==lead.next_date&&nextDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)||!Number.isFinite(Date.parse(nextDate))||new Date(nextDate).toISOString().slice(0,10)!==nextDate))fail('下次联系日期无效');

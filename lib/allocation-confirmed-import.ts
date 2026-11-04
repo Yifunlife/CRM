@@ -1,4 +1,5 @@
 import {importCustomerGrade} from './contact-kind';
+import {customerOwnerEligible} from './allocation-intake';
 import {customerOrigin} from './customer-origin';
 import {customerProfile} from './customer-profile';
 import {clean,digest,emailKey,id,now,phoneKey,wechatKey} from './crm';
@@ -11,28 +12,29 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
  const at=now(),source=body.form_source==='whatsapp'?'WhatsApp／其他':'内贸表单',batchId=id();
  const [leads,users,submissions]=await Promise.all([
   db.prepare('SELECT id,name,phone,email,source,owner_id,original_owner,market,country,business_scope,detail FROM crm_leads').all<any>(),
-  db.prepare("SELECT id,name,username FROM crm_users WHERE active=1 AND role IN ('sales','ceo','management')").all<any>(),
+  db.prepare("SELECT id,name,username,role,trade_scopes FROM crm_users WHERE active=1 AND role IN ('sales','ceo','management','followup')").all<any>(),
   db.prepare("SELECT id FROM crm_form_submissions WHERE id LIKE 'manual-form:%' UNION SELECT id FROM crm_customer_pool WHERE id LIKE 'manual-form:%'").all<any>()
  ]);
  const ownerKey=(value:string)=>value.trim().toLowerCase();
  const matchOwners=(value:string)=>{const key=ownerKey(value),exact=users.results.filter(u=>ownerKey(u.name)===key||ownerKey(u.username)===key);return exact.length?exact:/^[a-z]+$/.test(key)?users.results.filter(u=>ownerKey(u.name).split(/\s+/)[0]===key):[];};
+ users.results=users.results.filter(u=>customerOwnerEligible(u,body.form_source==='domestic'?'内贸':'外贸'));
  const known=new Set(submissions.results.map(s=>s.id)),seen=new Set<string>(),rows:any[]=[],statements:D1PreparedStatement[]=[];
  for(let i=0;i<body.rows.length;i++){
   const detail=Object.fromEntries(Object.entries(body.rows[i]||{}).map(([k,v])=>[clean(k,100),clean(v)])),suppliedName=clean(detail['客户名称']||detail.name,200),phone=clean(detail['联系方式']||detail.phone,100),email=clean(detail['邮箱']||detail.email,200),pk=phoneKey(phone),ek=emailKey(email),wechat=clean(detail['微信号']||detail.wechat,100),wk=wechatKey(wechat),original=clean(detail['分配业务员'],80),market=body.form_source==='domestic'?'内贸':'外贸';
-  const ownerMatches=original?matchOwners(original):[],owner=ownerMatches.length===1?ownerMatches[0]:null,name=suppliedName||(owner?phone||email||wechat:''),handle=body.form_source==='whatsapp'&&!pk&&!ek&&/^@[a-z0-9._-]{2,100}$/i.test(suppliedName)?ownerKey(suppliedName):'';
+  const ownerMatches=original?matchOwners(original):[],owner=ownerMatches.length===1?ownerMatches[0]:null,name=suppliedName||'暂无',handle=body.form_source==='whatsapp'&&!pk&&!ek&&/^@[a-z0-9._-]{2,100}$/i.test(suppliedName)?ownerKey(suppliedName):'';
   const entered=clean(detail['录入日期'],100)||(owner?'':at),date=new Date(entered.replace(/\//g,'-')),enteredDay=/^\d{4}[-/年]/.test(entered)&&Number.isFinite(date.getTime())?date.toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):'',today=new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
   const fingerprint='manual-form:'+await digest(JSON.stringify([source,Object.keys(detail).sort().map(k=>[k,detail[k]])])),keys=[pk&&'p:'+pk,ek&&'e:'+ek,wk&&'w:'+wk,handle&&'h:'+handle].filter(Boolean) as string[];
   const reviewKey='manual-form:'+await digest(fingerprint+':review');let result='',kind='new',target:any=null;
   if(known.has(fingerprint)||known.has(reviewKey)){result='已处理过的记录，跳过';kind='duplicate';}
   else if(keys.some(k=>seen.has(k))){result='表内重复，跳过';kind='duplicate';}
-  else if(!pk||!name){result='电话号码或客户名称缺失，待核查（微信号不能代替电话号码）';kind='review';}
+  else if(!pk){result='电话号码缺失，待核查（微信号不能代替电话号码）';kind='review';}
   else if(original&&!owner){result='原负责人未唯一匹配启用账号，待核查';kind='review';}
   else{
    const matches=leads.results.filter(l=>pk&&phoneKey(l.phone)===pk||ek&&emailKey(l.email)===ek||wk&&wechatKey(customerProfile(l).wechat)===wk||handle&&l.source==='WhatsApp／其他'&&ownerKey(l.name)===handle);
    if(matches.length===1){target=matches[0];const priorMarket=customerMarket(target);if(priorMarket!=='待确认'&&priorMarket!==market){kind='review';result='相同联系方式属于'+priorMarket+'，与本次'+market+'导入冲突，待核查';}else if(owner&&(target.owner_id&&target.owner_id!==owner.id||!target.owner_id&&target.original_owner&&!matchOwners(target.original_owner).some(u=>u.id===owner.id))){kind='review';result='原负责人存在冲突，待核查';}else{kind='existing';target.restore_owner=owner&&!target.owner_id?owner:null;result=target.restore_owner?'已有客户，按原表补齐业务员':'已有客户，保留原负责人';}}
    else if(matches.length>1){kind='review';result='联系方式匹配多个客户，待核查';}
    else if(owner){kind='owned';result='按原表负责人直接入档，不重新分配';}
-   else if(leads.results.some(l=>l.name.trim().toLowerCase()===name.toLowerCase())){kind='review';result='同名客户，待核查';}
+   else if(name!=='暂无'&&leads.results.some(l=>l.name.trim().toLowerCase()===name.toLowerCase())){kind='review';result='同名客户，待核查';}
    else if(!enteredDay||enteredDay>today){kind='review';result='来源日期无效或在未来，待核查';}
    else if(enteredDay<'2026-11-01'){kind='historical';result='历史客资，保留资料，不进入新增分配';}
    else{result='新增客资，保留待分配';}

@@ -14,7 +14,7 @@ import './management-workspace.css';
 type Props={section?:string;onSection?:(section:string)=>void;user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void};
 export default function CustomerWorkspace({user,api,openLead,section='总况',onSection}:Props){
  const tab=section;const [data,D]=useState<any>(null),[page,P]=useState(1),[query,Q]=useState(''),[revision,R]=useState(0),[error,E]=useState(''),[busy,B]=useState(false),[adding,A]=useState(false),[importing,I]=useState(false),[message,M]=useState(''),[selected,S]=useState<any>(null),[owner,O]=useState(user.role==='operations'?'':user.id),[state,STATE]=useState('');
- useEffect(()=>{if(tab==='分配管理')return;let live=true;E('');const timer=setTimeout(()=>api('sales-management/customers?'+new URLSearchParams({page:String(page),q:query,owner,state})).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}),query?200:0);return()=>{live=false;clearTimeout(timer);};},[api,page,query,owner,state,revision,user.id,tab]);
+ useEffect(()=>{if(tab==='分配管理'||tab==='档案')return;let live=true;E('');const timer=setTimeout(()=>api('sales-management/customers?'+new URLSearchParams({page:String(page),q:query,owner,state})).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}),query?200:0);return()=>{live=false;clearTimeout(timer);};},[api,page,query,owner,state,revision,user.id,tab]);
  if(tab==='分配管理')return <AllocationManagement user={user} api={api} openLead={openLead}/>;
  if(tab==='档案')return <div className="management-workspace"><CustomerManagement initialOwner={owner} onOwnerChange={O} title="客户档案" user={user} api={api} openLead={openLead}/></div>;
  const stages=Object.fromEntries(PROJECT_STAGES);
