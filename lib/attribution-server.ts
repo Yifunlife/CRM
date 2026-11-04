@@ -38,12 +38,12 @@ async function proposal(db:D1Database,user:any,kind:string,entity:string,body:an
  for(const key of [...assists,...(body.campaign_id?[body.campaign_id]:[])])if(!await db.prepare('SELECT id FROM crm_attribution_campaigns WHERE id=?').bind(key).first())fail('活动不存在');
  return {source_kind:body.source_kind,campaign_id:body.campaign_id||null,assists};
 }
-export async function closingOutcome(db:D1Database,lead:any,body:any,actor:any){
+export async function closingOutcome(db:D1Database,lead:any,body:any,actor:any,condition='1',args:any[]=[]){
  if(body.status!=='已结束'||await db.prepare('SELECT id FROM crm_deals WHERE lead_id=? AND cancelled=0').bind(lead.id).first())return [];
  if(!LOSS_REASONS.includes(body.loss_reason))fail('结束未成交咨询时请选择未成交原因');
  const note=required(body.loss_note,'未成交核查说明');
  const before=await db.prepare('SELECT * FROM crm_lead_outcomes WHERE lead_id=?').bind(lead.id).first();
- return [db.prepare('INSERT INTO crm_lead_outcomes(lead_id,reason,note,version,updated,updated_by) VALUES(?,?,?,1,?,?) ON CONFLICT(lead_id) DO UPDATE SET reason=excluded.reason,note=excluded.note,version=crm_lead_outcomes.version+1,updated=excluded.updated,updated_by=excluded.updated_by').bind(lead.id,body.loss_reason,note,now(),actor.id),audit(db,actor,'记录未成交原因',lead.id,{before,reason:body.loss_reason,note})];
+ return [db.prepare(`INSERT INTO crm_lead_outcomes(lead_id,reason,note,version,updated,updated_by) SELECT ?,?,?,1,?,? WHERE (${condition}) ON CONFLICT(lead_id) DO UPDATE SET reason=excluded.reason,note=excluded.note,version=crm_lead_outcomes.version+1,updated=excluded.updated,updated_by=excluded.updated_by`).bind(lead.id,body.loss_reason,note,now(),actor.id,...args),audit(db,actor,'记录未成交原因',lead.id,{before,reason:body.loss_reason,note},condition,args)];
 }
 export async function attributionEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('attribution/'))return undefined;

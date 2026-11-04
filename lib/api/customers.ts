@@ -1,3 +1,4 @@
+import {updateCustomerList} from '../customer-list-update';
 import {CONTACT_GRADES,cancelColleagueFirstContacts} from '../contact-kind';
 import {customerInquiry} from '../customer-inquiry';
 import {customerPage} from '../customer-page';
@@ -10,6 +11,7 @@ import { validateLeadFollowup } from '../workflow-server';
 import type { ApiContext } from './context';
 import { json,Problem } from './http';
 export async function customerRecords({db,req,path,write,body,user,actor}:ApiContext):Promise<Response|undefined>{
+  if(path==='leads/batch-update'&&req.method==='POST')return json(await updateCustomerList(db,user,actor,body));
   if(path==='leads-page'&&!write)return json(await customerPage(db,user,new URL(req.url)));
   const scope = !can(user,'customers_all') ? " WHERE l.owner_id=?" : "";
   if (path === "leads" && !write) {

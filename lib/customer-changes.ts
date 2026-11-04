@@ -1,9 +1,9 @@
 import {id,now} from './crm';
 // Read the old value inside the same database batch as the update, so concurrent
 // writers cannot produce a change log with a stale before-value.
-export function customerChange(db:D1Database,actor:any,leadId:string,field:'grade'|'status',after:string,reason=''){
+export function customerChange(db:D1Database,actor:any,leadId:string,field:'grade'|'status',after:string,reason='',condition='1',args:any[]=[]){
  return db.prepare(`INSERT INTO crm_attribution_events(id,kind,entity_id,payload,created,created_by)
- SELECT ?,?,?,json_object('field',?,'before',${field},'after',?,'reason',?),?,? FROM crm_leads WHERE id=? AND ${field}<>?`).bind(id(),field==='grade'?'客户分类变化':'跟进状态变化',leadId,field,after,reason,now(),actor.id,leadId,after);
+ SELECT ?,?,?,json_object('field',?,'before',${field},'after',?,'reason',?),?,? FROM crm_leads WHERE id=? AND ${field}<>? AND (${condition})`).bind(id(),field==='grade'?'客户分类变化':'跟进状态变化',leadId,field,after,reason,now(),actor.id,leadId,after,...args);
 }
 export async function customerChanges(db:D1Database,user:any,all:boolean,leadId=''){
  const conditions=["(e.kind IN ('客户分类变化','跟进状态变化','核查咨询有效性') OR (e.kind='确认归因' AND json_extract(e.payload,'$.kind')='lead'))"],args:string[]=[];
