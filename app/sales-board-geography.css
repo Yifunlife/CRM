@@ -1,0 +1,44 @@
+.sales-overview .so-geography { --region-a:#8055ad; --region-b:#4e7fb2; --region-c:#b7cbe0; --region-other:#dfe5ed; }
+.sales-overview .so-geography .section-heading { align-items:baseline; }
+.sales-overview .so-geography .section-heading p { margin:4px 0 0; }
+.sales-overview .so-geography-legend { display:flex; gap:8px 14px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.sales-overview .so-geography-legend>span { display:inline-flex; align-items:center; gap:5px; }
+.sales-overview .so-geography-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; }
+.sales-overview .so-region-A { background:var(--region-a); }
+.sales-overview .so-region-B { background:var(--region-b); }
+.sales-overview .so-region-C { background:var(--region-c); }
+.sales-overview .so-region-other { background:var(--region-other); }
+.sales-overview .so-geography-markets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.sales-overview .so-geography-markets.is-single { grid-template-columns:minmax(0,1fr); }
+.sales-overview .so-geography-market { min-width:0; }
+.sales-overview .so-geography-market+section { border-inline-start:1px solid var(--line); padding-inline-start:24px; }
+.sales-overview .so-geography-heading { display:flex; justify-content:space-between; align-items:baseline; gap:6px 12px; flex-wrap:wrap; }
+.sales-overview .so-geography-heading h3 { margin:0; font-size:15px; }
+.sales-overview .so-geography-summary { display:flex; gap:4px 12px; flex-wrap:wrap; margin:6px 0 12px; font-size:12px; color:var(--muted); }
+.sales-overview .so-geography-summary strong { color:var(--ink); font-weight:500; }
+.sales-overview .so-geography-columns,.sales-overview .so-geography-row { display:grid; grid-template-columns:20px minmax(84px,1fr) minmax(0,2fr) 40px; gap:8px; align-items:center; }
+.sales-overview .so-geography-columns { padding:0 4px 6px; color:var(--muted); font-size:12px; }
+.sales-overview .so-geography-columns>span:last-child { text-align:end; }
+.sales-overview .so-geography-ranking { list-style:none; margin:0; padding:0; }
+.sales-overview .so-geography-row { width:100%; padding:5px 4px; border:0; border-radius:4px; min-height:32px; text-align:start; font-size:13px; background:transparent; }
+.sales-overview .so-geography-row[aria-pressed=true] { background:#edf3fc; }
+.sales-overview .so-geography-row>span:nth-child(2) { overflow-wrap:anywhere; }
+.sales-overview .so-geography-row>strong { text-align:end; font-weight:500; }
+.sales-overview .so-geography-rank { color:var(--muted); font-size:12px; }
+.sales-overview .so-geography-bar { display:flex; height:12px; border-radius:2px; overflow:hidden; }
+.sales-overview .so-geography-bar i { display:block; height:100%; }
+.sales-overview .so-geography-detail { padding:9px 10px; background:#edf3fc; border-radius:5px; font-size:12px; margin:10px 0 6px; }
+.sales-overview .so-geography-detail p { margin:0 0 4px; overflow-wrap:anywhere; }
+.sales-overview .so-geography-detail>div { display:flex; flex-wrap:wrap; gap:4px 12px; }
+.sales-overview .so-geography-footer { font-size:12px; color:var(--muted); margin:6px 0 0; }
+@media(max-width:1100px) {
+ .sales-overview .so-geography-markets { grid-template-columns:minmax(0,1fr); gap:18px; }
+ .sales-overview .so-geography-market+section { border-inline-start:0; border-top:1px solid var(--line); padding:16px 0 0; }
+}
+@media(max-width:420px) {
+ .sales-overview .so-geography-columns,.sales-overview .so-geography-row { grid-template-columns:18px minmax(80px,1fr) minmax(0,1fr) 36px; gap:5px; }
+}
+@media(max-width:720px) {
+ .office-app .workspace .sales-overview[data-mobile-view=geography] [data-mobile-panel]:not([data-mobile-panel=geography]) { display:none; }
+}
+@media(pointer:coarse) { .sales-overview .so-geography-row { min-height:44px; } }
