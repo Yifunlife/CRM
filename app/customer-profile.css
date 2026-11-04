@@ -12,3 +12,26 @@ html:has(.customer-dossier){overflow-y:scroll}
 .office-app .workspace .customer-dossier .dossier-edit{min-height:36px;padding:7px 14px;font-weight:600}
 .customer-dossier .dossier-edit:focus-visible,.customer-dossier .dossier-edit-actions button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 @media(max-width:760px){.customer-dossier .dossier-edit-actions{width:100%;justify-content:flex-end;margin-bottom:8px}.customer-dossier .dossier-editing-state{flex:1 1 100%}.office-app .workspace .customer-dossier .dossier-edit,.customer-dossier .dossier-edit-actions button{min-height:44px}}
+
+.customer-dossier .dossier-toolbar{margin-bottom:10px;gap:10px}
+.customer-dossier .dossier-layout{grid-template-columns:minmax(0,1fr);gap:12px}
+.customer-dossier .dossier-sidebar{display:none}
+.customer-dossier .dossier-stack{gap:12px}
+.customer-detail .customer-dossier .panel{padding:14px}
+.customer-dossier .dossier-section h2,.customer-dossier .dossier-section .section-heading{margin-bottom:10px}
+.customer-dossier .dossier-grid{gap:10px 14px}
+.customer-dossier .dossier-grid input,.customer-dossier .dossier-grid select,.customer-dossier .dossier-grid textarea{min-height:36px;padding:7px 10px}
+.customer-dossier .dossier-actions{margin-top:12px}
+.customer-dossier .dossier-guided{margin-top:12px}
+.customer-dossier .dossier-date-buttons{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.customer-dossier .dossier-date-buttons button{padding:4px 8px;min-height:30px;font-size:12px}
+.customer-dossier .dossier-date-buttons button[aria-pressed=true]{background:var(--blue);color:#fff}
+.customer-dossier .dossier-section .dossier-choice-help{margin:0;align-self:center}
+.customer-dossier .dossier-contact-times{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px}
+.customer-dossier .dossier-checklist{display:grid;gap:8px;padding:0;margin:0;list-style:none}
+.customer-dossier .dossier-checklist li{display:flex;gap:12px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0}
+.customer-dossier .dossier-checklist li>div{min-width:0}.customer-dossier .dossier-checklist small{display:block;color:var(--muted)}
+@media(min-width:1300px){.customer-dossier .dossier-guided{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.customer-dossier .dossier-grid input,.customer-dossier .dossier-grid select,.customer-dossier .dossier-grid textarea{min-height:40px}.customer-dossier .dossier-checklist li{align-items:start;flex-wrap:wrap}}
+
+.office-app .workspace .customer-detail.customer-detail-dossier{max-width:none}

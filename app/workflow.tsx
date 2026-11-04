@@ -4,8 +4,8 @@ import {useEffect,useState} from 'react';
 const money=(n:number)=>((n||0)/100).toFixed(2);
 const values=(form:HTMLFormElement)=>Object.fromEntries(new FormData(form));
 type WorkflowIssue={kind:string;entity_id:string;name:string;owner:string;issue:string;due:string};
-type Props={api:(path:string,body?:any,method?:string)=>Promise<any>;user:any;section:'待核查'|'应收与放行'|'人员交接'|'操作记录';leadId?:string;orderId?:string;personal?:boolean;compact?:boolean;openLead?:(id:string)=>void;openOrder?:(id:string)=>void;manageHandovers?:()=>void;onSaved?:()=>Promise<void>};
-export default function Workflow({api,user,section:tab,leadId,orderId,personal=false,compact=false,openLead,openOrder,manageHandovers,onSaved}:Props){
+type Props={api:(path:string,body?:any,method?:string)=>Promise<any>;user:any;section:'待核查'|'应收与放行'|'人员交接'|'操作记录';leadId?:string;orderId?:string;personal?:boolean;compact?:boolean;openLead?:(id:string)=>void;openOrder?:(id:string)=>void;manageHandovers?:()=>void;onSaved?:()=>Promise<void>;onCustomerReview?:(issue:string)=>void};
+export default function Workflow({api,user,section:tab,leadId,orderId,personal=false,compact=false,openLead,openOrder,manageHandovers,onSaved,onCustomerReview}:Props){
  const [data,D]=useState<any>(null),[error,E]=useState(''),[message,M]=useState(''),[busy,B]=useState(false),[query,Q]=useState(''),[dealId,S]=useState(''),[page,P]=useState(1);
  const admin=hasAdminPermissions(user);
  const load=async()=>{const result=await api('workflow/report');
@@ -35,6 +35,7 @@ export default function Workflow({api,user,section:tab,leadId,orderId,personal=f
   if(i.kind==='deal'){const d=data.deals.find((d:any)=>d.id===i.entity_id);if(d)openLead?.(d.lead_id);return;}
   openOrder?.(i.entity_id);
  }
+ if(tab==='待核查'&&leadId)return <div className="dossier-review"><div className="section-heading"><h2>当前客户核查提醒</h2><button disabled={busy} onClick={()=>{E('');load().catch(e=>E(e.message));}}>刷新</button></div>{error&&<p className="notice error" role="alert">{error}</p>}{data.issues.length?<ul className="dossier-checklist">{data.issues.map((i:WorkflowIssue,n:number)=><li key={n}><div>{i.issue}{i.due&&<small>期限：{i.due}</small>}</div><button onClick={()=>onCustomerReview?onCustomerReview(i.issue):openLead?.(leadId)}>{/首次联系/.test(i.issue)?'选择联系结果':/日期|逾期/.test(i.issue)?'选择跟进安排':'查看并核实'}</button></li>)}</ul>:<p className="muted">暂无需要核查的事项。</p>}<p className="small muted">按提醒选择处理入口并保存，系统会重新核查。</p></div>;
  return <div><div className="section-heading"><h2>{tab==='待核查'?'核查提醒':personal&&tab==='人员交接'?'待处理交接':tab}</h2><button disabled={busy} onClick={()=>{E('');load().catch(e=>E(e.message));}}>刷新</button></div>
  {error&&<p className="notice error" role="alert">{error}</p>}{message&&<p className="notice" role="status">{message}</p>}
  {tab==='待核查'&&<section className="panel workflow-review"><label>查找客户、订单或问题<input value={query} onChange={e=>{Q(e.target.value);P(1);}}/></label><p className="small muted">首次联系截止到分配后的下一个中国法定工作日结束（北京时间，含调休）。已核对日历：{data.calendar_years.join('、')}；其他年份待核查。提醒仅在系统内展示，不自动发送消息或回收客资。</p>

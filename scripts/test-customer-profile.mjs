@@ -53,3 +53,10 @@ await assert.rejects(()=>post(payload(),{id:'manager',role:'sales',permissions:{
 await assert.rejects(()=>post(payload(),{id:'manager',role:'followup'}),e=>e.status===403);
 assert.deepEqual(row(),saved);
 console.log('PASS management own-customer editing from company view; other-owner, read-only sales and followup writes remain denied, with original data and history preserved.');
+
+await post({...payload(),next_date:'2026-11-09',profile:{nextAction:'核实需求与预算',blocker:'预算未确定',followNote:'等待投资人确认',reviewStatus:'需要协助'}},ownManager);
+assert.equal(customerProfile(row()).blocker,'预算未确定');assert.equal(customerProfile(row()).followNote,'等待投资人确认');assert.equal(customerProfile(row()).reviewStatus,'需要协助');
+assert.equal(notes(),notesBefore);assert.equal(row().last_contact,'2026-10-02T01:00:00.000Z');
+await assert.rejects(()=>post({...payload(),profile:{reviewStatus:'随便'}},ownManager),/核查状态/);
+const snapshot=payload();await post({...payload(),profile:{blocker:'',followNote:''}},ownManager);assert.equal(customerProfile(row()).blocker,'');assert.equal(customerProfile(row()).followNote,'');assert.equal(customerProfile(row()).nextAction,'核实需求与预算');await assert.rejects(()=>post(snapshot,ownManager),e=>e.status===409);
+console.log('PASS guided follow-up: manual blockers, notes, review choice and date round-trip; explicit clearing, stale-write rejection and contact-history preservation.');
