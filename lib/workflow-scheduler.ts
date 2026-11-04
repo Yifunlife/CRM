@@ -18,7 +18,7 @@ export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.E
   // Run both independent reminder families even if one fails; retain failure logs.
   const results=await Promise.allSettled([
    step('notifications','daily-followup-reminders',()=>refreshFollowupNotifications(db,at)),
-   step('projects','daily-sales-reminders',()=>refreshSalesSuite(db,undefined,at,true))
+   step('projects','daily-sales-reminders',()=>refreshSalesSuite(db,undefined,at))
   ]);
   const failed=results.find(r=>r.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
  }

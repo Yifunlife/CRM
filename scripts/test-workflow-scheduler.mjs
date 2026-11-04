@@ -11,7 +11,7 @@ const run=async at=>{globalThis.__calls=[];await runScheduledWorkflow(Date.parse
 try{
  const at='2026-11-02T00:00:00.000Z',calls=await run(at);
  assert.deepEqual(calls.map(c=>c.job),['followup-notifications','sales-suite-server']);
- assert.deepEqual(calls[0].args,[db,at]);assert.deepEqual(calls[1].args,[db,undefined,at,true]);
+ assert.deepEqual(calls[0].args,[db,at]);assert.deepEqual(calls[1].args,[db,undefined,at]);
  assert.equal(new Set(events.map(e=>e.run_id)).size,1);
  for(const at of ['2026-11-02T00:05:00Z','2026-11-02T03:00:00Z','2026-11-02T22:00:00Z','2026-06-02T21:00:00Z'])assert.equal((await run(at)).length,0,at);
  for(const at of ['2026-11-02T21:00:00.000Z','2026-06-02T22:00:00.000Z']){const c=await run(at);assert.deepEqual(c,[{job:'google-form-sync',args:[db,{at}]}]);}

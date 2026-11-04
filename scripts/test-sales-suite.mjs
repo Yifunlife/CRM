@@ -82,18 +82,26 @@ for(const change of [{created:'2026-09-30T12:00:00Z'},{note_at:'2026-10-28T12:00
 sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('sleep-test','Dormant fixture','Meta','sales','{}','sleep-test','2026-09-01')").run();
 sqlite.exec("UPDATE crm_leads SET cohort='new' WHERE id='sleep-test'");
 const beforeDormant=JSON.stringify(sqlite.prepare("SELECT * FROM crm_leads WHERE id='sleep-test'").get());
-await refreshSalesSuite(db,undefined,checkAt,false);
-assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE lead_id='sleep-test' AND dedupe_key LIKE 'dormant:%'").get().n,0,'five-minute run must not create dormant notifications');
-await refreshSalesSuite(db,undefined,checkAt,true);
-const sleeping=()=>sqlite.prepare("SELECT * FROM crm_sales_notifications WHERE lead_id='sleep-test' AND resolved_at='' AND dedupe_key LIKE 'dormant:%'").all();
-assert.equal(sleeping().length,1);assert.equal(sleeping()[0].recipient_id,'sales');
-const dailySnapshot=JSON.stringify(sleeping());await refreshSalesSuite(db,undefined,checkAt,false);assert.equal(JSON.stringify(sleeping()),dailySnapshot,'between daily scans preserve existing dormant notification');
-await call('notices/read',{id:sleeping()[0].id});await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,1);assert.ok(sleeping()[0].read_at);
+// Legacy automatic notices remain stored but are no longer actionable or recreated.
+sqlite.prepare("INSERT INTO crm_sales_notifications(id,dedupe_key,lead_id,recipient_id,title,content,created,read_at) VALUES('legacy-dormant','dormant:sleep-test:sales:old','sleep-test','sales','沉睡客户待跟进：Dormant fixture','旧规则提醒',?,'2026-10-28T00:00:00Z')").run(checkAt);
+sqlite.prepare("INSERT INTO crm_sales_notifications(id,dedupe_key,lead_id,recipient_id,title,content,created) VALUES('keep-quote','quote-ready:fixture:sales','sleep-test','sales','报价待处理','保留报价提醒',?)").run(checkAt);
+const originalNotice=sqlite.prepare("SELECT * FROM crm_sales_notifications WHERE id='legacy-dormant'").get();
+const visible=(await get('report')).notifications;
+assert(!visible.some(n=>n.dedupe_key.startsWith('dormant:')),'old dormant notices are excluded before the next scheduled scan');
+assert(visible.some(n=>n.id==='keep-quote'),'quotation reminders remain visible');
+const protectedBefore=JSON.stringify(['crm_leads','crm_notes','crm_sales_tasks'].map(t=>sqlite.prepare('SELECT * FROM '+t+' ORDER BY id').all()));
+await refreshSalesSuite(db,undefined,checkAt);
+const retired=sqlite.prepare("SELECT * FROM crm_sales_notifications WHERE id='legacy-dormant'").get();
+assert.equal(retired.resolved_at,checkAt);
+assert.deepEqual({...retired,resolved_at:''},{...originalNotice});
+assert.equal(sqlite.prepare("SELECT resolved_at FROM crm_sales_notifications WHERE id='keep-quote'").get().resolved_at,'');
+assert(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE task_id=? AND resolved_at=''").get(revival).n>0,'manually arranged tasks still generate their due reminders');
+await refreshSalesSuite(db,undefined,'2026-10-30T12:00:00Z');
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE dedupe_key LIKE 'dormant:%'").get().n,1,'daily refresh never recreates automatic dormant notices');
+assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM crm_sales_notifications WHERE dedupe_key LIKE 'dormant:%' AND resolved_at=''").get().n,0);
 assert.equal(JSON.stringify(sqlite.prepare("SELECT * FROM crm_leads WHERE id='sleep-test'").get()),beforeDormant);
-sqlite.prepare("UPDATE crm_leads SET next_date='2026-11-01' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,0);
-sqlite.prepare("UPDATE crm_leads SET next_date='',last_contact='2026-10-28T12:00:00Z' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,0);
-sqlite.prepare("UPDATE crm_leads SET last_contact='',owner_id='other' WHERE id='sleep-test'").run();await refreshSalesSuite(db,undefined,checkAt);assert.equal(sleeping().length,1);assert.equal(sleeping()[0].recipient_id,'other');
-console.log('PASS: dormant boundary, follow-up and reassignment suppression, future review, no-demand exclusion, automatic owner reminder, read persistence, deduplication and preserved customer rows.');
+assert.equal(JSON.stringify(['crm_leads','crm_notes','crm_sales_tasks'].map(t=>sqlite.prepare('SELECT * FROM '+t+' ORDER BY id').all())),protectedBefore,'customer data, contact history and manual tasks remain unchanged');
+console.log('PASS: retired automatic dormant notices stay hidden and archived without deletion or regeneration; manual tasks, quote reminders, contact history and customers are preserved.');
 
 // Confirmed dual-channel non-response stops the automatic dormant-revival prompt.
 sqlite.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,phone,email,status,cohort) VALUES('stop-contact','Stop contact','Meta','sales','{}','stop-contact','2026-09-01','61400000000','stop@example.invalid','已联系待回复','new')").run();

@@ -1,6 +1,5 @@
 import {customerLeadSQL} from './contact-kind';
 import {salesHomeEndpoint} from './sales-home-server';
-import {contactFollowups} from './contact-followup-server';
 import {assignmentReminders,teamAssignmentSummary} from './assignment-reminders';
 import {AllocationError} from './allocation-server';
 import {can,authorizedLead,id,now,hasAdminPermissions} from './crm';
@@ -40,7 +39,7 @@ async function report(db:D1Database,u:any,assigned?:Promise<any[]>){
   list(db,"SELECT id,name,role,active FROM crm_users WHERE active=1 AND role<>'followup' ORDER BY name"),
   list(db,'SELECT DISTINCT p.id,p.name,s.lead_id FROM crm_customer_projects p JOIN crm_customer_project_leads s ON s.project_id=p.id JOIN crm_leads l ON l.id=s.lead_id'+where,args),
   list(db,'SELECT o.id,o.order_number,o.project,o.lead_id,o.archived,o.stage FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id'+(can(u,'followup_all')?'':' WHERE l.owner_id=? AND o.commercial_id=?'),can(u,'followup_all')?[]:[u.id,u.id]),
-  list(db,"SELECT n.* FROM crm_sales_notifications n JOIN crm_leads l ON l.id=n.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND n.resolved_at='' AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(all?' OR 1=1':'')+") ORDER BY n.created DESC LIMIT 100",[u.id,u.id,u.id]),
+  list(db,"SELECT n.* FROM crm_sales_notifications n JOIN crm_leads l ON l.id=n.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND n.resolved_at='' AND n.dedupe_key NOT LIKE 'dormant:%' AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(all?' OR 1=1':'')+") ORDER BY n.created DESC LIMIT 100",[u.id,u.id,u.id]),
   list(db,"SELECT e.*,u.name AS author,l.name AS customer_name FROM crm_sales_events e JOIN crm_users u ON u.id=e.created_by JOIN crm_leads l ON l.id=e.lead_id WHERE e.kind='申请归属复核' AND NOT EXISTS(SELECT 1 FROM crm_sales_events r WHERE r.kind='归属复核结论' AND json_extract(r.payload,'$.review_id')=e.id)"+(all?'':' AND l.owner_id=?')+' ORDER BY e.created',args)
  ]);
  const projects=rawProjects.map(p=>({...p,details:parse(p.details)}));
@@ -157,20 +156,13 @@ async function syncQuote(db:D1Database,source:D1Database|undefined,u:any,link:an
  try{const snapshot=await quoteSnapshot(db,source,parse(link.summary).bridge_shared?{...u,role:'admin',permissions:'{}'}:u,link.quote_id);if(parse(link.summary).bridge_shared)(snapshot as any).bridge_shared=true;if(snapshot.source_key!==link.source_key)throw new Error('报价项目身份已变化，须人工核查');await db.prepare("UPDATE crm_sales_quote_links SET summary=?,sync_error='',synced=?,updated=?,version=version+1 WHERE id=? AND version=?").bind(JSON.stringify(snapshot),now(),now(),link.id,link.version).run();}
  catch(e:any){await db.prepare('UPDATE crm_sales_quote_links SET sync_error=?,updated=?,version=version+1 WHERE id=? AND version=?').bind(e instanceof AllocationError?e.message:'报价同步失败，请稍后重试；保留上次摘要。',now(),link.id,link.version).run();}
 }
-export async function refreshSalesSuite(db:D1Database,source?:D1Database,at=now(),scanDormant=true){
+export async function refreshSalesSuite(db:D1Database,source?:D1Database,at=now()){
  const users=await list(db,'SELECT id,role,permissions FROM crm_users WHERE active=1'),leaders=users.filter(leader),tasks=await list(db,"SELECT t.*,l.owner_id AS lead_owner,l.name AS customer_name FROM crm_sales_tasks t JOIN crm_leads l ON l.id=t.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND t.status='open'");
  const notices:any[]=[];
  for(const t of tasks){const review=parse(t.details).review_date,reviewDue=review&&review<=suiteDay(at),dueAt=t.next_followup&&t.next_followup<t.due_at?t.next_followup:t.due_at;if(!reviewDue&&Date.parse(dueAt)>Date.parse(at))continue;const overdue=Date.parse(t.due_at)<Date.parse(at),targets=new Set([t.owner_id,t.lead_owner,...(overdue?leaders.map(l=>l.id):[])]);for(const recipient of targets){const u=users.find(u=>u.id===recipient);if(!u||u.role==='followup')continue;notices.push({key:t.id+':'+dueAt+':'+(review||'')+':'+recipient,project_id:t.project_id,lead_id:t.lead_id,task_id:t.id,recipient,title:(overdue?'任务逾期：':'任务到期：')+t.title,content:t.customer_name+'｜'+t.title+'\n下一步：'+t.next_action+'\n期限：'+t.due_at});}}
  const projects=await list(db,"SELECT p.*,l.owner_id,l.name AS customer_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND p.next_date<>'' AND p.stage NOT IN ('won','lost')");
  for(const p of projects.filter(p=>p.next_date<=suiteDay(at))){for(const recipient of new Set([p.owner_id,...(p.next_date<suiteDay(at)?leaders.map(u=>u.id):[])])){if(!users.some(u=>u.id===recipient&&u.role!=='followup'))continue;notices.push({key:'project:'+p.project_id+':'+p.next_date+':'+recipient,project_id:p.project_id,lead_id:p.lead_id,task_id:null,recipient,title:(p.stage==='paused'?'项目到期复查：':'项目到期跟进：')+p.name,content:p.customer_name+'｜'+p.next_action+'\n日期：'+p.next_date});}}
- if(scanDormant){
- const dormant=await list(db,`SELECT l.*,${dormantFields},(SELECT MAX(p.updated) FROM crm_customer_pool p WHERE p.lead_id=l.id AND p.state='已入CRM' AND (l.last_contact='' OR p.updated>l.last_contact)) AS inquiry_at FROM crm_leads l WHERE ${customerLeadSQL()} AND l.owner_id IS NOT NULL`);
- const stopped=new Set((await Promise.all([...new Set<string>(dormant.map(l=>l.owner_id))].map(owner=>contactFollowups(db,owner,dormant.filter(l=>l.owner_id===owner),at)))).flat().filter(r=>r.kind==='dormant').map(r=>r.id));
- for(const l of dormant){const reason=dormantReason(l,at);if(stopped.has(l.id)||!reason||!users.some(u=>u.id===l.owner_id&&u.role!=='followup')||tasks.some(t=>t.lead_id===l.id&&t.kind==='revival'))continue;
-  notices.push({key:'dormant:'+l.id+':'+l.owner_id+':'+[l.last_contact,l.note_at,l.assigned_at,l.created].filter(Boolean).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],project_id:null,lead_id:l.id,task_id:null,recipient:l.owner_id,title:'沉睡客户待跟进：'+l.name,content:reason+'。请核查原沟通，记录跟进结果或安排复查日期。'});
- }
- }
- const statements=[db.prepare("UPDATE crm_sales_notifications SET resolved_at=? WHERE resolved_at='' AND dedupe_key NOT LIKE 'quote-ready:%'"+(scanDormant?"":" AND dedupe_key NOT LIKE 'dormant:%'")).bind(at),...notices.map(n=>db.prepare("INSERT INTO crm_sales_notifications(id,dedupe_key,project_id,lead_id,task_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.project_id||null,n.lead_id,n.task_id,n.recipient,n.title,n.content,at))];
+ const statements=[db.prepare("UPDATE crm_sales_notifications SET resolved_at=? WHERE resolved_at='' AND dedupe_key NOT LIKE 'quote-ready:%'").bind(at),...notices.map(n=>db.prepare("INSERT INTO crm_sales_notifications(id,dedupe_key,project_id,lead_id,task_id,recipient_id,title,content,created) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(dedupe_key) DO UPDATE SET resolved_at='',title=excluded.title,content=excluded.content").bind(id(),n.key,n.project_id||null,n.lead_id,n.task_id,n.recipient,n.title,n.content,at))];
  for(let i=0;i<statements.length;i+=80)await db.batch(statements.slice(i,i+80));
  if(source){const links=await list(db,'SELECT q.*,l.owner_id FROM crm_sales_quote_links q JOIN crm_sales_projects p ON p.project_id=q.project_id JOIN crm_leads l ON l.id=p.lead_id ORDER BY q.updated LIMIT 100');for(const link of links){const u:any=await db.prepare('SELECT id,role,permissions FROM crm_users WHERE id=? AND active=1').bind(link.owner_id).first();if(u)await syncQuote(db,source,u,link);}}
  return {count:notices.length};

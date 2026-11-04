@@ -27,3 +27,6 @@ assert.equal(dedup.find(r=>r.id==='task:deadline').due,'2026-10-29');
 assert.equal(dedup.find(r=>r.id==='order:order').item.order_id,'o1');
 assert.equal(dedup.find(r=>r.id==='lead:a').timeLabel,'跟进');
 console.log('PASS: no outgoing handovers or future tasks, own order only, direct order identity, exact reminder deduplication, independent quote reminder retained, earliest deadline.');
+
+const retiredNotice={id:'retired-dormant',dedupe_key:'dormant:old:owner',title:'沉睡客户待跟进：legacy',read_at:'',resolved_at:''};
+assert(!workTodos({...data,notifications:[retiredNotice]},null,user,[],[],[],at).some(r=>r.id==='notice:retired-dormant'),'cached old dormant notices cannot reappear as actionable work');
