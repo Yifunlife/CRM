@@ -1,3 +1,4 @@
+import {customerSourceSQL} from './customer-source';
 import {customerLeadSQL} from './contact-kind';
 import {allocationPerformance} from './allocation-performance-server';
 import {authorizedLead,canSetManagement,can,clean,id,now,STATUSES} from './crm';
@@ -84,7 +85,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const ids=[...new Set(events.filter(e=>e.kind==='业务员跟进记录'&&e.status!=='已结束').map(e=>e.lead_id))];
   for(const lead of ids){const own=events.filter(e=>e.lead_id===lead&&e.kind==='业务员跟进记录'),date=designDeadline(own);if(date&&daysBetween(date,today)<=2){const due=daysBetween(date,today);reminders.push({id:'design:'+lead,lead_id:lead,name:own[0].customer_name,title:'跟进设计进度',date,label:due<0?'出方案已逾期 '+(-due)+' 天':due===0?'今天出方案':'快到期 · 剩 '+due+' 天',rank:due<0?0:1,kind:'设计出方案'});}}
   for(const e of plans.values()){const p=e.payload;if(e.status==='已结束'||p.phase===4&&p.remaining===0)continue;const s=openingSchedule(p,today);if(s.due<=p.remind||s.late>0||s.slack<=p.remind)reminders.push({id:'opening:'+p.entity,lead_id:e.lead_id,name:e.customer_name,title:OPENING_TITLE(p.phase),date:s.latest[p.phase].finish,label:s.due<0?'已逾期 '+(-s.due)+' 天':s.due<=p.remind?s.due===0?'今天截止':'快到期 · 剩 '+s.due+' 天':s.text,rank:s.due<0?0:s.due<=p.remind?1:3,kind:'开业倒排',forecast:s.text});}
-  const newLeads=await list(db,`SELECT l.id,l.name,l.country,l.source,l.channel,l.status,
+  const newLeads=await list(db,`SELECT l.id,l.name,l.country,l.source,l.channel,l.status,${customerSourceSQL()} AS display_source,
    EXISTS(SELECT 1 FROM crm_workbench_links w WHERE w.lead_id=l.id AND w.owner_id=l.owner_id) AS workbench_added,
    (SELECT CASE WHEN c.state='done' AND json_extract(c.result,'$.status') IN ('sent','confirmed_sent') THEN 'sent' WHEN c.state='done' AND json_extract(c.result,'$.status')='skipped' THEN 'skipped' ELSE c.state END FROM crm_workbench_commands c WHERE c.owner_id=l.owner_id AND json_extract(c.payload,'$.crm_lead_id')=l.id AND json_extract(c.payload,'$.auto_first_contact')=1 ORDER BY c.created DESC LIMIT 1) AS first_contact_state
    FROM crm_leads l WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND (

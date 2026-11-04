@@ -101,3 +101,22 @@ assert.equal((await get('report')).reminders.some(r=>r.id==='opening:sales:p'),f
 console.log('PASS: owner-scoped project next actions, completed sales projects and completed opening plans automatically leave current reminders.');
 
 await post('record',{...base,status:'已成交'});assert.equal(sql.prepare("SELECT status FROM crm_leads WHERE id='mine'").get().status,'已成交');console.log('PASS: personal customer status does not require administrator deal confirmation.');
+
+// The intake list uses the same recorded platform rules as customer management.
+const sourceCases=[
+ ['wa-alias','WhatsApp／其他','WhatsApp／其他',{},'WhatsApp'],
+ ['fb','Meta','fb',{},'Facebook'],
+ ['ig','Meta','',{platform:'ig'},'Instagram'],
+ ['pending','Meta','',{},'平台待确认'],
+ ['override','WhatsApp／其他','WhatsApp／其他',{_source_override:'他人介绍'},'他人介绍']
+];
+for(const [id,source,channel,detail] of sourceCases)sql.prepare("INSERT INTO crm_leads(id,name,source,channel,detail,fingerprint,owner_id,created,cohort) VALUES(?,?,?,?,?,?,'a',?,'new')").run('source-'+id,'Source fixture',source,channel,JSON.stringify(detail),'source-'+id,stamp);
+const beforeSources=preserved(),sourceReport=(await get('report')).newLeads;
+for(const [id,source,channel,,expected] of sourceCases){
+ const row=sourceReport.find(l=>l.id==='source-'+id);
+ assert.equal(row.display_source,expected);
+ assert.equal(row.source,source);
+ assert.equal(row.channel,channel);
+}
+assert.equal(preserved(),beforeSources,'source display does not rewrite recorded source, ownership or history');
+console.log('PASS: personal intake resolves Facebook, Instagram, WhatsApp, explicit overrides and unknown platforms without rewriting customer data.');
