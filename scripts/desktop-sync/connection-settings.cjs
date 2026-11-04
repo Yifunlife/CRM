@@ -11,9 +11,13 @@ function createConnectionSettings({configFile,root,clients,request,pause,start})
   const old=read(configFile),token=String(input.token||'').trim()||old.token;
   if(!token)throw Error('请填写本人连接码');
   if(!/^(?:[a-f0-9]{96}|[a-f0-9-]{64,80})$/i.test(token))throw Error('连接码格式不正确，请从本人CRM重新复制');
-  const response=await request(origin+'/api/bridge/connect',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}',signal:AbortSignal.timeout(15000)});
-  if(!response.ok)throw Error('CRM未接受连接码，请确认从本人CRM账号生成，并检查账号是否启用');
-  const identity=await response.json();if(!identity.owner_id||!identity.username||identity.protocol!==2)throw Error('CRM连接协议不匹配');
+  const controller=new AbortController();let timer,identity;
+  try{identity=await Promise.race([(async()=>{
+   const response=await request(origin+'/api/bridge/connect',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}',signal:controller.signal});
+   if(!response.ok)throw Error('CRM未接受连接码，请确认从本人CRM账号生成，并检查账号是否启用');
+   return response.json();
+  })(),new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Error('CRM连接核对超时，请检查网络后重试；原连接保留'));},15000);})]);}finally{clearTimeout(timer);}
+  if(!identity.owner_id||!identity.username||identity.protocol!==2)throw Error('CRM连接协议不匹配');
   if(old.owner_id&&old.owner_id!==identity.owner_id)throw Error('原工作台已绑定其他CRM账号，未覆盖原连接');
   const journal=read(path.join(root(),'.workbench','crm-account-sync.json'));if(journal.owner_id&&journal.owner_id!==identity.owner_id)throw Error('原资料库属于其他CRM账号，未改动');
   return {identity,token};

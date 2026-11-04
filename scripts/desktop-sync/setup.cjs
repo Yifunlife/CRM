@@ -1,6 +1,6 @@
 process.noAsar=true;
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process'),crypto=require('node:crypto');
-const asar=require('@electron/asar'),{patchFirstContactMail,patchFirstContactMain,patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionMain,patchConnectionPreload}=require('./patch-app.cjs');
+const asar=require('@electron/asar'),{patchRecoveryMain,patchFirstContactMail,patchFirstContactMain,patchMain,patchManagement,patchBridge,patchRenderer,patchConnectionMain,patchConnectionPreload}=require('./patch-app.cjs');
 const run=(bin,args)=>cp.execFileSync(bin,args,{encoding:'utf8',stdio:['ignore','pipe','pipe']});
 const dialog=script=>run('/usr/bin/osascript',['-e',script]).trim();
 const digest=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
@@ -15,7 +15,7 @@ async function prepare(app,output){
  const stored=run('/usr/libexec/PlistBuddy',['-c','Print :ElectronAsarIntegrity:Resources/app.asar:hash',info]).trim();if(stored!==before.hash)throw Error('原应用完整性检查未通过，未修改');
  const folder=path.join(output,'source'),candidate=path.join(output,'亦玩销售工作台.app');
  asar.extractAll(archive,folder);run('/usr/bin/ditto',[app,candidate]);
- for(const [name,patch] of [['main.js',source=>patchFirstContactMain(patchConnectionMain(patchMain(source)))],['outlook-outreach.js',patchFirstContactMail],['preload.js',patchConnectionPreload],['crm-client-management.js',patchManagement],['crm-bridge.js',patchBridge],['renderer/renderer.js',patchRenderer]]){const file=path.join(folder,name);fs.writeFileSync(file,patch(fs.readFileSync(file,'utf8')));}
+ for(const [name,patch] of [['main.js',source=>patchRecoveryMain(patchFirstContactMain(patchConnectionMain(patchMain(source))))],['outlook-outreach.js',patchFirstContactMail],['preload.js',patchConnectionPreload],['crm-client-management.js',patchManagement],['crm-bridge.js',patchBridge],['renderer/renderer.js',patchRenderer]]){const file=path.join(folder,name);fs.writeFileSync(file,patch(fs.readFileSync(file,'utf8')));}
  fs.copyFileSync(path.join(__dirname,'crm-account-sync.cjs'),path.join(folder,'crm-account-sync.js'));
  fs.copyFileSync(path.join(__dirname,'crm-history-sync.cjs'),path.join(folder,'crm-history-sync.cjs'));
  fs.copyFileSync(path.join(__dirname,'crm-first-contact.cjs'),path.join(folder,'crm-first-contact.js'));
