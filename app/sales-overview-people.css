@@ -15,3 +15,8 @@
 @media(max-width:360px) {
  :root .office-app .workspace .sales-overview .so-progress-row { grid-template-columns:76px minmax(0,1fr) 70px 12px; gap:5px; }
 }
+:root .office-app .workspace .sales-overview .so-market-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+:root .office-app .workspace .sales-overview .so-market-columns.is-single { grid-template-columns:minmax(0,1fr); }
+.sales-overview .so-market-columns>.so-market-people { min-width:0; }
+@media(min-width:1001px) { :root .office-app .workspace .sales-overview .so-market-columns .so-progress-row { grid-template-columns:110px minmax(0,1fr) 84px 14px; gap:8px; } }
+@media(max-width:1000px) { :root .office-app .workspace .sales-overview .so-market-columns { grid-template-columns:minmax(0,1fr); } }
