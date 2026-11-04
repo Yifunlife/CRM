@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pathToFileURL} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+const dir=mkdtempSync(tmpdir()+'/crm-analysis-');
+try{
+ const compiled=await build({stdin:{contents:"export {salesWorkflowEndpoint} from './lib/sales-workflow-server';export {customerAnalysisEndpoint} from './lib/customer-analysis';export {bridgeDeviceEndpoint} from './lib/workbench-bridge';export {digest} from './lib/crm';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'fixture-storage',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env={};'}));}}]});
+ writeFileSync(dir+'/module.mjs',compiled.outputFiles[0].text);const {customerAnalysisEndpoint,bridgeDeviceEndpoint,digest,salesWorkflowEndpoint}=await import(pathToFileURL(dir+'/module.mjs'));
+ const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ class Statement{constructor(q,a=[]){this.q=q;this.a=a;}bind(...a){return new Statement(this.q,a);}async first(){return sql.prepare(this.q).get(...this.a)||null;}async all(){return {results:sql.prepare(this.q).all(...this.a)};}async run(){return {meta:sql.prepare(this.q).run(...this.a)};}}
+ const db={prepare:q=>new Statement(q),batch:async list=>{sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}},alice={id:'alice',role:'sales'},bob={id:'bob',role:'sales'},admin={id:'admin',role:'admin'};
+ for(const u of [alice,bob,admin])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'fixture','2026-11-04');
+ sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('lead','Fixture customer','Meta','alice',?,'fixture','2026-11-04')").run(JSON.stringify({_customer_profile:{blocker:'等待客户场地图',nextAction:'确认场地'}}));
+ sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('note','lead','alice','客户需要儿童乐园方案','WhatsApp','核实面积','2026-11-04')").run();
+ sql.prepare("INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES('alice',?,'now','alice')").run(JSON.stringify({clients:[{id:'desktop',name:'Fixture',messages:[]}]}));
+ sql.prepare("INSERT INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) VALUES('lead','alice','desktop','now','alice')").run();
+ sql.prepare("INSERT INTO crm_workbench_bridge(owner_id,token_hash,created_by) VALUES('alice',?,'alice')").run(await digest('fixture-device'));
+ sql.prepare("INSERT INTO crm_leads(id,name,owner_id,source,detail,fingerprint,created) VALUES('manual-lead','Manual customer','alice','Meta',?,'manual-lead','2026-11-04')").run(JSON.stringify({_customer_profile:{blocker:'keep blocker',nextAction:'keep plan'},attachment:'keep.pdf'}));
+ const manualCall=(method,body={},user=alice)=>customerAnalysisEndpoint(db,user,user,'customer-analysis/manual-lead',method,body);
+ const fields={customerNeeds:'室内乐园',confirmedFacts:'已提供面积',pendingItems:'预算待确认',nextAction:'核实需求与预算'},payload={mode:'manual',fields,revision:'',request_id:'manual-first-000001'};
+ const before=JSON.stringify(sql.prepare("SELECT * FROM crm_leads WHERE id='manual-lead'").get());
+ assert.equal((await manualCall('GET')).linked,false);assert.equal((await manualCall('GET')).manual,null);
+ await assert.rejects(manualCall('POST',{...payload,fields:{...fields,pendingItems:''}}),/四项/);
+ await assert.rejects(manualCall('POST',payload,{...alice,permissions:{customers_edit:false}}),e=>e.status===403);
+ await assert.rejects(manualCall('POST',payload,bob),e=>e.status===404);
+ const saved=await manualCall('POST',payload);await manualCall('POST',payload);
+ assert.equal(sql.prepare("SELECT count(*) n FROM crm_sales_events WHERE lead_id='manual-lead'").get().n,1);
+ let value=await manualCall('GET');assert.deepEqual(value.manual.fields,fields);assert.equal(value.manual.source,'手动填写');assert.equal(value.manual.stale,false);
+ const listing=await salesWorkflowEndpoint(db,alice,alice,'sales-management/customers','GET',{},new URL('https://fixture.invalid/api/sales-management/customers'));assert.equal(listing.rows.find(r=>r.id==='manual-lead').analysis_summary,fields.customerNeeds);
+ await assert.rejects(manualCall('POST',{...payload,fields:{...fields,nextAction:'changed'}}),e=>e.status===409);
+ await assert.rejects(manualCall('POST',{...payload,request_id:'manual-stale-000001'}),e=>e.status===409);
+ const results=await Promise.allSettled([manualCall('POST',{...payload,revision:saved.id,request_id:'manual-concurrent-1'}),manualCall('POST',{...payload,revision:saved.id,request_id:'manual-concurrent-2',fields:{...fields,nextAction:'other edit'}})]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.status,409);
+ assert.equal(JSON.stringify(sql.prepare("SELECT * FROM crm_leads WHERE id='manual-lead'").get()),before);
+ sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('new-note','manual-lead','alice','new message','电话','','2026-11-04')").run();assert.equal((await manualCall('GET')).manual.stale,true);
+ sql.prepare("UPDATE crm_leads SET owner_id='bob' WHERE id='manual-lead'").run();await assert.rejects(manualCall('GET'),e=>e.status===404);assert.deepEqual((await manualCall('GET',{},bob)).manual.fields,fields);
+ assert.equal(sql.prepare('SELECT count(*) n FROM crm_workbench_commands').get().n,0);assert.equal(sql.prepare('SELECT count(*) n FROM crm_ai_usage').get().n,0);
+ console.log('PASS manual communication: unlinked/offline customer, four fields, validation, permissions, durable readback/list summary, idempotence, concurrent-edit rejection, new-message staleness, handover access, and unchanged manual blockers/plans/attachments.');
+}finally{rmSync(dir,{recursive:true,force:true});}

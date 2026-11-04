@@ -1,5 +1,6 @@
+import {readManualCommunication,saveManualCommunication} from './communication-manual';
 import {authorizedLead,clean,digest} from './crm';
-import {customerProfile} from './customer-profile';
+import {customerProfile,canEditCustomerProfile} from './customer-profile';
 import {readJson} from './object-storage';
 import {ownedDesktop} from './workbench-bridge';
 import {AllocationError} from './allocation-server';
@@ -11,14 +12,19 @@ export async function customerAnalysisEndpoint(db:D1Database,user:any,actor:any,
  const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(match[1]).first();
  if(!lead||!authorizedLead(user,lead))throw new AllocationError('客户不存在或无权查看',404);
  const link:any=await db.prepare('SELECT desktop_id FROM crm_workbench_links WHERE lead_id=? AND owner_id=?').bind(lead.id,lead.owner_id).first();
- if(!link){if(method==='GET')return {analysis:null,job:null};throw new AllocationError('此客户尚未关联所属业务员的工作台，请先同步并核对客户关联',409);}
+ if(method==='POST'&&body?.mode==='manual')return saveManualCommunication(db,user,actor,lead,body);
+ const bridgeStatus:any=method==='GET'&&link?await db.prepare('SELECT seen,status FROM crm_workbench_bridge WHERE owner_id=?').bind(lead.owner_id).first():null;
+ const extra=method==='GET'?{manual:await readManualCommunication(db,lead),can_edit_manual:canEditCustomerProfile(user,lead),linked:!!link,online:!!bridgeStatus&&Date.now()-bridgeStatus.seen<30000,supported:!!bridgeStatus&&!!JSON.parse(bridgeStatus.status||'{}').customerAnalysis,can_generate:user.id===actor.id}:{};
+ if(!link){if(method==='GET')return {analysis:null,workbench_analysis:null,job:null,...extra};throw new AllocationError('此客户尚未关联所属业务员的工作台，请先同步并核对客户关联',409);}
  const args=[lead.owner_id,link.desktop_id,lead.id];
  const where="owner_id=? AND desktop_id=? AND kind='customer-analysis' AND json_extract(payload,'$.crm_lead_id')=?";
  if(method==='GET'){
-  const saved:any=await db.prepare(`SELECT result FROM crm_workbench_commands WHERE ${where} AND state='done' ORDER BY created DESC,id DESC LIMIT 1`).bind(...args).first();
+  const saved:any=await db.prepare(`SELECT result,updated FROM crm_workbench_commands WHERE ${where} AND state='done' ORDER BY created DESC,id DESC LIMIT 1`).bind(...args).first();
   const latest:any=await db.prepare(`SELECT id,state,result FROM crm_workbench_commands WHERE ${where} ORDER BY created DESC,id DESC LIMIT 1`).bind(...args).first();
   const result=latest?await readJson(latest.result):null;
-  return {analysis:saved?(await readJson(saved.result)).analysis:null,job:latest?{id:latest.id,state:latest.state,error:clean(result?.error,300)}:null};
+  const analysis=saved?(await readJson(saved.result)).analysis:null;
+  const workbench_analysis=analysis?{fields:{customerNeeds:analysis.needs,confirmedFacts:analysis.confirmed,pendingItems:analysis.pending,nextAction:analysis.nextStep},source:analysis.source,generated_at:analysis.updatedAt,synced_at:new Date(saved.updated).toISOString(),total_messages:analysis.messageCount,analyzed_messages:analysis.messageCount,stale:!!lead.last_contact&&Date.parse(lead.last_contact)>Date.parse(analysis.updatedAt)}:null;
+  return {analysis,workbench_analysis,...extra,job:latest?{id:latest.id,state:latest.state,error:clean(result?.error,300)}:null};
  }
  if(user.id!==actor.id)throw new AllocationError('请退出代看身份后生成分析',403);
  if(!/^[a-zA-Z0-9-]{16,80}$/.test(body.request_id||''))throw new AllocationError('分析请求编号无效');
