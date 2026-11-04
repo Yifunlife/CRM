@@ -64,4 +64,10 @@ try{
  assert.equal(synced.uploaded.length,1);assert.equal(sql.prepare('SELECT market FROM crm_leads WHERE id=?').get(synced.uploaded[0].lead_id).market,'外贸');
 }finally{rmSync(dir,{recursive:true,force:true});}
 assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,0);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+// Domestic spreadsheet defaults also apply to future imports and pending review rows.
+const domesticRows=[{'客户名称':'Domestic defaults','联系方式':'13800000991','分配业务员':'sales','来源平台':'小红书','城市':'南京'},{'客户名称':'Pending domestic defaults','来源平台':'小红书','城市':'北京'}];
+const aligned=await importForm(db,admin,admin,{...body,rows:domesticRows});assert.equal(aligned.inserted,1);assert.equal(aligned.reviewed,1);
+const savedDefault=sql.prepare("SELECT * FROM crm_leads WHERE name='Domestic defaults'").get();assert.equal(savedDefault.country,'中国');assert.equal(savedDefault.business_scope,'xiaohongshu');assert.equal(JSON.parse(savedDefault.detail)['偏好联系方式'],'微信');
+const pendingDefaults=await customerPage(db,admin,new URL('https://fixture.invalid/?'+new URLSearchParams({market:'内贸',method:'微信',source:'小红书',q:'Pending domestic defaults'})));
+assert.equal(pendingDefaults.total,1);assert.equal(pendingDefaults.rows[0].country,'中国');assert.equal(pendingDefaults.rows[0].detail['城市'],'北京');assert.equal(pendingDefaults.rows[0].detail['偏好联系方式'],'微信');assert.equal(pendingDefaults.rows[0].stage,'待核查');
 console.log('PASS: explicit market storage and constraints, conservative migration, both spreadsheet entries, original owners, no-write previews, cross-market duplicate review/replay, manual intake retention, market pagination/counts and owner isolation.');

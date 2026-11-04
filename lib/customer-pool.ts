@@ -9,7 +9,7 @@ import {enquiryNotification} from './lead-notifications';
 const manager=(user:any)=>can(user,'customers_all')&&can(user,'leads_allocate');
 const day=(at:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
-function fields(input:any):Record<string,string>{const market=clean(input?.market,20);if(market&&!['内贸','外贸','待确认'].includes(market))fail('请选择内贸或外贸');const data=Object.fromEntries(['name','phone','email','country','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));const platform=clean(input?.platform,20).toLowerCase();if(platform&&!['fb','ig','facebook','instagram'].includes(platform))fail('请选择Facebook或Instagram平台');return {...data,...(market?{market}:{}),...(platform?{platform}:{} )};}
+function fields(input:any):Record<string,string>{const market=clean(input?.market,20);if(market&&!['内贸','外贸','待确认'].includes(market))fail('请选择内贸或外贸');const data=Object.fromEntries(['name','phone','email','country','city','preferred_method','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));const platform=clean(input?.platform,20).toLowerCase();if(platform&&!['fb','ig','facebook','instagram'].includes(platform))fail('请选择Facebook或Instagram平台');return {...data,...(market?{market}:{}),...(platform?{platform}:{} )};}
 function event(db:D1Database,key:string,actor:string,kind:string,payload:any){return db.prepare('INSERT INTO crm_pool_events(id,intake_id,actor_id,kind,payload,created) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),key,actor,kind,JSON.stringify(payload),now());}
 async function matches(db:D1Database,data:any){
  const rows=(await db.prepare('SELECT l.id,l.name,l.phone,l.email,l.owner_id,l.original_owner,l.review,u.name AS owner_name,u.active AS owner_active FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id').all<any>()).results;
@@ -39,7 +39,7 @@ export async function processCustomerPool(db:D1Database,at=now()){
    if(!lead){
     const duplicates=await matches(db,data);
     if(duplicates.length&&!data.distinct_reason)throw new Error('发现相同联系方式，请核查是否已有客户');
-    const detail=JSON.stringify({'客资市场':customerMarket({...data,source:row.source}),'项目需求描述':data.requirement,'客户需求摘要':data.summary,...(data.platform?{'来源渠道':data.platform,platform:data.platform}:{}),'原始内容':row.raw,'客户池记录':row.id,'确认新客户依据':data.distinct_reason||'','客户池电话键':phoneKey(data.phone),'客户池邮箱键':emailKey(data.email)});
+    const detail=JSON.stringify({'客资市场':customerMarket({...data,source:row.source}),'城市':data.city||'','偏好联系方式':data.preferred_method||'','项目需求描述':data.requirement,'客户需求摘要':data.summary,...(data.platform?{'来源渠道':data.platform,platform:data.platform}:{}),'原始内容':row.raw,'客户池记录':row.id,'确认新客户依据':data.distinct_reason||'','客户池电话键':phoneKey(data.phone),'客户池邮箱键':emailKey(data.email)});
     await db.batch([
      db.prepare(`INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,entered,detail,fingerprint,created,market)
       SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_customer_pool WHERE id=? AND state='待分配' AND version=?)
