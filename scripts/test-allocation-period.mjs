@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {performanceDates,performanceRange}=await import(moduleURL('lib/allocation-period.ts'));
+const {allocationEndpoint}=await import(moduleURL('lib/allocation-server.ts'));
+const at=new Date('2026-11-04T00:00:00Z');
+assert.deepEqual(performanceDates('month',at),{from:'2026-11-01',to:'2026-11-30'});
+assert.deepEqual(performanceDates('quarter',at),{from:'2026-10-01',to:'2026-12-31'});
+assert.deepEqual(performanceDates('year',at),{from:'2026-01-01',to:'2026-12-31'});
+assert.equal(performanceDates('month',new Date('2024-02-10T00:00Z')).to,'2024-02-29');
+assert.equal(performanceDates('quarter',new Date('2026-09-30T15:00Z')).from,'2026-10-01');
+const spring=performanceRange('2026-10-04','2026-10-04'),autumn=performanceRange('2026-04-05','2026-04-05');
+assert.equal(spring.startAt,'2026-10-03T14:00:00.000Z');assert.equal(spring.endAt,'2026-10-04T13:00:00.000Z');
+assert.equal(Date.parse(autumn.endAt)-Date.parse(autumn.startAt),25*3600000);
+for(const pair of [['','2026-01-01'],['2026-02-30','2026-03-01'],['2026-11-04','2026-11-03']])assert.throws(()=>performanceRange(...pair));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),admin={id:'admin',role:'admin'},sales={id:'a',role:'sales'};
+for(const u of [admin,sales])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
+const times=['2026-10-03T13:59:59.999Z',spring.startAt,'2026-10-04T12:59:59.999Z',spring.endAt];
+for(let i=0;i<6;i++){
+ const scope=i===5?'meta-product':'meta-full';
+ sql.prepare("INSERT INTO crm_leads(id,name,source,business_scope,owner_id,detail,fingerprint,created,cohort) VALUES(?,?,'Meta',?,'a','{}',?,'2026-01-01',?)").run('l'+i,'示例'+i,scope,'l'+i,i===4?'historical':'new');
+ sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,business_scope,allocation_month,policy,created) VALUES(?,?,'admin','a',?,'2026-10',?,?)").run('a'+i,'l'+i,scope,i===4?'historical-alignment':'equal-global-v1',times[i]||spring.startAt);
+}
+const deal=(id,lead,day,cancelled=0)=>sql.prepare("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by,cancelled) VALUES(?,?,?,'a',?,?,?,'admin',?)").run(id,id,lead,lead==='l5'?'meta-product':'meta-full',day,'2026-10-04',cancelled);
+deal('d0','l0','2026-10-03');deal('d1','l1','2026-10-04');deal('d2','l2','2026-10-05');deal('void','l3','2026-10-04',1);deal('other','l5','2026-10-04');
+for(const [id,dealId,currency,amount,day,cancelled] of [['r0','d0','CNY',1000,'2026-10-04',0],['r1','d1','USD',2500,'2026-10-04',0],['r2','d2','CNY',9000,'2026-10-05',0],['rv','void','CNY',99999,'2026-10-04',0],['rc','d1','CNY',88888,'2026-10-04',1],['ro','other','USD',5000,'2026-10-04',0]])sql.prepare("INSERT INTO crm_receipts(id,reference,deal_id,currency,amount_minor,received_date,created,created_by,cancelled) VALUES(?,?,?,?,?,?,'2026-10-04','admin',?)").run(id,id,dealId,currency,amount,day,cancelled);
+const call=(query,user=admin)=>allocationEndpoint(db,user,'allocation/report','GET',{},new URL('https://test.invalid/?'+new URLSearchParams(query)));
+const changes=sql.prepare('SELECT total_changes() n').get().n;
+const r=await call({scope:'meta-full',from:'2026-10-04',to:'2026-10-04'});
+assert.equal(r.assigned[0].n,2);assert.equal(r.deals[0].n,1);assert.equal(r.cash[0].cny,1000);assert.equal(r.cash[0].usd,2500);assert.equal(r.confirmed,null);assert.equal(r.period.month,null);
+const all=await call({scope:'all',from:'2026-10-04',to:'2026-10-04'});assert.equal(all.assigned[0].n,3);assert.equal(all.deals[0].n,2);assert.equal(all.cash[0].usd,7500);
+const quarter=await call({scope:'meta-full',from:'2026-10-01',to:'2026-12-31'});assert.equal(quarter.deals[0].n,3);assert.equal(quarter.cash[0].cny,10000);
+const month=await call({scope:'meta-full',from:'2026-10-01',to:'2026-10-31'});const legacy=await call({scope:'meta-full',month:'2026-10'});assert.deepEqual(month.deals,legacy.deals);assert.deepEqual(month.cash,legacy.cash);assert.equal(month.period.month,'2026-10');
+await assert.rejects(call({from:'2026-02-30',to:'2026-11-04'}),e=>e.status===400);await assert.rejects(call({from:'2026-11-04'}),e=>e.status===400);await assert.rejects(call({from:'2026-10-04',to:'2026-10-04'},sales),e=>e.status===403);
+assert.equal(sql.prepare('SELECT total_changes() n').get().n,changes);console.log('PASS: month/quarter/year, leap dates, Sydney DST/inclusive bounds, scoped allocation/deals/separate currencies, void exclusions, legacy month parity, validation, permissions and zero writes.');

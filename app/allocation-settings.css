@@ -1,1 +1,6 @@
 .allocation-members select{min-width:112px}
+
+.allocation-period{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.allocation-period label{margin:0;min-width:140px}
+.allocation-period select,.allocation-period input{width:100%}
+@media(max-width:720px){.allocation-period{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.allocation-period label{min-width:0}.allocation-period select,.allocation-period input{font-size:16px;min-height:44px}.allocation-period button{min-height:44px}}

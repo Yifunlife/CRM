@@ -19,12 +19,14 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
   if(!lead||!authorizedLead(user,lead))throw new Problem('客户不存在或无权维护',404);
   if(!canEditCustomerProfile(user,lead))throw new Problem('没有客户维护权限',403);
   const patch=change.patch;
-  if(!patch||!Object.keys(patch).length||Object.keys(patch).some(k=>!['grade','status','next_date','pause_reason','loss_reason','loss_note'].includes(k)))throw new Problem('请选择状态或客户分类');
+  if(!patch||!Object.keys(patch).length||Object.keys(patch).some(k=>!['grade','status','next_date','pause_reason','loss_reason','loss_note','contract_number'].includes(k)))throw new Problem('请选择状态或客户分类');
   if(!Object.hasOwn(patch,'grade')&&!Object.hasOwn(patch,'status'))throw new Problem('请选择状态或客户分类');
   if(!change.base||['grade','status','next_date','owner_id'].some(k=>change.base[k]!==lead[k]))throw new Problem('客户状态或归属已变化，请刷新后重试',409);
   if(Object.hasOwn(patch,'grade')&&!['',...CONTACT_GRADES].includes(patch.grade))throw new Problem('请选择有效客户分类');
+  if(Object.hasOwn(patch,'contract_number')&&(typeof patch.contract_number!=='string'||patch.contract_number.trim().length>200))throw new Problem('合同号最多200字');
+  const detail=JSON.parse(lead.detail||'{}');
   const dealCount:any=await db.prepare('SELECT COUNT(*) n FROM crm_deals WHERE lead_id=? AND cancelled=0').bind(lead.id).first();
-  snapshots.push({id:lead.id,...change.base,deal_count:dealCount.n});
+  snapshots.push({id:lead.id,...change.base,deal_count:dealCount.n,contract_number:detail._customer_profile?.contractNumber??null});
   if(Object.hasOwn(patch,'status')){
    if(!STATUSES.includes(patch.status))throw new Problem('请选择有效客户状态');
    const nextDate=patch.next_date??lead.next_date;
@@ -37,6 +39,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
    statements.push(customerChange(db,actor,lead.id,'grade',patch.grade,'',condition,args));
    statements.push(db.prepare('UPDATE crm_leads SET grade=? WHERE id=? AND '+condition).bind(patch.grade,lead.id,...args),cancelColleagueFirstContacts(db,lead.id,condition,args));
   }
+  if(Object.hasOwn(patch,'contract_number'))statements.push(db.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._customer_profile.contractNumber',?,'$._profile_revision',COALESCE(json_extract(detail,'$._profile_revision'),0)+1) WHERE id=? AND "+condition).bind(patch.contract_number.trim(),lead.id,...args));
   statements.push(db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE '+condition).bind(id(),'客户管理快捷更新',lead.id,JSON.stringify({before:change.base,patch}),now(),actor.id,...args));
  }
  // Admit the whole batch only if every snapshot still matches inside the write transaction.
@@ -47,6 +50,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
    AND l.grade IS json_extract(snapshot.value,'$.grade')
    AND l.status IS json_extract(snapshot.value,'$.status')
    AND l.next_date IS json_extract(snapshot.value,'$.next_date')
+   AND json_extract(l.detail,'$._customer_profile.contractNumber') IS json_extract(snapshot.value,'$.contract_number')
    AND (SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)=json_extract(snapshot.value,'$.deal_count'))=?`)
   .bind(token,'客户管理批量更新',changes[0].id,JSON.stringify({count:changes.length}),now(),actor.id,JSON.stringify(snapshots),changes.length);
  const result=await db.batch([gate,...statements]);

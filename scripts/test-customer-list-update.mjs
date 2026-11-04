@@ -22,9 +22,12 @@ await assert.rejects(call([change('one',{grade:'Z'})]),/分类/);
 await assert.rejects(call([change('one',{owner_id:'other'})]),/状态或客户分类/);
 await assert.rejects(call([change('one',{status:'暂停跟进',next_date:'2099-01-01'})]),/暂停原因/);
 await assert.rejects(call([change('one',{status:'正在沟通',next_date:'2026-02-30'})]),/日期/);
-await assert.rejects(call([change('one',{status:'已成交'})]),/成交单/);
+
 await assert.rejects(call([change('one',{status:'已结束'})]),/未成交原因/);
 assert.equal(snapshot(),saved);
+await call([change('one',{status:'已成交'})]);assert.equal(row('one').status,'已成交');
+await call([change('one',{status:'已成交',contract_number:'YF-TEST-001'})]);assert.equal(JSON.parse(row('one').detail)._customer_profile.contractNumber,'YF-TEST-001');assert.equal(row('one').last_contact,before.last_contact);
+await assert.rejects(call([change('one',{status:'已成交',contract_number:'x'.repeat(201)})]),/合同号/);
 const stale=change('one',{grade:'VIP'});sql.prepare("UPDATE crm_leads SET grade='C' WHERE id='one'").run();await assert.rejects(call([stale]),e=>e.status===409);
 await call([change('one',{status:'暂停跟进',pause_reason:'客户暂缓',next_date:'2099-02-01'})]);
 assert(sql.prepare("SELECT payload FROM crm_attribution_events WHERE entity_id='one' AND kind='跟进状态变化' ORDER BY rowid DESC LIMIT 1").get().payload.includes('客户暂缓'));
@@ -37,7 +40,7 @@ await assert.rejects(call([change('one',{grade:'A'}),change('one',{grade:'B'})])
 await assert.rejects(call([]),/1–30/);
 for(const table of ['crm_notes','crm_deals','crm_receipts','crm_workbench_commands'])assert.equal(sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,0,table);
 assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length,0);
-console.log('PASS: single/batch status and classification, all-row validation, permissions, own-manager editing, stale snapshots, pause/end/deal validation, audit and original contact/files/details preserved.');
+console.log('PASS: single/batch status and classification, all-row validation, permissions, own-manager editing, stale snapshots, pause/end validation, direct sold status and contract supplementation, audit and original contact/files/details preserved.');
 // Reassignment after preflight but before the transaction must reject every write.
 const auditTables=['crm_workflow_audit','crm_attribution_events','crm_lead_outcomes'];
 const auditSnapshot=()=>auditTables.map(t=>JSON.stringify(sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));

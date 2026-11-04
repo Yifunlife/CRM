@@ -1,3 +1,4 @@
+import {customerContractNumber} from './customer-profile';
 import {isColleague} from './contact-kind';
 import {AllocationError} from './allocation-server';
 import {id,now,clean,authorizedLead,can,hasAdminPermissions} from './crm';
@@ -17,8 +18,7 @@ export async function paymentSummary(db:D1Database,dealId:string){
  const valid=receipts.filter(r=>!r.cancelled),net=valid.filter(r=>r.currency===contract.currency).reduce((n,r)=>n+r.amount_minor-r.refunded_minor,0);
  return {contract,receipts,net_minor:net,cross_currency:valid.some(r=>r.currency!==contract.currency),ship_due_minor:contract.schedule.filter((p:any)=>p.before_ship).reduce((n:number,p:any)=>n+p.amount_minor,0),outstanding_minor:Math.max(0,contract.total_minor-net),overdue_minor:Math.max(0,contract.schedule.filter((p:any)=>p.due_date<chinaToday()).reduce((n:number,p:any)=>n+p.amount_minor,0)-net)};
 }
-export async function validateLeadFollowup(db:D1Database,lead:any,body:any){
- if(body.status==='已成交'&&!await db.prepare('SELECT id FROM crm_deals WHERE lead_id=? AND cancelled=0').bind(lead.id).first())fail('标记已成交前需管理员确认有效成交单');
+export async function validateLeadFollowup(_db:D1Database,_lead:any,body:any){
  if(!['已成交','已结束'].includes(body.status)){date(body.next_date);if(body.next_date<chinaToday())fail('下次跟进或复查日期不能早于今天');}
  if(body.status==='暂停跟进')required(body.pause_reason,'暂停原因');
 }
@@ -28,10 +28,10 @@ export async function workflowEndpoint(db:D1Database,user:any,actor:any,path:str
  if(!path.startsWith('workflow/'))return undefined;
  if(path==='workflow/report'&&method==='GET'){
   const all=can(user,'customers_all'),where=user.role==='followup'?' WHERE 0':all?'':' WHERE l.owner_id=?',args=all||user.role==='followup'?[]:[user.id];
-  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.grade,l.status,l.cohort,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
+  const leads=(await db.prepare('SELECT l.id,l.name,l.owner_id,l.grade,l.detail,l.status,l.cohort,l.next_date,l.last_contact,l.created,u.name AS owner_name,u.active AS owner_active,(SELECT MAX(a.created) FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id) AS assigned_at,(SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AS deal_count FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id'+where).bind(...args).all<any>()).results;
   const issues:any[]=[];const add=(kind:string,entity_id:string,name:string,owner:string,issue:string,due='')=>issues.push({kind,entity_id,name,owner,issue,due});
   for(const l of leads.filter(l=>!isColleague(l.grade))){
-   if(l.status==='已成交'&&!l.deal_count)add('customer',l.id,l.name,l.owner_name,'已成交但无有效成交单，待核查');
+   if(l.status==='已成交'&&!l.deal_count&&!customerContractNumber(l))add('customer',l.id,l.name,l.owner_name,'已成交，请补录合同号信息');
    if(l.deal_count&&!['已成交','已结束'].includes(l.status))add('customer',l.id,l.name,l.owner_name,'已有成交仍在跟进，核查是否复购');
    if(l.owner_id&&l.owner_active===0)add('customer',l.id,l.name,l.owner_name,'负责人停用，待交接');
    if(['已成交','已结束'].includes(l.status))continue;

@@ -18,7 +18,7 @@ await assert.rejects(post('record',{...base,id:'foreign'}),e=>e.status===404);
 await assert.rejects(post('record',{...base,result:'其他'},ceo),/备注/);
 await assert.rejects(post('record',{...base,result:'其他'}),/备注/);
 await assert.rejects(post('record',{...base,result:'设计已下单'}),/出方案/);
-await assert.rejects(post('record',{...base,status:'已成交'}),/成交单/);
+
 await assert.rejects(post('record',{...base,at:'2099-01-01T00:00:00.000Z'}),/未来/);
 await post('record',{...base,type:'首次联系'});
 assert.equal(JSON.parse(sql.prepare("SELECT detail FROM crm_leads WHERE id='mine'").get().detail)['原始资料'],'保留');
@@ -99,3 +99,5 @@ const currentPlan=(await get('customer?id=mine')).plans.find(p=>p.entity==='sale
 await post('plan',{id:'mine',revision:currentPlan.revision,plan:{...plan,opening:addDays(today,-1),phase:4,remaining:0}});
 assert.equal((await get('report')).reminders.some(r=>r.id==='opening:sales:p'),false,'an opening plan with its last phase completed does not remain overdue');
 console.log('PASS: owner-scoped project next actions, completed sales projects and completed opening plans automatically leave current reminders.');
+
+await post('record',{...base,status:'已成交'});assert.equal(sql.prepare("SELECT status FROM crm_leads WHERE id='mine'").get().status,'已成交');console.log('PASS: personal customer status does not require administrator deal confirmation.');

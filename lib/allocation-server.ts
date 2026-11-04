@@ -1,3 +1,4 @@
+import {performanceRange} from './allocation-period';
 import {customerLeadSQL} from './contact-kind';
 import {allocationPerformance} from './allocation-performance-server';
 import {adjustedShares} from './allocation-performance';
@@ -25,19 +26,19 @@ export async function distribute(db:D1Database,ids:string[],scope:string,actor:s
  }
  const result=await db.batch(statements);return result.filter((_,i)=>i%2===0).reduce((n,r)=>n+(r.meta.changes||0),0);
 }
-async function report(db:D1Database,scope:string,month:string){
+async function report(db:D1Database,scope:string,month:string,period?:ReturnType<typeof performanceRange>){
  const config=await configFor(db),users=await activeUsers(db),plan=await planFor(db,scope,month),next=nextMonth(month),all=scope===GLOBAL_ALLOCATION_SCOPE,args=all?[]:[scope];
  const weights=effectiveShares(config,plan,users.filter(u=>u.active&&['sales','ceo','management'].includes(u.role)).map(u=>u.id));
- const deals=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_deals WHERE '+(all?'1=1':'business_scope=?')+' AND cancelled=0 AND substr(deal_date,1,7)=? GROUP BY owner_id').bind(...args,month).all<any>()).results;
- const assigned=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_assignments WHERE '+(all?'1=1':'business_scope=?')+' AND allocation_month=? AND policy NOT IN (\'historical-alignment\',\'historical-sync\') AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=crm_assignments.lead_id AND l.cohort=\'new\') GROUP BY owner_id').bind(...args,month).all<any>()).results;
+ const deals=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_deals WHERE '+(all?'1=1':'business_scope=?')+' AND cancelled=0 AND '+(period?'deal_date>=? AND deal_date<=?':'substr(deal_date,1,7)=?')+' GROUP BY owner_id').bind(...args,...(period?[period.from,period.to]:[month])).all<any>()).results;
+ const assigned=(await db.prepare('SELECT owner_id,COUNT(*) AS n FROM crm_assignments WHERE '+(all?'1=1':'business_scope=?')+' AND '+(period?'created>=? AND created<?':'allocation_month=?')+' AND policy NOT IN (\'historical-alignment\',\'historical-sync\') AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=crm_assignments.lead_id AND l.cohort=\'new\') GROUP BY owner_id').bind(...args,...(period?[period.startAt,period.endAt]:[month])).all<any>()).results;
  const globalAssigned=(await db.prepare("SELECT owner_id,COUNT(*) AS n FROM crm_assignments WHERE allocation_month=? AND policy IN ('equal-v1','equal-global-v1','full-first-v1') AND EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=crm_assignments.lead_id AND l.cohort='new') GROUP BY owner_id").bind(monthNow()).all<any>()).results;
- const cash=(await db.prepare("SELECT d.owner_id,SUM(CASE WHEN r.currency='CNY' THEN r.amount_minor ELSE 0 END) cny,SUM(CASE WHEN r.currency='USD' THEN r.amount_minor ELSE 0 END) usd,COUNT(DISTINCT d.id) paid_orders FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE "+(all?'1=1':'d.business_scope=?')+" AND d.cancelled=0 AND r.cancelled=0 AND substr(r.received_date,1,7)=? GROUP BY d.owner_id").bind(...args,month).all<any>()).results;
+ const cash=(await db.prepare("SELECT d.owner_id,SUM(CASE WHEN r.currency='CNY' THEN r.amount_minor ELSE 0 END) cny,SUM(CASE WHEN r.currency='USD' THEN r.amount_minor ELSE 0 END) usd,COUNT(DISTINCT d.id) paid_orders FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE "+(all?'1=1':'d.business_scope=?')+" AND d.cancelled=0 AND r.cancelled=0 AND "+(period?"r.received_date>=? AND r.received_date<=?":"substr(r.received_date,1,7)=?")+" GROUP BY d.owner_id").bind(...args,...(period?[period.from,period.to]:[month])).all<any>()).results;
  const receiptPolicy=config.rule.receipts!==false&&month>='2026-10';
  const conversion=(await db.prepare('SELECT l.owner_id,COUNT(DISTINCT l.id) AS assigned,COUNT(DISTINCT CASE WHEN d.id IS NOT NULL THEN l.id END) AS converted FROM crm_leads l LEFT JOIN crm_deals d ON d.lead_id=l.id AND d.cancelled=0 AND d.business_scope=l.business_scope AND d.owner_id=l.owner_id WHERE '+(all?'1=1':'l.business_scope=?')+' AND l.owner_id IS NOT NULL GROUP BY l.owner_id').bind(...args).all<any>()).results;
- const confirmed:any=await db.prepare('SELECT * FROM crm_allocation_plans WHERE key=?').bind(scope+':'+next).first();
+ const confirmed:any=period&&!period.month?null:await db.prepare('SELECT * FROM crm_allocation_plans WHERE key=?').bind(scope+':'+next).first();
  const liveCurrent=equalShares(config,users.filter(u=>u.active).map(u=>u.id));
  const proposal=liveCurrent,warning='';
- return {priorityAssigned:await cumulativeAllocationCounts(db),allocationStart:ALLOCATION_START,scope,config_scope:GLOBAL_ALLOCATION_SCOPE,month,next,config,users,cash,receiptPolicy,policy:'full-first-v1',liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,globalAssigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
+ return {priorityAssigned:await cumulativeAllocationCounts(db),allocationStart:ALLOCATION_START,period,scope,config_scope:GLOBAL_ALLOCATION_SCOPE,month,next,config,users,cash,receiptPolicy,policy:'full-first-v1',liveCurrent,current:weights,plan_month:plan?.month||'',deals,assigned,globalAssigned,conversion,proposal,warning,confirmed:confirmed?{...confirmed,payload:JSON.parse(confirmed.payload)}:null,closed:month<monthNow(),timezone:'Australia/Sydney'};
 }
 export async function allocationEndpoint(db:D1Database,user:any,path:string,method:string,body:any,url:URL){
  if(!path.startsWith('allocation/'))return undefined;
@@ -45,7 +46,13 @@ export async function allocationEndpoint(db:D1Database,user:any,path:string,meth
  if(method!=='GET'&&!canSetManagement(user))throw new AllocationError('只有 Winnie、CEO、徐泽贵可以设置分配管理',403);
  const scope=String(body.scope||url.searchParams.get('scope')||GLOBAL_ALLOCATION_SCOPE);
  if(scope!==GLOBAL_ALLOCATION_SCOPE&&!BUSINESS_SCOPES.some(s=>s.id===scope))throw new AllocationError('请选择有效业务范围');
- if(path==='allocation/report'&&method==='GET'){const month=url.searchParams.get('month')||monthNow();if(!validMonth(month)||month>monthNow())throw new AllocationError('请选择本月或过去月份');return report(db,scope,month);}
+ if(path==='allocation/report'&&method==='GET'){
+  if(url.searchParams.has('from')||url.searchParams.has('to')){
+   let period:ReturnType<typeof performanceRange>;try{period=performanceRange(url.searchParams.get('from')||'',url.searchParams.get('to')||'');}catch(e:any){throw new AllocationError(e.message);}
+   const month=period.month||period.to.slice(0,7);return report(db,scope,month,period);
+  }
+  const month=url.searchParams.get('month')||monthNow();if(!validMonth(month)||month>monthNow())throw new AllocationError('请选择本月或过去月份');return report(db,scope,month);
+ }
  if(path==='allocation/distribute'&&method==='POST'){
   const ids=[...new Set<string>(body.ids||[])];if(!ids.length||ids.length>200)throw new AllocationError('每次选择1至200条客资');
   const selected=(await db.prepare("SELECT id FROM crm_leads WHERE id IN (SELECT value FROM json_each(?)) AND (?=? OR business_scope=?) AND business_scope IN (SELECT value FROM json_each(?)) AND cohort='new' AND owner_id IS NULL AND original_owner='' AND review=0 AND COALESCE(grade,'') NOT IN ('Yifun Staff','同事')").bind(JSON.stringify(ids),scope,GLOBAL_ALLOCATION_SCOPE,scope,JSON.stringify(BUSINESS_SCOPES.map(s=>s.id))).all()).results;

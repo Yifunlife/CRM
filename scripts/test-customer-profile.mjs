@@ -13,7 +13,7 @@ sql.prepare("INSERT INTO crm_leads(id,name,source,country,phone,email,grade,owne
 sql.exec("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('note','lead','sales','原跟进','WhatsApp','真实下一步','2026-10-02')");
 const row=()=>sql.prepare("SELECT * FROM crm_leads WHERE id='lead'").get();
 const notes=()=>JSON.stringify(sql.prepare('SELECT * FROM crm_notes').all());const notesBefore=notes();
-const payload=()=>{const l=row(),d=JSON.parse(l.detail);return {id:l.id,revision:d._profile_revision||0,base:Object.fromEntries(['name','country','phone','email','grade','next_date'].map(k=>[k,l[k]])),country:l.country,method:d['偏好联系方式']||'',source_note:d['客户来源说明']||'',company:d._sales_company||'',contacts:d._contacts||[],profile:{}};};
+const payload=()=>{const l=row(),d=JSON.parse(l.detail);return {id:l.id,revision:d._profile_revision||0,base:Object.fromEntries(['source','name','country','phone','email','grade','next_date'].map(k=>[k,l[k]])),country:l.country,method:d['偏好联系方式']||'',source_note:d['客户来源说明']||'',company:d._sales_company||'',contacts:d._contacts||[],profile:{}};};
 const post=(body,user=sales)=>call(db,user,user,'role-workspace/customer','POST',body,new URL('http://test/'));
 assert.equal(customerProfile(row()).project,'原项目');assert.equal(customerProfile(row()).stage,'3');assert.equal(customerProfile(row()).notes,'原备注');
 const body={...payload(),name:'补充姓名',phone:'+91 5550001',email:'new@example.com',grade:'A',country:'India',method:'WhatsApp',company:'澳洲分公司',source_note:'朋友介绍',source:'伪造来源',owner_id:'other',profile:{contact:'采购',organization:'示例公司',city:'Delhi',role:'负责人',customerType:'集团公司',notes:'新备注'}};
@@ -60,3 +60,15 @@ assert.equal(notes(),notesBefore);assert.equal(row().last_contact,'2026-10-02T01
 await assert.rejects(()=>post({...payload(),profile:{reviewStatus:'随便'}},ownManager),/核查状态/);
 const snapshot=payload();await post({...payload(),profile:{blocker:'',followNote:''}},ownManager);assert.equal(customerProfile(row()).blocker,'');assert.equal(customerProfile(row()).followNote,'');assert.equal(customerProfile(row()).nextAction,'核实需求与预算');await assert.rejects(()=>post(snapshot,ownManager),e=>e.status===409);
 console.log('PASS guided follow-up: manual blockers, notes, review choice and date round-trip; explicit clearing, stale-write rejection and contact-history preservation.');
+
+// Authorized maintainers can supplement contract information and correct customer source directly.
+const {customerSource,customerSourceSQL}=await import(moduleURL('lib/customer-source.ts'));
+const sourceSnapshot=payload();await post({...payload(),customer_source:'微信',profile:{contractNumber:'YF-TEST-001'}},ownManager);
+assert.equal(row().source,'微信');assert.equal(customerSource(row()),'微信');assert.equal(customerContractNumber(row()),'YF-TEST-001');assert.equal(row().owner_id,'manager');
+assert.deepEqual(JSON.parse(row().detail)._workbench,originalDetail._workbench);assert.deepEqual(JSON.parse(row().detail)._sales_progress,originalDetail._sales_progress);
+await assert.rejects(()=>post(sourceSnapshot,ownManager),e=>e.status===409);
+const sourceSaved=row();await assert.rejects(()=>post({...payload(),customer_source:'未知渠道'},ownManager),/客户来源/);assert.deepEqual(row(),sourceSaved);
+await post({...payload(),customer_source:'Facebook'},ownManager);assert.equal(customerSource(row()),'Facebook');assert.equal(sql.prepare('SELECT '+customerSourceSQL()+" label FROM crm_leads WHERE id='lead'").get().label,'Facebook');
+assert.equal(JSON.parse(row().detail).platform,'ig','original imported platform is retained as evidence');
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_deals').get().n,0);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_receipts').get().n,0);assert.equal(notes(),notesBefore);
+console.log('PASS: own-customer contract supplementation and explicit source corrections without administrator approval; original evidence, ownership and financial records preserved; source SQL/display parity and stale/invalid-source rejection.');
