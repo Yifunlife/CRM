@@ -21,7 +21,7 @@ function audit(db:D1Database,actor:any,kind:string,p:any,payload:any,taskId:stri
 const list=async(db:D1Database,sql:string,args:any[]=[])=> (await db.prepare(sql).bind(...args).all<any>()).results;
 function qualification(v:any){
  if(!v||typeof v!=='object'||Array.isArray(v))fail('需求资料格式无效');
- const out:any={};for(const [key] of QUALIFICATION_FIELDS){const item=v[key]||{};if(!['pending','verified',''].includes(item.state||''))fail('核实状态无效');out[key]={value:optional(item.value,1500),state:item.state||'pending',evidence:optional(item.evidence,1500)};if(out[key].state==='verified'&&(!out[key].value||!out[key].evidence))fail('已核实资料必须有内容与依据');}
+ const out:any={};for(const [key] of QUALIFICATION_FIELDS){const item=v[key]||{};if(!['pending','verified',''].includes(item.state||''))fail('核实状态无效');out[key]={value:optional(item.value,1500),state:item.state||'pending',evidence:optional(item.evidence,1500)};if(['area_m2','height_m'].includes(key)&&out[key].value&&(!Number.isFinite(Number(out[key].value))||Number(out[key].value)<=0))fail(key==='area_m2'?'面积须填写大于0的平方米数':'层高须填写大于0的米数');if(out[key].state==='verified'&&(!out[key].value||!out[key].evidence))fail('已核实资料必须有内容与依据');}
  return out;
 }
 function contacts(v:any){if(!Array.isArray(v)||v.length>30)fail('联系人最多30人');return v.map((c:any)=>({name:required(c.name,'联系人姓名',200),role:required(c.role,'联系人角色',200),contact:optional(c.contact,400),state:['pending','contacted'].includes(c.state)?c.state:fail('联系人状态无效'),evidence:optional(c.evidence,1000)}));}

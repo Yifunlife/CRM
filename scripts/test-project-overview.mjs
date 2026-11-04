@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const result=await build({entryPoints:['lib/project-overview.ts'],bundle:true,write:false,platform:'node',format:'esm'});
+const {projectOverviewFacts:facts}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const project={project_id:'PROJECT-ID',country:'澳大利亚',expected_date:'2026-12-01',details:{contract_no:'HT-001',qualification:{area_m2:{value:'528.5'},height_m:{value:'6.2'},area:{value:'旧说明'}}}};
+assert.deepEqual(facts(project),{contractNumber:'HT-001',country:'澳大利亚',area:'528.5',height:'6.2',legacyDimensions:'旧说明',deliveryDate:'',deliveryLabel:''});
+const order={order_number:'ORDER-001',country:'中国',details:{contract_source:{contract_no:'HT-002'},dates:{planned_ship:{date:'2026-12-04'},eta_site:{date:'2026-12-15'}}}};
+assert.deepEqual(facts(order,project),{contractNumber:'HT-002',country:'中国',area:'528.5',height:'6.2',legacyDimensions:'旧说明',deliveryDate:'2026-12-15',deliveryLabel:'预计到客户现场'});
+assert.equal(facts({project_id:'PROJECT-ID',current_quote:{contract_no:'QUOTE-001'}}).contractNumber,'','project/quote identifiers are not confirmed contract numbers');
+assert.equal(facts({details:{qualification:{area:{value:'1000㎡，层高6米'}}}}).area,'','legacy free text is not guessed');
+assert.equal(facts({details:{qualification:{area:{value:'1000㎡，层高6米'}}}}).height,'');
+assert.equal(facts({details:{dates:{planned_ship:{date:'2026-12-04'}}}}).deliveryDate,'','shipment is not delivery');
+for(const value of ['-1','0','Infinity','6米',''])assert.equal(facts({details:{height_m:value}}).height,'');
+assert.equal(facts({details:{area_m2:'1800',height_m:'7.5'}}).area,'1800');
+console.log('PASS: project-specific contracts, country/region, independent units, linked dimensions, missing values and delivery-date provenance.');

@@ -109,3 +109,11 @@
 .mw-communication-dialog .mw-manual-fields textarea{width:100%;min-width:0;min-height:70px;margin-top:4px;padding:8px;resize:vertical;font:inherit}
 .mw-communication-dialog .mw-manual-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 @media(max-width:600px){.mw-communication-dialog .mw-manual-fields{grid-template-columns:1fr}.mw-communication-dialog .mw-manual-fields textarea{font-size:16px}}
+
+/* Project facts stay in distinct columns; wide lists scroll inside the panel. */
+.management-workspace .mw-project-overview table{min-width:1360px;font-variant-numeric:tabular-nums}
+.management-workspace .mw-project-overview :is(th,td){white-space:normal;overflow-wrap:anywhere}
+.management-workspace .mw-project-overview th{white-space:nowrap}
+.management-workspace .mw-project-overview td:nth-child(2){min-width:160px;max-width:240px}
+.management-workspace .mw-project-overview .mw-project-dimension{text-align:right;white-space:nowrap}
+.management-workspace .mw-project-overview:focus-visible{outline:2px solid var(--blue);outline-offset:2px}

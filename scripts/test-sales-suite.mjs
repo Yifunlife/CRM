@@ -35,6 +35,14 @@ assert.equal(p.stage,'qualification');
 await call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{site:{value:'租赁已签',state:'verified',evidence:'客户邮件确认'}},reason:'核实场地'});
 p=(await detail()).project;assert.equal(p.details.qualification.site.state,'verified');assert.equal(p.next_date,'','qualification can save without inventing a plan');
 await assert.rejects(call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{site:{value:'场地',state:'verified'}},reason:'测试'}),/依据/);
+// Independent dimensions keep the legacy note and reject values with unknown units.
+await call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{area_m2:{value:'528.5'},height_m:{value:'6.2'},area:{value:'旧资料：约500平米，净高待核实'}},reason:'分开登记面积与层高'});
+p=(await detail()).project;
+assert.equal(p.details.qualification.area_m2.value,'528.5');assert.equal(p.details.qualification.height_m.value,'6.2');assert.equal(p.details.qualification.area.value,'旧资料：约500平米，净高待核实');
+for(const [key,value] of [['area_m2','-1'],['height_m','0'],['area_m2','500sqm'],['height_m','Infinity']]){
+ await assert.rejects(call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{[key]:{value}},reason:'无效尺寸'}),/大于0/);
+ assert.equal((await detail()).project.version,p.version,'invalid dimensions must not save');
+}
 const update=async(key,patch={},u=sales)=>{const p=(await detail(key,u)).project;return call('project/update',{id:key,version:p.version,stage:p.stage,amount:p.amount_minor==null?'':p.amount_minor/100,currency:p.currency,expected_date:'2026-11-20',forecast:'best',review_reason:'采购计划已沟通',next_action:'核实安装范围',next_date:'2026-11-01',blocker:'安装成本待确认',reason:'真实变更依据',...patch},u);};
 await update(p1,{stage:'design',amount:'148000'});assert.equal((await detail(p2)).project.stage,'qualification','one customer has independent stages');
 const stageAt=(await detail()).project.stage_at;await update(p1,{stage:'design'});assert.equal((await detail()).project.stage_at,stageAt);

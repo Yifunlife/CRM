@@ -18,5 +18,18 @@ for(const role of ['sales','management','ceo'])for(const scopes of [[],['domesti
  assert.deepEqual(options,[...(allowed.length===2?['全部']:[]),...allowed,...(role==='ceo'?['待确认']:[])]);
  assert.equal(select.props.value,allowed.length===2?'全部':allowed[0]);assert(calls.some(p=>p.startsWith('role-workspace')));
 }
+// The company view starts with all visible owners and exposes independent project facts.
+globalThis.__projectEffects=[];globalThis.__projectStates=[];globalThis.__projectIndex=0;
+const props={user:{id:'manager',role:'management',trade_scopes:['domestic','foreign']},api:async()=>({orders:[],projects:[],people:[]}),openLead(){},openOrder(){},openProject(){}};
+Projects(props);
+assert.equal(globalThis.__projectStates[1],'');
+globalThis.__projectStates[4]={orders:[],projects:[{project_id:'p',name:'真实项目',country:'中国香港',owner_id:'sales',stage:'design',details:{contract_no:'HT-001',qualification:{area_m2:{value:'500'},height_m:{value:'6.5'}}},next_action:'确认图纸',next_date:'2026-11-15'}],people:[{id:'sales',name:'业务员'}]};
+globalThis.__projectIndex=0;
+let tree=Projects(props);
+assert.deepEqual(nodes(tree).filter(n=>n.type==='th').map(n=>n.props.children),['合同号','项目名','国家/地区','面积（㎡）','层高（米）','业务员 / 跟单','当前阶段','当前节点 / 下一步','计划交付时间','状态','操作']);
+const text=v=>Array.isArray(v)?v.map(text).join(''):v&&typeof v==='object'?text(v.props?.children):v==null?'':String(v);
+assert.match(text(tree),/HT-001/);assert.match(text(tree),/中国香港/);assert.match(text(tree),/500/);assert.match(text(tree),/6.5/);assert.match(text(tree),/确认图纸/);
+globalThis.__projectStates[2]='HT-001';globalThis.__projectIndex=0;assert.equal(nodes(Projects(props)).filter(n=>n.type==='tr').length,2,'contract number is searchable');
+globalThis.__projectStates[2]='no-match';globalThis.__projectIndex=0;assert.equal(nodes(Projects(props)).filter(n=>n.type==='tr').length,1);
 for(const key of ['__projectEffects','__projectStates','__projectIndex'])delete globalThis[key];
 console.log('PASS: project defaults and filters use authorized markets for personal/company, single/dual/unconfigured scopes; unauthorized requests never issued.');
