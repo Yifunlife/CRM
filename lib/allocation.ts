@@ -7,6 +7,9 @@ export const BUSINESS_SCOPES = [
  {id:'website',name:'独立站',source:'独立站'},
  {id:'whatsapp',name:'WhatsApp／其他',source:'WhatsApp／其他'},
  {id:'alibaba',name:'阿里',source:'阿里'},
+ {id:'xiaohongshu',name:'小红书',source:'小红书'},
+ {id:'wechat',name:'微信',source:'微信'},
+ {id:'referral',name:'他人介绍',source:'他人介绍'},
 ];
 export type Member = {user_id:string; state:'参与'|'请假'|'暂停'; share:number};
 export type Rule = {performance:number; maxChange:number; minimum:number; automatic:boolean; receipts?:boolean};

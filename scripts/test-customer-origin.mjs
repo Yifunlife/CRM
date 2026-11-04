@@ -13,7 +13,7 @@ assert.equal(origin({'来源账号':'乐园号'},{source_account:'工厂号'}).o
 assert.equal(origin({ad_name:'工厂号客户需求：全案'},{},{business_scope:'meta-product'}).origin_account,'待确认');
 assert.equal(origin({}, {}, {source:'WhatsApp／其他'}).origin_account,'—');
 assert.equal(origin({}, {platform:'ig'}).display_source,'Instagram');
-assert.equal(origin({platform:'fb'}, {platform:'ig'}).display_source,'Meta（平台待确认）');
+assert.equal(origin({platform:'fb'}, {platform:'ig'}).display_source,'平台待确认');
 assert.equal(origin({}, '{not json').origin_account,'待确认');
 
 const sql=new DatabaseSync(':memory:');
