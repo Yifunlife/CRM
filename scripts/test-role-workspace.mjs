@@ -178,3 +178,19 @@ const inactiveFollowup=await call(db,ceo,ceo,'role-workspace/report','GET',{},ne
 assert.equal(inactiveFollowup.followup_people.length,0,'disabled followup staff stay hidden');
 sqlite.exec("UPDATE crm_users SET active=1 WHERE id='follow'; DELETE FROM crm_leads WHERE id='followup-lead'");assert.equal(snapshot(),followupBefore);
 console.log('PASS followup grouping, preserved ownership, sales roster isolation, market/personal permissions and inactive filtering.');
+
+// Confirmed market colleagues appear even without clients, while retaining followup permissions.
+sqlite.exec('SAVEPOINT scoped_followup_roster');
+const colleagues=[['dom-follow-a','葛晶玉'],['dom-follow-b','杜晓琦'],['dom-follow-c','安振微']];
+for(const [id,name] of colleagues)sqlite.prepare("INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES(?,?,?,'followup','unused','[\"domestic\"]','2026-11-04')").run(id,id,name);
+const rosterBefore=snapshot(),domesticRoster=await get(ceo,'2026-11','内贸');
+assert.deepEqual(domesticRoster.followup_roster.map(p=>p.name).sort(),colleagues.map(p=>p[1]).sort());assert(domesticRoster.followup_roster.every(p=>p.role==='followup'&&p.total_customers===0&&p.customers===0));assert(!domesticRoster.people.some(p=>p.id.startsWith('dom-follow-')),'support colleagues do not enter sales rankings');
+assert.equal((await get(ceo,'2026-11','外贸')).followup_roster.length,0);assert.equal((await get(sales,'2026-11','内贸')).followup_roster.length,0,'personal view cannot expose the colleague roster');
+const foreignManager={id:'foreign-manager',role:'management',trade_scopes:['foreign'],permissions:{customers_all:true}};
+assert.equal((await get(foreignManager,'2026-11','外贸')).followup_roster.length,0);await assert.rejects(()=>get(foreignManager,'2026-11','内贸'),/权限/);
+sqlite.exec("UPDATE crm_users SET active=0 WHERE id='dom-follow-a'");const activeRoster=await call(db,ceo,ceo,'role-workspace/report','GET',{},new URL('http://test/?month=2026-11&market='+encodeURIComponent('内贸')+'&active=1'));assert.equal(activeRoster.followup_roster.length,2);
+sqlite.exec("UPDATE crm_users SET active=1 WHERE id='dom-follow-a'");assert.equal(snapshot(),rosterBefore,'roster reads preserve business records');
+const {salesManagementEndpoint}=await import(moduleURL('lib/sales-management-server.ts'));const performanceRoster=await salesManagementEndpoint(db,ceo,ceo,'sales-management/report','GET',{},new URL('http://test/?month=2026-11'));assert(!performanceRoster.people.some(p=>p.id.startsWith('dom-follow-')));await assert.rejects(()=>salesManagementEndpoint(db,ceo,ceo,'sales-management/targets','POST',{owner_id:'dom-follow-a',currency:'CNY',items:[{period:'month',period_start:'2026-11-01',amount:'100',version:0}]},new URL('http://test/')),/有效业务员/);
+assert(sqlite.prepare("SELECT role,trade_scopes FROM crm_users WHERE id LIKE 'dom-follow-%'").all().every(p=>p.role==='followup'&&p.trade_scopes==='["domestic"]'));
+sqlite.exec('ROLLBACK TO scoped_followup_roster; RELEASE scoped_followup_roster');
+console.log('PASS market colleague roster: zero-client visibility, preserved followup roles, no sales ranking/targets, market and personal isolation, inactive filtering, no business writes.');
