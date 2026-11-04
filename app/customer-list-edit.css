@@ -9,13 +9,19 @@
 .office-app .customer-list-grade select{min-width:82px}
 .office-app .customer-list-status-select{min-width:140px;width:auto}
 @media(max-width:720px){
+ .office-app .workspace .customer-management .filters{gap:6px}
+ .office-app .workspace .customer-management .filters label{font-size:12px}
+ .office-app .workspace .customer-management .ui-customer-list .filters input,.office-app .workspace .customer-management .ui-customer-list .filters select{height:34px;min-height:34px;font-size:13px;padding:4px 6px}
+ .office-app .workspace .customer-management .filters .ui-filter-toggle{height:34px;min-height:34px;min-width:80px;font-size:12px;padding:4px 7px}
+ .office-app .workspace .customer-management > .page-heading .primary,.office-app .workspace .customer-management .section-heading button{height:34px;min-height:34px;font-size:12px;padding:4px 8px}
+ .office-app .workspace .customer-management .ui-customer-table .customer-list-region{display:block;margin:4px 0 0 28px;color:var(--muted)}
  .office-app .workspace .customer-management .ui-customer-table .customer-list-selection{display:block;position:absolute;left:0;top:14px}
  .office-app .workspace .customer-management .ui-customer-table .ui-customer-identity{padding-left:28px}
  .office-app .workspace .customer-management .ui-customer-table .customer-list-grade{display:block;margin:8px 0 0 28px}
- .office-app .workspace .customer-management .ui-customer-table .customer-list-grade select{width:auto;min-width:100px;font-size:16px;min-height:44px}
+ .office-app .workspace .customer-management .ui-customer-table .customer-list-grade select{width:auto;min-width:68px;width:68px;height:34px;font-size:14px;min-height:34px;padding:4px 6px}
  .office-app .workspace .customer-management .ui-customer-table .ui-customer-status{padding-right:0;margin-left:28px}
  .office-app .workspace .customer-management .ui-customer-table .ui-next-date{position:static;text-align:left;margin-top:4px}
- .office-app .customer-list-status-select{font-size:16px;min-height:44px;max-width:100%}
+ .office-app .workspace .customer-management .customer-list-status-select{width:124px;min-width:0;height:34px;font-size:13px;min-height:34px;max-width:100%;padding:4px 6px}
  .office-app .customer-list-edit-actions button,.office-app .customer-list-batch button{min-height:44px}
  .office-app .customer-list-edit-fields{grid-template-columns:1fr}
  .office-app .customer-list-edit-fields input,.office-app .customer-list-edit-fields select{font-size:16px;min-height:44px}

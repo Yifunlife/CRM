@@ -89,7 +89,7 @@ async function report(db:D1Database,user:any,url:URL){
  for(const d of [from,to])if(d&&(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!Number.isFinite(Date.parse(d))||new Date(d).toISOString().slice(0,10)!==d))fail('日期格式不正确');if(from&&to&&from>to)fail('开始日期不能晚于结束日期');
  const inRange=(d:string)=>(!from||d>=from)&&(!to||d<=to),all=can(user,'customers_all'),adView=can(user,'advertising_view'),scope=all?'':' WHERE owner_id=?';
  const rows=async(sql:string,args:any[]=[])=> (await db.prepare(sql).bind(...args).all<any>()).results;
- const leads=(await rows('SELECT id,name,source,country,business_scope,next_date,channel,owner_id,original_owner,created,entered,status,grade,last_contact FROM crm_leads'+scope,all?[]:[user.id])).filter(l=>!isColleague(l.grade)),leadIds=new Set(leads.map(l=>l.id));
+ const leads=(await rows('SELECT id,name,market,source,country,business_scope,next_date,channel,owner_id,original_owner,created,entered,status,grade,last_contact FROM crm_leads'+scope,all?[]:[user.id])).filter(l=>!isColleague(l.grade)),leadIds=new Set(leads.map(l=>l.id));
  const allDeals=await rows('SELECT id,lead_id,order_number,deal_date,cancelled FROM crm_deals'),deals=allDeals.filter(d=>leadIds.has(d.lead_id));
  const campaigns=await rows('SELECT c.*,a.name AS account_name,a.currency FROM crm_attribution_campaigns c JOIN crm_operation_accounts a ON a.id=c.account_id');
  const attrs=(await rows('SELECT * FROM crm_attribution_leads')).filter(a=>leadIds.has(a.lead_id)),quality=(await rows('SELECT * FROM crm_attribution_quality')).filter(a=>leadIds.has(a.lead_id)),outcomes=(await rows('SELECT * FROM crm_lead_outcomes')).filter(a=>leadIds.has(a.lead_id));

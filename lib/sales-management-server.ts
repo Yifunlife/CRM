@@ -15,7 +15,7 @@ export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,p
  if(path==='sales-management/report'&&method==='GET'){
   const [people,leads,links,deals,receipts,targets]=await Promise.all([
    list(db,"SELECT id,name,role,active,trade_scopes FROM crm_users WHERE role='sales' OR (role IN ('management','ceo') AND trade_scopes<>'[]') OR EXISTS(SELECT 1 FROM crm_deals d WHERE d.owner_id=crm_users.id) OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.owner_id=crm_users.id) ORDER BY name"),
-   list(db,'SELECT id,name,owner_id,grade,created,entered,country,source,business_scope,detail FROM crm_leads l WHERE '+customerLeadSQL()),
+   list(db,'SELECT id,name,owner_id,grade,created,entered,market,country,source,business_scope,detail FROM crm_leads l WHERE '+customerLeadSQL()),
    list(db,'SELECT lead_id,subject_id FROM crm_customer_subject_links'),
    list(db,'SELECT d.*,c.currency,c.total_minor FROM crm_deals d LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0'),
    list(db,'SELECT r.*,COALESCE((SELECT SUM(f.amount_minor) FROM crm_workflow_refunds f WHERE f.receipt_id=r.id),0) AS refunded_minor FROM crm_receipts r WHERE r.cancelled=0'),
@@ -34,7 +34,7 @@ export async function salesManagementEndpoint(db:D1Database,user:any,actor:any,p
  if(!person?.active||!['sales','management','ceo'].includes(person.role))fail('请选择有效业务员');
  if(!['CNY','USD'].includes(body.currency))fail('目标币种只能为人民币或美元');
  const scopes=accountTradeScopes(person),allowed=new Set(scopes.map(s=>s==='domestic'?'CNY':'USD'));
- if(!scopes.length){for(const l of await list(db,'SELECT country,source,business_scope,detail FROM crm_leads WHERE owner_id=?',[person.id])){const market=JSON.parse(l.detail||'{}')._sales_company?'外贸':customerMarket(l);if(market!=='待确认')allowed.add(market==='内贸'?'CNY':'USD');}}
+ if(!scopes.length){for(const l of await list(db,'SELECT market,country,source,business_scope,detail FROM crm_leads WHERE owner_id=?',[person.id])){const market=JSON.parse(l.detail||'{}')._sales_company?'外贸':customerMarket(l);if(market!=='待确认')allowed.add(market==='内贸'?'CNY':'USD');}}
  if(!allowed.has(body.currency))fail('目标币种与业务员业务范围不符，请先核实账号业务范围');
  const keys=new Set<string>(),statements:D1PreparedStatement[]=[];
  for(const item of body.items){

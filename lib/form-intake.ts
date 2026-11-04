@@ -1,3 +1,4 @@
+import {customerMarket} from './operations-dashboard';
 import {businessDetail} from './customer-business-detail';
 import {can,clean,digest,emailKey,id,now,phoneKey} from './crm';
 import {AllocationError,allocationWeights,distribute} from './allocation-server';
@@ -85,8 +86,8 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
    }
    const statements:D1PreparedStatement[]=[];
    if(isNew){
-    const detail={...businessDetail(first.raw),'客户名称':first.name,'联系方式':first.phone,'邮箱':first.email,'所在国家/地区':first.country,'录入日期':first.occurred,'项目需求描述':first.requirement,'公司名称':clean(first.raw.company_name),'来源渠道':clean(first.raw.platform),'首次表单时间':first.occurred};
-    statements.push(db.prepare('INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,channel,entered,detail,fingerprint,batch_id,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(lead.id,lead.name,lead.phone,lead.email,lead.country,'Meta',lead.business_scope,clean(first.raw.platform),first.occurred,JSON.stringify(detail),first.fingerprint,batchId,at));allocate.add(lead.id);
+    const detail={...businessDetail(first.raw),'客资市场':customerMarket({...lead,source:'Meta',detail:first.raw}),'客户名称':first.name,'联系方式':first.phone,'邮箱':first.email,'所在国家/地区':first.country,'录入日期':first.occurred,'项目需求描述':first.requirement,'公司名称':clean(first.raw.company_name),'来源渠道':clean(first.raw.platform),'首次表单时间':first.occurred};
+    statements.push(db.prepare('INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,business_scope,channel,entered,detail,fingerprint,batch_id,created,market) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(lead.id,lead.name,lead.phone,lead.email,lead.country,'Meta',lead.business_scope,clean(first.raw.platform),first.occurred,JSON.stringify(detail),first.fingerprint,batchId,at,customerMarket({...lead,source:'Meta',detail})));allocate.add(lead.id);
    }
    // Persist each source ID, including repeats, so re-fetches never create duplicate notes or notices.
    for(const r of fresh){

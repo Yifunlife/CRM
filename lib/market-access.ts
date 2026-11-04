@@ -10,6 +10,6 @@ export function boardLeadVisible(user:any,lead:any){
  return boardMarkets(user).includes(market);
 }
 export async function boardLeadIds(db:D1Database,user:any){
- const rows=(await db.prepare("SELECT id,owner_id,grade,country,source,business_scope,json_extract(detail,'$._sales_company') AS sales_company FROM crm_leads").all<any>()).results;
+ const rows=(await db.prepare("SELECT id,owner_id,grade,market,country,source,business_scope,json_extract(detail,'$._sales_company') AS sales_company FROM crm_leads").all<any>()).results;
  return new Set(rows.filter(l=>boardLeadVisible(user,l)).map(l=>l.id));
 }

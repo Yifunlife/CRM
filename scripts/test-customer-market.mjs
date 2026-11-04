@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {build} from 'esbuild';
+import {DatabaseSync} from 'node:sqlite';
+import {database,moduleURL} from './test-form-intake.mjs';
+const {customerMarket}=await import(moduleURL('lib/operations-dashboard.ts'));
+const {confirmedAllocationImport:importForm}=await import(moduleURL('lib/allocation-confirmed-import.ts'));
+const {customerPage}=await import(moduleURL('lib/customer-page.ts'));
+const {customerImport}=await import(moduleURL('lib/api/intake.ts'));
+const {customerPoolEndpoint:pool}=await import(moduleURL('lib/customer-pool.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
+for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&f<'0040').sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
+const admin={id:'admin',role:'admin'},sales={id:'sales',role:'sales'},other={id:'other',role:'sales'};
+const ceo={id:'ceo',role:'ceo'};
+for(const u of [admin,sales,other,ceo])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
+for(const [id,detail,country] of [['legacy-cn',{'客资市场':'内贸'},'US'],['legacy-foreign',{'客资市场':'外贸'},'CN'],['legacy-country',{},'Australia'],['legacy-unknown',{},'']])sql.prepare("INSERT INTO crm_leads(id,name,source,detail,country,fingerprint,created) VALUES(?,?,'独立站',?,?,?,'2026-01-01')").run(id,id,JSON.stringify(detail),country,id);
+const legacyBefore=sql.prepare('SELECT * FROM crm_leads ORDER BY id').all().map(r=>({...r}));
+sql.exec(readFileSync('drizzle/0040_customer_market.sql','utf8'));
+const migrated=sql.prepare('SELECT * FROM crm_leads ORDER BY id').all();
+assert.deepEqual(migrated.map(({market,...r})=>r),legacyBefore,'migration preserves original records');
+assert.equal(migrated.find(r=>r.id==='legacy-cn').market,'内贸');
+assert.equal(migrated.find(r=>r.id==='legacy-foreign').market,'外贸');
+assert.equal(migrated.find(r=>r.id==='legacy-unknown').market,'待确认');
+assert.equal(customerMarket(migrated.find(r=>r.id==='legacy-country')),'外贸','legacy country classification stays readable');
+assert.throws(()=>sql.prepare("UPDATE crm_leads SET market='invalid' WHERE id='legacy-cn'").run(),/CHECK/);
+assert.equal(customerMarket({market:'内贸',country:'US',source:'阿里',detail:{'客资市场':'外贸'}}),'内贸');
+const db=database(sql),body={confirmed_flow:true,allocation_management:true,allocate:false,form_source:'domestic',filename:'fixture.csv',rows:[{'客户名称':'Domestic','联系方式':'13800000001','分配业务员':'sales','客资市场':'外贸','所在国家/地区':'US','项目需求描述':'Original request'}]};
+const tables=['crm_leads','crm_batches','crm_assignments','crm_notes','crm_customer_pool','crm_form_submissions'];
+const snapshot=()=>JSON.stringify(tables.map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+let before=snapshot();let result=await importForm(db,admin,admin,{...body,preview:true});assert.equal(snapshot(),before);assert.equal(result.previewRows[0].market,'内贸');
+result=await importForm(db,admin,admin,body);assert.equal(result.inserted,1);
+const domestic=sql.prepare("SELECT * FROM crm_leads WHERE name='Domestic'").get();assert.equal(domestic.market,'内贸');assert.equal(domestic.owner_id,'sales');assert.equal(JSON.parse(domestic.detail)['客资市场'],'内贸');
+assert.equal((await importForm(db,admin,admin,body)).skipped,1);
+const cross={...body,form_source:'whatsapp',rows:[{...body.rows[0],'客户名称':'Cross market attempt'}]};
+before=snapshot();result=await importForm(db,admin,admin,{...cross,preview:true});assert.equal(snapshot(),before);assert.equal(result.reviewed,1);assert.match(result.previewRows[0].result,/内贸.*外贸.*待核查/);
+const preserved=sql.prepare('SELECT * FROM crm_leads WHERE id=?').get(domestic.id);
+result=await importForm(db,admin,admin,cross);assert.equal(result.reviewed,1);assert.equal(result.repeated,0);assert.deepEqual(sql.prepare('SELECT * FROM crm_leads WHERE id=?').get(domestic.id),preserved);
+assert.equal(JSON.parse(sql.prepare('SELECT payload FROM crm_customer_pool').get().payload).market,'外贸');
+assert.equal((await importForm(db,admin,admin,cross)).skipped,1);
+result=await importForm(db,admin,admin,{...body,form_source:'whatsapp',rows:[{'客户名称':'Foreign','联系方式':'+1 202 555 0102','分配业务员':'sales','客资市场':'内贸','所在国家/地区':'CN'}]});assert.equal(result.inserted,1);assert.equal(sql.prepare("SELECT market FROM crm_leads WHERE name='Foreign'").get().market,'外贸');
+// The other spreadsheet entry also persists the selected market.
+const response=await customerImport({db,user:ceo,actor:ceo,req:new Request('https://fixture.invalid/api/import',{method:'POST'}),path:'import',write:true,body:{allocation_management:true,allocate:false,market:'内贸',platform:'抖音',account:'工厂号',rows:[{'客户名称':'Generic domestic','联系方式':'13800000003','所在国家/地区':'US'}]}});
+assert.equal(response.status,200);assert.equal(sql.prepare("SELECT market FROM crm_leads WHERE name='Generic domestic'").get().market,'内贸');
+// A manually selected market survives submit, save and confirmation.
+const poolId='customer-market-fixture-01',fields={name:'Pool domestic',email:'pool@example.invalid',country:'US',business_scope:'wechat',requirement:'Example requirement',market:'内贸'};
+await pool(db,ceo,ceo,'customer-pool/submit','POST',{id:poolId,source:'微信',raw:'Synthetic intake',fields});
+await pool(db,ceo,ceo,'customer-pool/save','POST',{id:poolId,version:0,fields:{summary:'Example summary'}});
+await pool(db,ceo,ceo,'customer-pool/confirm','POST',{id:poolId,version:1,fields:{}});
+assert.equal(sql.prepare('SELECT market FROM crm_leads WHERE id=?').get(poolId).market,'内贸');
+for(let i=0;i<35;i++)sql.prepare("INSERT INTO crm_leads(id,name,source,market,country,owner_id,detail,fingerprint,created) VALUES(?,?,'Meta','内贸','US',?,'{}',?,'2026-01-01')").run('page-'+i,'Domestic '+i,i===34?'other':'sales','page-'+i);
+const read=(market,page=1,user=admin)=>customerPage(db,user,new URL('https://fixture.invalid/?'+new URLSearchParams({market,page:String(page)})));
+before=snapshot();const one=await read('内贸'),two=await read('内贸',2);assert.equal(one.total,39);assert.equal(two.total,39);assert.equal(new Set([...one.rows,...two.rows].map(r=>r.id)).size,39);assert([...one.rows,...two.rows].every(r=>customerMarket(r)==='内贸'));
+assert.equal((await read('内贸',1,sales)).total,35,'owner isolation is preserved');
+assert((await read('外贸')).rows.every(r=>customerMarket(r)==='外贸'));assert.equal((await read('待确认')).total,1);assert.equal(snapshot(),before,'filtering is read only');
+// Exercise the real workbench writer with an isolated in-memory storage binding.
+const dir=mkdtempSync(tmpdir()+'/crm-market-bridge-');
+try{
+ await build({entryPoints:['lib/workbench-bridge.ts'],bundle:true,platform:'node',format:'esm',outfile:dir+'/bridge.mjs',logLevel:'silent',plugins:[{name:'storage-fixture',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env={BUCKET:{put:async()=>({}),get:async()=>null}};'}));}}]});
+ const {bridgeDeviceEndpoint}=await import(dir+'/bridge.mjs'),{digest}=await import(moduleURL('lib/crm.ts'));
+ await db.prepare('INSERT INTO crm_workbench_bridge(owner_id,token_hash,created_by) VALUES(?,?,?)').bind('sales',await digest('fixture-secret'),'sales').run();
+ const c={id:'market-desktop',name:'Desktop market fixture',whatsapp:'61400000123',email:'',country:'Australia',grade:'C',source:'WhatsApp',createdAt:'2020-01-02',messages:[]};
+ const synced=await bridgeDeviceEndpoint(db,new Request('https://fixture.invalid/api/bridge/poll',{headers:{Authorization:'Bearer fixture-secret'}}),{sync:{clients:[c],new_clients:[c.id],bindings:[],scenes:[]}});
+ assert.equal(synced.uploaded.length,1);assert.equal(sql.prepare('SELECT market FROM crm_leads WHERE id=?').get(synced.uploaded[0].lead_id).market,'外贸');
+}finally{rmSync(dir,{recursive:true,force:true});}
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,0);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: explicit market storage and constraints, conservative migration, both spreadsheet entries, original owners, no-write previews, cross-market duplicate review/replay, manual intake retention, market pagination/counts and owner isolation.');

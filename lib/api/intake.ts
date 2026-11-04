@@ -1,3 +1,4 @@
+import {customerMarket} from '../operations-dashboard';
 import {confirmedAllocationImport} from '../allocation-confirmed-import';
 import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS} from '../allocation-intake';
 import { BUSINESS_SCOPES } from '../allocation';
@@ -47,7 +48,7 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
     if(previewRows.length<8)previewRows.push({...detail,result:review?"相同联系方式，待核查":original?(owner?"保留原负责人":"原负责人待匹配"):"新增待分配"});
     const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";
     const leadId=id();if(!original&&!review&&businessScope)autoIds.push(leadId);
-    statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(leadId,name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100)||(body.allocation_management&&body.market?now():''),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now(),businessScope));inserted++;
+    statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope,market) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(leadId,name,phone,email,clean(detail["所在国家/地区"],100),body.source,clean(detail["来源渠道"],100),clean(detail["录入日期"],100)||(body.allocation_management&&body.market?now():''),owner,original,status,JSON.stringify(detail),fingerprint,review,batchId,now(),businessScope,customerMarket({detail,country:detail['所在国家/地区'],source:body.source,business_scope:businessScope})));inserted++;
    }
    if(body.preview===true)return json({inserted,skipped,reviewed,unmatched,autoAssigned:0,previewRows});
    for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));let autoAssigned=0,allocationWarning='';if(body.allocate!==false&&body.allocation_management!==true&&businessScope&&autoIds.length){const {config,weights}=await allocationWeights(db,businessScope);if(config.rule.automatic&&weights.length){try{for(let i=0;i<autoIds.length;i+=100)autoAssigned+=await distribute(db,autoIds.slice(i,i+100),businessScope,user.id);}catch{allocationWarning='导入已保存，自动分配未完成，请到客户管理处理剩余待分配记录';}}else if(config.rule.automatic)allocationWarning='没有可参与的业务员，客资保留待分配';}return json({inserted,skipped,reviewed,unmatched,autoAssigned,allocationWarning});
