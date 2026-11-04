@@ -1,8 +1,9 @@
 const crypto=require('node:crypto');
 const hash=text=>crypto.createHash('sha256').update(text).digest('hex');
-async function synchronizeHistory({clients,archive,journal,post,checkpoint,active}){
+async function synchronizeHistory({clients,archive,journal,post,checkpoint,active,shouldYield=()=>false}){
  journal.history||={};
  for(const client of clients){
+  if(shouldYield())return;
   if(!active())throw Error('工作区已变化，聊天同步停止');
   const messages=(archive(client)||[]).map(m=>({...m,text:String(m.text??''),channel:String(m.channel||'whatsapp'),timestamp:String(m.timestamp||[m.date,m.time].filter(Boolean).join(' '))}));
   const occurrences=new Map();
@@ -12,6 +13,7 @@ async function synchronizeHistory({clients,archive,journal,post,checkpoint,activ
   if(previous?.revision===revision&&previous.complete)continue;
   let offset=previous?.revision===revision?previous.received:0;
   do{
+   if(shouldYield())return;
    if(!active())throw Error('工作区已变化，聊天同步停止');
    const batch=[];let bytes=0;
    for(const m of messages.slice(offset,offset+50)){const entry={value:m,sort_time:Date.parse(m.timestamp)||0},size=Buffer.byteLength(JSON.stringify(entry));if(size>4400000)throw Error(client.name+' 有单条聊天超过上传容量，全文保留本机，未标记为完整');if(batch.length&&bytes+size>700000)break;batch.push(entry);bytes+=size;}

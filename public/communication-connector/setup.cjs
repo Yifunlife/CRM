@@ -4,9 +4,9 @@ var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/concat-map/index.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/concat-map@0.0.1/node_modules/concat-map/index.js
 var require_concat_map = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/concat-map/index.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/concat-map@0.0.1/node_modules/concat-map/index.js"(exports2, module2) {
     module2.exports = function(xs, fn) {
       var res = [];
       for (var i = 0; i < xs.length; i++) {
@@ -22,9 +22,9 @@ var require_concat_map = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/balanced-match/index.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/balanced-match@1.0.2/node_modules/balanced-match/index.js
 var require_balanced_match = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/balanced-match/index.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/balanced-match@1.0.2/node_modules/balanced-match/index.js"(exports2, module2) {
     "use strict";
     module2.exports = balanced;
     function balanced(a, b, str) {
@@ -80,9 +80,9 @@ var require_balanced_match = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/brace-expansion/index.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/brace-expansion@1.1.18/node_modules/brace-expansion/index.js
 var require_brace_expansion = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/brace-expansion/index.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/brace-expansion@1.1.18/node_modules/brace-expansion/index.js"(exports2, module2) {
     var concatMap = require_concat_map();
     var balanced = require_balanced_match();
     module2.exports = expandTop;
@@ -93,8 +93,6 @@ var require_brace_expansion = __commonJS({
     var escPeriod = "\0PERIOD" + Math.random() + "\0";
     var EXPANSION_MAX = 1e5;
     var EXPANSION_MAX_LENGTH = 4e6;
-    var EXPANSION_MAX_DEPTH = 1e3;
-    var EXPANSION_MAX_REWRITES = 1e3;
     function numeric(str) {
       return parseInt(str, 10) == str ? parseInt(str, 10) : str.charCodeAt(0);
     }
@@ -104,36 +102,25 @@ var require_brace_expansion = __commonJS({
     function unescapeBraces(str) {
       return str.split(escSlash).join("\\").split(escOpen).join("{").split(escClose).join("}").split(escComma).join(",").split(escPeriod).join(".");
     }
-    function pushAll(target, items) {
-      for (var i = 0; i < items.length; i++) {
-        target.push(items[i]);
-      }
-    }
     function parseCommaParts(str) {
+      if (!str)
+        return [""];
       var parts = [];
-      var carry = "";
-      for (; ; ) {
-        var m = balanced("{", "}", str);
-        if (!m) {
-          var tail = str.split(",");
-          tail[0] = carry + tail[0];
-          pushAll(parts, tail);
-          return parts;
-        }
-        var pre = m.pre;
-        var body = m.body;
-        var post = m.post;
-        var p = pre.split(",");
-        p[0] = carry + p[0];
-        p[p.length - 1] += "{" + body + "}";
-        if (!post.length) {
-          pushAll(parts, p);
-          return parts;
-        }
-        carry = p.pop();
-        pushAll(parts, p);
-        str = post;
+      var m = balanced("{", "}", str);
+      if (!m)
+        return str.split(",");
+      var pre = m.pre;
+      var body = m.body;
+      var post = m.post;
+      var p = pre.split(",");
+      p[p.length - 1] += "{" + body + "}";
+      var postParts = parseCommaParts(post);
+      if (post.length) {
+        p[p.length - 1] += postParts.shift();
+        p.push.apply(p, postParts);
       }
+      parts.push.apply(parts, p);
+      return parts;
     }
     function expandTop(str, options) {
       if (!str)
@@ -141,12 +128,10 @@ var require_brace_expansion = __commonJS({
       options = options || {};
       var max = options.max == null ? EXPANSION_MAX : options.max;
       var maxLength = options.maxLength == null ? EXPANSION_MAX_LENGTH : options.maxLength;
-      var maxDepth = options.maxDepth == null ? EXPANSION_MAX_DEPTH : options.maxDepth;
-      var maxRewrites = options.maxRewrites == null ? EXPANSION_MAX_REWRITES : options.maxRewrites;
       if (str.substr(0, 2) === "{}") {
         str = "\\{\\}" + str.substr(2);
       }
-      return expand(escapeBraces(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces);
+      return expand(escapeBraces(str), max, maxLength, true).map(unescapeBraces);
     }
     function embrace(str) {
       return "{" + str + "}";
@@ -221,13 +206,9 @@ var require_brace_expansion = __commonJS({
       }
       return N;
     }
-    function expand(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
-      if (depth > maxDepth) {
-        return [str];
-      }
+    function expand(str, max, maxLength, isTop) {
       var acc = [""];
       var accBase = [0];
-      var rewrites = 0;
       var dropEmpties = false;
       var firstGroup = true;
       var nextBase;
@@ -245,8 +226,7 @@ var require_brace_expansion = __commonJS({
         var isSequence = isNumericSequence || isAlphaSequence;
         var isOptions = m.body.indexOf(",") >= 0;
         if (!isSequence && !isOptions) {
-          if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
-            rewrites++;
+          if (m.post.match(/,(?!,).*\}/)) {
             str = m.pre + "{" + m.body + escClose + m.post;
             isTop = true;
             firstGroup = true;
@@ -278,7 +258,7 @@ var require_brace_expansion = __commonJS({
         } else {
           var n = parseCommaParts(m.body);
           if (n.length === 1 && n[0] !== void 0) {
-            n = expand(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
+            n = expand(n[0], max, maxLength, false).map(embrace);
             if (n.length === 1) {
               nextBase = [];
               acc = combine(
@@ -306,7 +286,7 @@ var require_brace_expansion = __commonJS({
           values = [];
           var valuesLength = 0;
           outer: for (var j = 0; j < n.length; j++) {
-            var expanded = expand(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false);
+            var expanded = expand(n[j], max, maxLength, false);
             for (var k = 0; k < expanded.length; k++) {
               var v = expanded[k];
               if (dropsEmpties && !v) continue;
@@ -338,9 +318,9 @@ var require_brace_expansion = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/minimatch/minimatch.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/minimatch@3.1.5/node_modules/minimatch/minimatch.js
 var require_minimatch = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/minimatch/minimatch.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/minimatch@3.1.5/node_modules/minimatch/minimatch.js"(exports2, module2) {
     module2.exports = minimatch;
     minimatch.Minimatch = Minimatch;
     var path2 = (function() {
@@ -1010,9 +990,9 @@ var require_minimatch = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/wrapped-fs.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/wrapped-fs.js
 var require_wrapped_fs = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/wrapped-fs.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/wrapped-fs.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var fs2 = "electron" in process.versions ? require("original-fs") : require("fs");
@@ -1039,9 +1019,9 @@ var require_wrapped_fs = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/integrity.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/integrity.js
 var require_integrity = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/integrity.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/integrity.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1122,9 +1102,9 @@ var require_integrity = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/filesystem.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/filesystem.js
 var require_filesystem = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/filesystem.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/filesystem.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1323,9 +1303,9 @@ var require_filesystem = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/pickle.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/pickle.js
 var require_pickle = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/pickle.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/pickle.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Pickle = void 0;
@@ -1501,9 +1481,9 @@ var require_pickle = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/disk.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/disk.js
 var require_disk = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/disk.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/disk.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1728,9 +1708,9 @@ var require_disk = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/fs.realpath/old.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/fs.realpath@1.0.0/node_modules/fs.realpath/old.js
 var require_old = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/fs.realpath/old.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/fs.realpath@1.0.0/node_modules/fs.realpath/old.js"(exports2) {
     var pathModule = require("path");
     var isWindows = process.platform === "win32";
     var fs2 = require("fs");
@@ -1928,9 +1908,9 @@ var require_old = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/fs.realpath/index.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/fs.realpath@1.0.0/node_modules/fs.realpath/index.js
 var require_fs = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/fs.realpath/index.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/fs.realpath@1.0.0/node_modules/fs.realpath/index.js"(exports2, module2) {
     module2.exports = realpath;
     realpath.realpath = realpath;
     realpath.sync = realpathSync;
@@ -1987,9 +1967,9 @@ var require_fs = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inherits/inherits_browser.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js
 var require_inherits_browser = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inherits/inherits_browser.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js"(exports2, module2) {
     if (typeof Object.create === "function") {
       module2.exports = function inherits(ctor, superCtor) {
         if (superCtor) {
@@ -2019,9 +1999,9 @@ var require_inherits_browser = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inherits/inherits.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits.js
 var require_inherits = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inherits/inherits.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits.js"(exports2, module2) {
     try {
       util = require("util");
       if (typeof util.inherits !== "function") throw "";
@@ -2033,9 +2013,9 @@ var require_inherits = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/path-is-absolute/index.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/path-is-absolute@1.0.1/node_modules/path-is-absolute/index.js
 var require_path_is_absolute = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/path-is-absolute/index.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/path-is-absolute@1.0.1/node_modules/path-is-absolute/index.js"(exports2, module2) {
     "use strict";
     function posix(path2) {
       return path2.charAt(0) === "/";
@@ -2053,9 +2033,9 @@ var require_path_is_absolute = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/common.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/common.js
 var require_common = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/common.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/common.js"(exports2) {
     exports2.setopts = setopts;
     exports2.ownProp = ownProp;
     exports2.makeAbs = makeAbs;
@@ -2247,9 +2227,9 @@ var require_common = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/sync.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/sync.js
 var require_sync = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/sync.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/sync.js"(exports2, module2) {
     module2.exports = globSync;
     globSync.GlobSync = GlobSync;
     var rp = require_fs();
@@ -2602,9 +2582,9 @@ var require_sync = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/wrappy/wrappy.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/wrappy@1.0.2/node_modules/wrappy/wrappy.js
 var require_wrappy = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/wrappy/wrappy.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/wrappy@1.0.2/node_modules/wrappy/wrappy.js"(exports2, module2) {
     module2.exports = wrappy;
     function wrappy(fn, cb) {
       if (fn && cb) return wrappy(fn)(cb);
@@ -2632,9 +2612,9 @@ var require_wrappy = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/once/once.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/once@1.4.0/node_modules/once/once.js
 var require_once = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/once/once.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/once@1.4.0/node_modules/once/once.js"(exports2, module2) {
     var wrappy = require_wrappy();
     module2.exports = wrappy(once);
     module2.exports.strict = wrappy(onceStrict);
@@ -2676,9 +2656,9 @@ var require_once = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inflight/inflight.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inflight@1.0.6/node_modules/inflight/inflight.js
 var require_inflight = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/inflight/inflight.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/inflight@1.0.6/node_modules/inflight/inflight.js"(exports2, module2) {
     var wrappy = require_wrappy();
     var reqs = /* @__PURE__ */ Object.create(null);
     var once = require_once();
@@ -2722,9 +2702,9 @@ var require_inflight = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/glob.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/glob.js
 var require_glob = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/glob/glob.js"(exports2, module2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/glob@7.2.3/node_modules/glob/glob.js"(exports2, module2) {
     module2.exports = glob;
     var rp = require_fs();
     var minimatch = require_minimatch();
@@ -3278,9 +3258,9 @@ var require_glob = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/crawlfs.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/crawlfs.js
 var require_crawlfs = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/crawlfs.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/crawlfs.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -3359,9 +3339,9 @@ var require_crawlfs = __commonJS({
   }
 });
 
-// ../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/asar.js
+// ../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/asar.js
 var require_asar = __commonJS({
-  "../../../../../.npm/_npx/1a762337c8d778b9/node_modules/@electron/asar/lib/asar.js"(exports2) {
+  "../../../Yifun-V1-macOS-USB/workbench-v1/node_modules/.pnpm/@electron+asar@3.4.1/node_modules/@electron/asar/lib/asar.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -3678,8 +3658,9 @@ function startCrmAccountSync(){let snapshot,byClient;
  const state=()=>{const data=bootstrapClients(),clients=data.clients,links=readJson(path.join(workbenchDir(),'customer-email-links.json'),{}),mailView=outlookService().view(),owners=new Map();byClient=new Map();
  for(const row of mailView.messages){const ids=new Set();for(const email of row.folder==='inbox'?[row.from]:row.to||[]){const key=customerArchive.normalizeEmail(email);if(!owners.has(key))owners.set(key,customerArchive.emailOwner(key,clients,links));const client=owners.get(key);if(client)ids.add(client.id);}for(const id of ids){if(!byClient.has(id))byClient.set(id,[]);byClient.get(id).push(row);}}
  snapshot={clients,links,mailView};return data;};
- crmAccountSync=require('./crm-account-sync').createAccountSync({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),request:(...a)=>net.fetch(...a),root:()=>workspaceRoot,state,save:saveClients,profile:require('./crm-client-management').profile,archive:c=>saveCustomerArchive(c,true,{...snapshot,mailRows:byClient.get(c.id)||[]}).messages,scenes:()=>receptionConfig().scenes,changed:value=>sendWhatsAppEvent('crm:synced',value)});crmAccountSync.start();}
+ crmAccountSync=require('./crm-account-sync').createAccountSync({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),request:(...a)=>fetch(...a),root:()=>workspaceRoot,state,save:saveClients,profile:require('./crm-client-management').profile,archive:c=>saveCustomerArchive(c,true,{...snapshot,mailRows:byClient.get(c.id)||[]}).messages,scenes:()=>receptionConfig().scenes,changed:value=>sendWhatsAppEvent('crm:synced',value)});crmAccountSync.start();}
 `;
+      source = source.replace("request:(...args)=>net.fetch(...args),status:", "request:(...args)=>fetch(...args),status:");
       if (source.includes("createAccountSync")) {
         const begin = source.indexOf("function startCrmAccountSync(){"), end2 = source.indexOf("\nfunction startCrmBridge()", begin);
         if (begin < 0 || end2 < 0) throw Error("\u5DF2\u6709\u540C\u6B65\u7EC4\u4EF6\u65E0\u6CD5\u5B89\u5168\u66F4\u65B0");
@@ -3715,7 +3696,24 @@ function startCrmAccountSync(){let snapshot,byClient;
       return source.includes("crm-connection-renderer.js") ? source : source + "\n(()=>{const script=document.createElement('script');script.src='../crm-connection-renderer.js';document.head.appendChild(script)})();\n";
     }
     function patchConnectionPreload2(source) {
-      return source.includes("exposeInMainWorld('crmConnection'") ? source : source + "\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";
+      if (!source.includes("exposeInMainWorld('crmConnection'")) source += "\ncontextBridge.exposeInMainWorld('crmConnection',{get:()=>ipcRenderer.invoke('crm:connection-get'),test:payload=>ipcRenderer.invoke('crm:connection-test',payload),save:payload=>ipcRenderer.invoke('crm:connection-save',payload)});\n";
+      if (!source.includes("'crm:analysis-start'")) source = source.replace("contextBridge.exposeInMainWorld('crmConnection',{", "contextBridge.exposeInMainWorld('crmConnection',{analyze:id=>ipcRenderer.invoke('crm:analysis-start',id),analysisStatus:id=>ipcRenderer.invoke('crm:analysis-status',id),");
+      if (source.includes("'crm:sync-status'")) return source;
+      return source.replace("contextBridge.exposeInMainWorld('crmConnection',{", "contextBridge.exposeInMainWorld('crmConnection',{status:()=>ipcRenderer.invoke('crm:sync-status'),retry:()=>ipcRenderer.invoke('crm:sync-retry'),openLog:()=>ipcRenderer.invoke('crm:sync-log'),onStatus:callback=>{const listener=(_,value)=>callback(value);ipcRenderer.on('crm:synced',listener);return()=>ipcRenderer.removeListener('crm:synced',listener);},");
+    }
+    function patchRecoveryMain2(source) {
+      if (!source.includes("ipcMain.handle('crm:analysis-start'")) source += `
+const crmAnalysisButton=require('./crm-analysis-button.cjs').createAnalysisButton({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,client:crmBridgeClient,request:(...args)=>fetch(...args)});
+ipcMain.handle('crm:analysis-start',(_,id)=>crmAnalysisButton.start(id));
+ipcMain.handle('crm:analysis-status',(_,id)=>crmAnalysisButton.status(id));
+`;
+      if (source.includes("ipcMain.handle('crm:sync-status'")) return source;
+      return source + `
+ipcMain.handle('crm:sync-status',()=>crmAccountSync?.status()||{state:'disabled',stage:'idle',stale:true});
+ipcMain.handle('crm:sync-retry',()=>crmAccountSync?.retry());
+ipcMain.handle('crm:sync-log',()=>{const file=path.join(workbenchDir(),'logs','crm-sync.jsonl');if(fs.existsSync(file))shell.showItemInFolder(file);return {ok:fs.existsSync(file)};});
+app.whenReady().then(()=>require('electron').powerMonitor.on('resume',()=>{if(!app.isQuitting)void crmAccountSync?.retry();}));
+`;
     }
     function patchConnectionMain2(source) {
       const create = source.indexOf("ipcMain.handle('clients:create'");
@@ -3727,7 +3725,7 @@ function startCrmAccountSync(){let snapshot,byClient;
       source = source.replace("require('./crm-connection-settings')", "require('./crm-connection-settings.cjs')");
       if (source.includes("require('./crm-connection-settings.cjs')")) return source;
       return source + `
-const crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>net.fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
+const crmConnectionSettings=require('./crm-connection-settings.cjs').createConnectionSettings({configFile:path.join(app.getPath('userData'),'crm-bridge.json'),root:()=>workspaceRoot,clients:()=>bootstrapClients().clients,request:(...args)=>fetch(...args),pause:async()=>{if(crmAccountSync?.stopAndWait)await crmAccountSync.stopAndWait();else crmAccountSync?.stop();},start:()=>{if(!crmBridge)startCrmBridge();else startCrmAccountSync();}});
 ipcMain.handle('crm:connection-get',()=>crmConnectionSettings.get());
 ipcMain.handle('crm:connection-test',(_,payload)=>crmConnectionSettings.test(payload||{}));
 ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(payload||{}));
@@ -3794,7 +3792,7 @@ ipcMain.handle('crm:connection-save',(_,payload)=>crmConnectionSettings.save(pay
  }
  async function send(`);
     }
-    module2.exports = { patchFirstContactMail: patchFirstContactMail2, patchFirstContactMain: patchFirstContactMain2, patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2, patchConnectionPreload: patchConnectionPreload2, patchConnectionMain: patchConnectionMain2 };
+    module2.exports = { patchRecoveryMain: patchRecoveryMain2, patchFirstContactMail: patchFirstContactMail2, patchFirstContactMain: patchFirstContactMain2, patchMain: patchMain2, patchManagement: patchManagement2, patchBridge: patchBridge2, patchRenderer: patchRenderer2, patchConnectionPreload: patchConnectionPreload2, patchConnectionMain: patchConnectionMain2 };
   }
 });
 
@@ -3806,7 +3804,7 @@ var os = require("node:os");
 var cp = require("node:child_process");
 var crypto = require("node:crypto");
 var asar = require_asar();
-var { patchFirstContactMail, patchFirstContactMain, patchMain, patchManagement, patchBridge, patchRenderer, patchConnectionMain, patchConnectionPreload } = require_patch_app();
+var { patchRecoveryMain, patchFirstContactMail, patchFirstContactMain, patchMain, patchManagement, patchBridge, patchRenderer, patchConnectionMain, patchConnectionPreload } = require_patch_app();
 var run = (bin, args) => cp.execFileSync(bin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 var dialog = (script) => run("/usr/bin/osascript", ["-e", script]).trim();
 var digest = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
@@ -3835,7 +3833,7 @@ async function prepare(app, output) {
   const folder = path.join(output, "source"), candidate = path.join(output, "\u4EA6\u73A9\u9500\u552E\u5DE5\u4F5C\u53F0.app");
   asar.extractAll(archive, folder);
   run("/usr/bin/ditto", [app, candidate]);
-  for (const [name, patch] of [["main.js", (source) => patchFirstContactMain(patchConnectionMain(patchMain(source)))], ["outlook-outreach.js", patchFirstContactMail], ["preload.js", patchConnectionPreload], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
+  for (const [name, patch] of [["main.js", (source) => patchRecoveryMain(patchFirstContactMain(patchConnectionMain(patchMain(source))))], ["outlook-outreach.js", patchFirstContactMail], ["preload.js", patchConnectionPreload], ["crm-client-management.js", patchManagement], ["crm-bridge.js", patchBridge], ["renderer/renderer.js", patchRenderer]]) {
     const file = path.join(folder, name);
     fs.writeFileSync(file, patch(fs.readFileSync(file, "utf8")));
   }
@@ -3843,21 +3841,21 @@ async function prepare(app, output) {
   fs.copyFileSync(path.join(__dirname, "crm-history-sync.cjs"), path.join(folder, "crm-history-sync.cjs"));
   fs.copyFileSync(path.join(__dirname, "crm-first-contact.cjs"), path.join(folder, "crm-first-contact.js"));
   fs.copyFileSync(path.join(__dirname, "crm-first-contact-mail.cjs"), path.join(folder, "crm-first-contact-mail.js"));
-  for (const [file, name] of [["crm-connection-settings.cjs", "crm-connection-settings.cjs"], ["crm-connection-renderer.js", "crm-connection-renderer.js"]]) fs.copyFileSync(path.join(__dirname, file), path.join(folder, name));
-  for (const name of ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"]) {
+  for (const [file, name] of [["crm-analysis-button.cjs", "crm-analysis-button.cjs"], ["crm-analysis-renderer.js", "crm-analysis-renderer.js"], ["crm-connection-settings.cjs", "crm-connection-settings.cjs"], ["crm-connection-renderer.js", "crm-connection-renderer.js"]]) fs.copyFileSync(path.join(__dirname, file), path.join(folder, name));
+  for (const name of ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js", "crm-analysis-button.cjs", "crm-analysis-renderer.js"]) {
     const script = fs.readFileSync(path.join(folder, name), "utf8");
     new (require("node:vm")).Script(script, { filename: name });
   }
   const files = entries(before.tree), unpacked = files.filter((f) => f.unpacked).map((f) => path.join(folder, f.name));
   await asar.createPackageWithOptions(folder, candidate + "/Contents/Resources/app.asar", unpacked.length ? { unpack: unpacked.length === 1 ? unpacked[0] : "{" + unpacked.join(",") + "}" } : {});
-  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"];
+  const next = candidate + "/Contents/Resources/app.asar", after = header(next), allowed = ["crm-first-contact-mail.js", "outlook-outreach.js", "crm-first-contact.js", "main.js", "crm-client-management.js", "crm-bridge.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js", "crm-analysis-button.cjs", "crm-analysis-renderer.js"];
   for (const file of files) {
     if (file.link) continue;
     const original = asar.extractFile(archive, file.name), updated = asar.extractFile(next, file.name);
     if (!allowed.includes(file.name) && digest(original) !== digest(updated)) throw Error("\u65E0\u5173\u5E94\u7528\u6587\u4EF6\u53D1\u751F\u53D8\u5316\uFF0C\u672A\u5B89\u88C5\uFF1A" + file.name);
   }
   for (const file of entries(after.tree)) {
-    if (!files.some((f) => f.name === file.name) && !["crm-first-contact-mail.js", "crm-first-contact.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
+    if (!files.some((f) => f.name === file.name) && !["crm-first-contact-mail.js", "crm-first-contact.js", "crm-account-sync.js", "crm-history-sync.cjs", "renderer/renderer.js", "preload.js", "crm-connection-settings.cjs", "crm-connection-renderer.js", "crm-analysis-button.cjs", "crm-analysis-renderer.js"].includes(file.name)) throw Error("\u66F4\u65B0\u5305\u542B\u672A\u77E5\u6587\u4EF6\uFF0C\u672A\u5B89\u88C5");
   }
   run("/usr/libexec/PlistBuddy", ["-c", "Set :ElectronAsarIntegrity:Resources/app.asar:hash " + after.hash, candidate + "/Contents/Info.plist"]);
   const ent = run("/usr/bin/codesign", ["-d", "--entitlements", ":-", app]);
@@ -3941,7 +3939,7 @@ async function install() {
     fs.renameSync(result.candidate, app);
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify({ ...config, ...old.owner_id === config.owner_id && old.autoFirstContact ? { autoFirstContact: old.autoFirstContact } : {}, enabled: true, accountSync: true, fullHistory: true, historyOnly: false, pullOnly: true, uploadNewLeads: true, workspace, localOwner }, null, 2), { mode: 384 });
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, ...old.chatUploadMode ? { chatUploadMode: old.chatUploadMode } : {}, ...old.owner_id === config.owner_id && old.autoFirstContact ? { autoFirstContact: old.autoFirstContact } : {}, enabled: true, accountSync: true, fullHistory: old.chatUploadMode !== "manual_summary", historyOnly: false, pullOnly: true, uploadNewLeads: true, workspace, localOwner }, null, 2), { mode: 384 });
     fs.chmodSync(configFile, 384);
     fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, workspace }, null, 2), { mode: 384 });
   } catch (e) {

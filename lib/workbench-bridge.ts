@@ -1,4 +1,5 @@
 import {customerMarket} from './operations-dashboard';
+import {customerAnalysisEndpoint} from './customer-analysis';
 import {CONTACT_GRADES,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {ensureCustomerCode} from './customer-code';
 import {customerProfile,validateCustomerProfile} from './customer-profile';
@@ -69,6 +70,23 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  const device:any=bearer?await db.prepare('SELECT b.*,u.active,u.role,u.permissions,u.username,u.name FROM crm_workbench_bridge b JOIN crm_users u ON u.id=b.owner_id WHERE b.token_hash=?').bind(await digest(bearer)).first():null;
  if(!device||!device.active||!['sales','management','ceo'].includes(device.role)||device.role==='management'&&!await db.prepare('SELECT owner_id FROM crm_workbench_snapshots WHERE owner_id=?').bind(device.owner_id).first())throw new AllocationError('收发连接认证失败',401);
  if(body.connect===true)return {owner_id:device.owner_id,username:device.username,name:device.name,protocol:2,can_import:device.role!=='sales'||can(device,'customers_edit')};
+ if(body.analysis_request||body.analysis_status){
+  const input=body.analysis_request||body.analysis_status;
+  if(typeof input.desktop_id!=='string'||!/^[-a-zA-Z0-9_:]{1,150}$/.test(input.desktop_id))throw new AllocationError('客户编号无效');
+  await ownedDesktop(db,device.owner_id,input.desktop_id);
+  const link:any=await db.prepare('SELECT l.id FROM crm_workbench_links w JOIN crm_leads l ON l.id=w.lead_id AND l.owner_id=w.owner_id WHERE w.owner_id=? AND w.desktop_id=?').bind(device.owner_id,input.desktop_id).first();
+  if(!link)throw new AllocationError('客户尚未关联本人CRM，请等待客资同步后再整理',409);
+  if(body.analysis_request){const user={...device,id:device.owner_id};return customerAnalysisEndpoint(db,user,user,'customer-analysis/'+link.id,'POST',{request_id:input.request_id});}
+  if(typeof input.job_id!=='string'||!/^analysis-[a-f0-9]{64}$/.test(input.job_id))throw new AllocationError('分析任务编号无效');
+  const job:any=await db.prepare("SELECT id,state,result,updated FROM crm_workbench_commands WHERE id=? AND owner_id=? AND desktop_id=? AND kind='customer-analysis' AND json_extract(payload,'$.crm_lead_id')=?").bind(input.job_id,device.owner_id,input.desktop_id,link.id).first();
+  if(!job)throw new AllocationError('分析任务不存在或归属已变化',404);
+  const value=await readJson(job.result);
+  return {id:job.id,state:job.state,analysis:job.state==='done'?value.analysis:null,error:job.state==='failed'?'AI整理未完成，原分析保留。请检查工作台AI连接后重试。':'',synced_at:job.state==='done'?new Date(job.updated).toISOString():''};
+ }
+ let manualSummary=false;
+ if(body.history||body.sync){const policy:any=await db.prepare('SELECT value FROM crm_cloud_settings WHERE id=?').bind('workbench-sync:'+device.owner_id).first();manualSummary=!!policy&&JSON.parse(policy.value).chat_upload==='manual_summary';}
+ if(body.history&&manualSummary)throw new AllocationError('日常聊天上传已关闭，请在工作台点击AI整理重点并上传CRM',403);
+ if(body.sync&&manualSummary)body={...body,sync:{...body.sync,full_history:false,clients:Array.isArray(body.sync.clients)?body.sync.clients.map((c:any)=>({...c,messages:[]})):body.sync.clients}};
  if(body.contact_receipts)return synchronizeContactReceipts(db,device.owner_id,body.contact_receipts);
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
  if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
