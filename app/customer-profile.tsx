@@ -1,4 +1,6 @@
 'use client';
+import {customerMarket} from '../lib/operations-dashboard';
+import {customerOrigin} from '../lib/customer-origin';
 import {countryLabel} from '../lib/report-country';
 import GuidedFollowup from './guided-followup';
 import {CONTACT_GRADES,contactGradeLabel,isColleague} from '../lib/contact-kind';
@@ -16,6 +18,7 @@ const tabs=[['客户资料','基本资料'],['成交与收款','项目与成交'
 const date=(value:string)=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):value||'待补充';
 export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followup,project,original,onEditingChange}:Props){
  const [contacts,C]=useState<any[]>([]),[busy,B]=useState(false),[error,E]=useState(''),[message,M]=useState(''),[editing,S]=useState(false),[reset,R]=useState(0);
+ const domestic=customerMarket(lead)==='内贸';
  const detail=lead.detail||{},profile=customerProfile(lead),editable=canEditCustomerProfile(user,lead),formId=useId();
  useEffect(()=>{C(detail._contacts||[]);S(false);E('');},[lead.id,detail._profile_revision]);
  useEffect(()=>{M('');},[lead.id]);
@@ -33,7 +36,7 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
    await onSaved();S(false);M('保存成功，修改已生效');
   }catch(e:any){E(e.message);}finally{B(false);}
  }
- function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input key={name==='country'?String(editing):name} name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'} defaultValue={name==='country'&&!editing?countryLabel(value,''):value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='profile_contractNumber'?'可直接补录合同号':'待补充'}/></label>;}
+ function field(name:string,label:string,value:string,type='text',readOnly=false){return <label key={name}>{label}<input key={name==='country'?String(editing):name} name={name} type={type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value)?'text':type} required={name==='name'||name==='phone'} defaultValue={name==='country'&&!editing?countryLabel(value,''):value||''} maxLength={name==='phone'?100:200} readOnly={readOnly||!editing} placeholder={name==='profile_contractNumber'?'可直接补录合同号':'待补充'}/></label>;}
  function select(name:string,label:string,value:string,options:string[]){return <label>{label}<select name={name} defaultValue={value||''} disabled={!editing}><option value="">待确认</option>{value&&!options.includes(value)&&<option value={value}>{value}（原记录）</option>}{options.map(o=><option key={o} value={o}>{contactGradeLabel(o)}</option>)}</select></label>;}
  function actions(header=false){return editable&&(editing?<div className={header?'dossier-edit-actions':'dossier-actions'} role="group" aria-label="客户资料修改操作">{header&&<span className="dossier-editing-state" role="status">编辑中，尚未保存</span>}<button type="button" disabled={busy} onClick={cancel}>取消修改</button><button type="submit" form={formId} className="primary" disabled={busy}>{busy?'正在保存…':'保存修改'}</button></div>:header?<button type="button" className="primary dossier-edit" disabled={busy} onClick={edit}><Pencil size={16} aria-hidden="true"/>编辑档案</button>:null);}
  return <div className="customer-dossier">
@@ -43,12 +46,12 @@ export default function CustomerProfile({lead,user,api,onSaved,tab,onTab,followu
    {tab==='客户资料'&&<div id="dossier-panel-0" role="tabpanel" aria-labelledby="dossier-tab-0"><section className="panel dossier-section"><div className="section-heading dossier-profile-heading"><h2>基本客户资料</h2>{!editable&&<span className="small muted">客户档案</span>}</div>
     <CustomerInquiry lead={lead}/><form id={formId} key={lead.id+':'+detail._profile_revision+':'+reset} onSubmit={save}><fieldset disabled={busy}><div className="dossier-grid">
      {field('name','客户姓名 *',lead.name)}{field('profile_contractNumber','合同编号',profile.contractNumber)}
-     {field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
-     {field('phone','电话 / WhatsApp',lead.phone)}{field('email','Email',lead.email,'email')}
+     {domestic?<>{field('profile_province','省份',profile.province)}{field('profile_city','城市',profile.city)}</>:field('country','国家 / 地区',lead.country)}{field('profile_contact','联系人',profile.contact)}
+     {field('phone','联系方式（电话）*',lead.phone)}{field('profile_wechat','微信号',profile.wechat)}{field('email','Email',lead.email,'email')}
      <label>客户来源<select name="customer_source" defaultValue={CUSTOMER_SOURCE_OPTIONS.includes(customerSource(lead))?customerSource(lead):''} disabled={!editing}>{!CUSTOMER_SOURCE_OPTIONS.includes(customerSource(lead))&&<option value="" disabled>{customerSource(lead)}</option>}{CUSTOMER_SOURCE_OPTIONS.map(source=><option key={source}>{source}</option>)}</select></label>{select('profile_customerType','客户类型',profile.customerType,customerTypes)}
-     {select('grade','客户等级',lead.grade,CONTACT_GRADES)}{field('owner_display','负责人',owner,'text',true)}
-    </div><hr/><h3>补充信息</h3><div className="dossier-grid">
-     {field('profile_organization','公司 / 机构',profile.organization)}{field('profile_city','城市',profile.city)}
+     {field('origin_account_display','来源账号',customerOrigin(lead).origin_account,'text',true)}{select('grade','客户等级',lead.grade,CONTACT_GRADES)}{field('owner_display','负责人',owner,'text',true)}
+    </div><p className="small muted">联系方式（电话号码）必填，微信号为独立信息，不能代替电话号码。</p><hr/><h3>补充信息</h3><div className="dossier-grid">
+     {field('profile_organization','公司 / 机构',profile.organization)}{!domestic&&field('profile_city','城市',profile.city)}
      {field('method','偏好联系方式',detail['偏好联系方式']||detail['which_method_would_you_prefer_to_be_contacted_by?'])}{field('profile_role','联系人角色',profile.role)}
      <label>所属分公司<select name="company" defaultValue={salesCompanyName(detail._sales_company)} disabled={!editing}><option value="">未指定</option><option>澳洲分公司</option><option>北美分公司</option></select></label>
      {field('source_note','来源补充说明',detail['客户来源说明']||'')}

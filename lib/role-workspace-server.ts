@@ -83,6 +83,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   if(email!==lead.email&&email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('邮箱格式无效');
   if(nextDate!==lead.next_date&&nextDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)||!Number.isFinite(Date.parse(nextDate))||new Date(nextDate).toISOString().slice(0,10)!==nextDate))fail('下次联系日期无效');
   let profile:any;try{profile=body.profile===undefined?undefined:validateCustomerProfile(body.profile);}catch(e){fail((e as Error).message);}
+  if(!phone.replace(/[^0-9]/g,''))fail('联系方式（电话号码）必填，微信号不能代替电话号码');
   const after={...before,...(sourceChanged?{_source_override:sourceChoice}:{}),_sales_company:company,_profile_revision:(before._profile_revision||0)+1,_contacts:contacts,'偏好联系方式':method,'客户来源说明':sourceNote,...(profile?{_customer_profile:{...before._customer_profile,...profile,...(Object.hasOwn(profile,'nextAction')?{nextActionAt:now()}:{})}}:{})};
   const previous={source:lead.source,name:lead.name,country:lead.country,phone:lead.phone,email:lead.email,grade:lead.grade,next_date:lead.next_date,company:before._sales_company||'',contacts:before._contacts,method:before['偏好联系方式'],source_note:before['客户来源说明'],profile:before._customer_profile};
   const updated={source,name,country,phone,email,grade,next_date:nextDate,company,contacts,method,source_note:sourceNote,profile:after._customer_profile};

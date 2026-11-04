@@ -16,8 +16,8 @@ for(const source of ['WhatsApp','WhatsApp／其他','WhatsApp/其他','WhatsApp 
 const request=(path,body)=>pool(db,user,user,'customer-pool/'+path,'POST',body);
 for(const [i,source,scope] of [[1,'小红书','xiaohongshu'],[2,'微信','wechat'],[3,'他人介绍','referral']]){
  const id='new-source-intake-000'+i;
- await request('submit',{id,source,raw:'隔离测试资料',fields:{name:'示例'+source,email:'source'+i+'@example.invalid',business_scope:scope,requirement:'测试需求'}});
- await request('confirm',{id,version:0,fields:{name:'示例'+source,email:'source'+i+'@example.invalid',business_scope:scope,requirement:'测试需求'}});
+ await request('submit',{id,source,raw:'隔离测试资料',fields:{name:'示例'+source,phone:'1380000000'+i,email:'source'+i+'@example.invalid',business_scope:scope,requirement:'测试需求'}});
+ await request('confirm',{id,version:0,fields:{name:'示例'+source,phone:'1380000000'+i,email:'source'+i+'@example.invalid',business_scope:scope,requirement:'测试需求'}});
  const saved=sql.prepare('SELECT * FROM crm_leads WHERE id=?').get(id);assert.equal(saved.source,source);assert.equal(saved.business_scope,scope);
  const report=await customerPage(db,user,new URL('https://test.invalid/?source='+encodeURIComponent(source)));assert.equal(report.total,1);assert.equal(report.rows[0].display_source,source);
 }

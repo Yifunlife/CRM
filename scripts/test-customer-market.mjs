@@ -43,7 +43,7 @@ result=await importForm(db,admin,admin,{...body,form_source:'whatsapp',rows:[{'�
 const response=await customerImport({db,user:ceo,actor:ceo,req:new Request('https://fixture.invalid/api/import',{method:'POST'}),path:'import',write:true,body:{allocation_management:true,allocate:false,market:'内贸',platform:'抖音',account:'工厂号',rows:[{'客户名称':'Generic domestic','联系方式':'13800000003','所在国家/地区':'US'}]}});
 assert.equal(response.status,200);assert.equal(sql.prepare("SELECT market FROM crm_leads WHERE name='Generic domestic'").get().market,'内贸');
 // A manually selected market survives submit, save and confirmation.
-const poolId='customer-market-fixture-01',fields={name:'Pool domestic',email:'pool@example.invalid',country:'US',business_scope:'wechat',requirement:'Example requirement',market:'内贸'};
+const poolId='customer-market-fixture-01',fields={name:'Pool domestic',phone:'13800000990',email:'pool@example.invalid',country:'US',business_scope:'wechat',requirement:'Example requirement',market:'内贸'};
 await pool(db,ceo,ceo,'customer-pool/submit','POST',{id:poolId,source:'微信',raw:'Synthetic intake',fields});
 await pool(db,ceo,ceo,'customer-pool/save','POST',{id:poolId,version:0,fields:{summary:'Example summary'}});
 await pool(db,ceo,ceo,'customer-pool/confirm','POST',{id:poolId,version:1,fields:{}});

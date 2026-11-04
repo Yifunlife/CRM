@@ -1,10 +1,11 @@
+import {customerProfile} from '../customer-profile';
 import {customerMarket} from '../operations-dashboard';
 import {confirmedAllocationImport} from '../allocation-confirmed-import';
 import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS} from '../allocation-intake';
 import { BUSINESS_SCOPES } from '../allocation';
 import { allocationWeights,distribute } from '../allocation-server';
 import { syncAssignments } from '../assignment-sync';
-import { clean,digest,emailKey,id,now,phoneKey,SOURCES,STATUSES } from '../crm';
+import { clean,digest,emailKey,id,now,phoneKey,wechatKey,SOURCES,STATUSES } from '../crm';
 import { importForms } from '../form-intake';
 import type { ApiContext } from './context';
 import { json,Problem } from './http';
@@ -30,19 +31,19 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
    if(!body.market&&body.source==='Meta'&&body.rows.every((r:any)=>r.id&&r.form_id)&&!body.rows.some((r:any)=>clean(r['分配业务员'],80)))return json(await importForms(db,body.rows,actor.id,{scope:businessScope,filename:clean(body.filename,200),preview:body.preview===true,allocate:body.allocate!==false&&body.allocation_management!==true,manualOnly:body.allocation_management===true}));
    const autoIds:string[]=[],previewRows:any[]=[];
    const allUsers = (await db.prepare("SELECT id,name FROM crm_users WHERE active=1 AND role IN ('sales','management','ceo')").all()).results;
-   const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint FROM crm_leads").all()).results;
-   const fingerprints = new Set(existing.map(r=>r.fingerprint)), phones = new Set(existing.map(r=>phoneKey(r.phone)).filter(Boolean)), emails = new Set(existing.map(r=>emailKey(r.email)).filter(Boolean));
+   const existing: any[] = (await db.prepare("SELECT phone,email,fingerprint,detail FROM crm_leads").all()).results;
+   const fingerprints = new Set(existing.map(r=>r.fingerprint)), phones = new Set(existing.map(r=>phoneKey(r.phone)).filter(Boolean)), emails = new Set(existing.map(r=>emailKey(r.email)).filter(Boolean)),wechats=new Set(existing.map(r=>wechatKey(customerProfile(r).wechat)).filter(Boolean));
    const batchId=id(); let inserted=0,skipped=0,reviewed=0,unmatched=0;
    const statements = [db.prepare("INSERT INTO crm_batches(id,filename,source,created,creator,total) VALUES(?,?,?,?,?,?)").bind(batchId,clean(body.filename,200)||"人工新增",body.source,now(),user.id,body.rows.length)];
    for(const raw of body.rows) {
     const detail: Record<string,string> = {};for(const [k,v] of Object.entries(raw))detail[clean(k,100)]=clean(v);
-    const name = clean(detail["客户名称"]||detail["姓名"]||detail["name"],200),phone=clean(detail["联系方式"]||detail["电话"]||detail["phone"],100),email=clean(detail["邮箱"]||detail["email"],200);
-    if(!name || (!phone && !email)) { skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"缺少姓名或联系方式，跳过"});continue; }
+    const name = clean(detail["客户名称"]||detail["姓名"]||detail["name"],200),phone=clean(detail["联系方式"]||detail["电话"]||detail["phone"],100),email=clean(detail["邮箱"]||detail["email"],200),wk=wechatKey(detail['微信号']||detail.wechat);
+    if(!name || !phoneKey(phone)) { skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"缺少姓名或电话号码，跳过"});continue; }
     const metaId = body.source === "Meta" && detail["form_id"] ? clean(detail["id"],200) : "";
     const fingerprint = await digest(metaId ? "Meta:lead:"+metaId : body.source+JSON.stringify(Object.keys(detail).sort().map(k=>[k,detail[k]])));
     if(fingerprints.has(fingerprint)){skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"重复记录，跳过"});continue;}fingerprints.add(fingerprint);
-    const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) ? 1:0;
-    if(pk)phones.add(pk);if(ek)emails.add(ek);if(review)reviewed++;
+    const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) || (wk&&wechats.has(wk)) ? 1:0;
+    if(pk)phones.add(pk);if(ek)emails.add(ek);if(wk)wechats.add(wk);if(review)reviewed++;
     const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original);
     const owner = original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
     if(previewRows.length<8)previewRows.push({...detail,result:review?"相同联系方式，待核查":original?(owner?"保留原负责人":"原负责人待匹配"):"新增待分配"});

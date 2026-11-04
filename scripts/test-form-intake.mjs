@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
-import {readFileSync,readdirSync} from 'node:fs';
+import {readFileSync,readdirSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pathToFileURL} from 'node:url';
 import {resolve,dirname} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const cache=new Map();
-export function moduleURL(file){file=resolve(file);if(cache.has(file))return cache.get(file);let source=readFileSync(file,'utf8');source=source.replace(/from (['"])([^'"]+)\1/g,(_,q,p)=>'from '+JSON.stringify(p.startsWith('.')?moduleURL(resolve(dirname(file),p+'.ts')):import.meta.resolve(p)));const url='data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');cache.set(file,url);return url;}
+const cache=new Map(),moduleDir=mkdtempSync(tmpdir()+'/crm-test-modules-');
+process.on('exit',()=>rmSync(moduleDir,{recursive:true,force:true}));
+export function moduleURL(file){
+ file=resolve(file);if(cache.has(file))return cache.get(file);
+ const output=moduleDir+'/'+cache.size+'.mjs',url=pathToFileURL(output).href;cache.set(file,url);
+ let source=readFileSync(file,'utf8');source=source.replace(/from (['"])([^'"]+)\1/g,(_,q,p)=>'from '+JSON.stringify(p.startsWith('.')?moduleURL(resolve(dirname(file),p+'.ts')):import.meta.resolve(p)));
+ writeFileSync(output,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);return url;
+}
 export function database(sql){
  class Statement{constructor(query,args=[]){this.query=query;this.args=args;}bind(...args){return new Statement(this.query,args);}async first(){return sql.prepare(this.query).get(...this.args)||null;}async all(){return {results:sql.prepare(this.query).all(...this.args)};}async run(){return {meta:sql.prepare(this.query).run(...this.args)};}}
  return {prepare:q=>new Statement(q),batch:async statements=>{sql.exec('BEGIN');try{const result=statements.map(s=>({meta:sql.prepare(s.query).run(...s.args)}));sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}};

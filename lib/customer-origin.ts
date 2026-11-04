@@ -13,7 +13,7 @@ export function customerOrigin(lead:any,original:any={}){
  const records=[detail,raw],accounts=new Set<string>();
  const forms=[...new Set(records.flatMap(r=>[r.form_name,r['来源表单'],r._sheet]).filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim()))];
  for(const r of records){
-  for(const key of ['source_account','来源账号','运营账号'])if(Object.values(ALLOCATION_ACCOUNTS).some(c=>Object.values(c).some(a=>a.includes(r[key]))))accounts.add(r[key]);
+  for(const key of ['source_account','来源账号','运营账号',...(['抖音','小红书'].includes(lead.source)?['接待抖音号','接待小红书号']:[])])if(Object.values(ALLOCATION_ACCOUNTS).some(c=>Object.values(c).some(a=>a.includes(r[key]))))accounts.add(r[key]);
  }
  for(const form of forms){
   for(const account of ['乐园号','玩具号','工厂号'])if(form.includes(account))accounts.add(account);
