@@ -58,3 +58,5 @@
 资料只取本项目及明确关联的销售项目，缺失值显示待登记／待补充，不借用同客户其他项目或推测数值。既有需求核实编辑器增加独立数值字段 `area_m2`、`height_m`，保存时非空值必须大于0，沿用核实状态与依据；历史 `area` 原文保留为“原面积与净高说明”，不自动拆分。计划交付时间读取既有 `eta_site`，附“预计到客户现场”标签，不代表出货日期。
 
 **Reviewer disposition: ship — 本地虚拟数据截图范围。** 证据为 `.impeccable/review/project-desktop.jpg`、`project-mobile.jpg`、`project-desktop-right.jpg`、`project-mobile-right.jpg`、`project-mobile-dimensions.jpg`；结论仅覆盖这些本地画面，不代表生产发布、真实账号权限或保存验收。发布由主任务单独记录。本次无新系统视觉决策，根 `DESIGN.md`、`PRODUCT.md` 及设计 sidecar 保持不变。
+
+同日补充：项目列表的合同号、项目名固定在左侧，使用不透明底色与高于滚动内容的层级；手机缩窄两列宽度，仍可在表格内滑动查看其余信息。桌面及393px手机横向滚动后位置与遮挡检查通过，证据为 `.impeccable/review/project-sticky-desktop.jpg`、`project-sticky-mobile.jpg`。
