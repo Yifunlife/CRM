@@ -48,6 +48,20 @@
 :root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=USD] { color: #145397; }
 :root .office-app .workspace .content .sales-overview .ui-currencies > [data-currency=CNY] { color: #17634b; }
 :root .office-app .workspace .content .sales-overview .so-metric .so-empty-amount { font-size: 14px; font-weight: 500; }
+
+/* Keep metric detail columns close enough to scan across each row. */
+.office-app .workspace .sales-overview .sales-metric-details table { width: 100%; min-width: 640px; table-layout: fixed; white-space: normal; }
+.office-app .workspace .sales-overview .sales-metric-details th,
+.office-app .workspace .sales-overview .sales-metric-details td { padding: 4px 10px; line-height: 1.45; vertical-align: middle; overflow-wrap: anywhere; }
+.office-app .workspace .sales-overview .sales-metric-details th:first-child { width: 28%; }
+.office-app .workspace .sales-overview .sales-metric-details th:nth-child(2) { width: 22%; }
+.office-app .workspace .sales-overview .sales-metric-details th:nth-child(3) { width: 12%; }
+.office-app .workspace .sales-overview .sales-metric-details th:nth-child(4) { width: 20%; }
+.office-app .workspace .sales-overview .sales-metric-details th:last-child { width: 18%; }
+.office-app .workspace .sales-overview .sales-metric-details button.text { min-height: 28px; }
+@media (pointer: coarse) {
+  .office-app .workspace .sales-overview .sales-metric-details button.text { min-height: 44px; }
+}
 @media (max-width: 720px) {
   :root .office-app .workspace .content .sales-overview .so-metric > strong { font-size: 20px; }
   :root .office-app .workspace .content .sales-overview .so-metric:has(.ui-currencies > [data-currency]) > strong { grid-column: 1 / -1; text-align: left; }
