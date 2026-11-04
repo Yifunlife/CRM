@@ -101,7 +101,6 @@
 :root .office-app .workspace .content .daily-first-contact .section-heading > div { flex: 1 1 420px; }
 :root .office-app .workspace .content .daily-first-contact .section-heading h2 { flex-shrink: 0; }
 :root .office-app .workspace .content .daily-first-contact .section-heading p { flex: 1 1 360px; }
-:root .office-app .workspace .content .daily-first-contact .first-contact-summary { margin: 6px 0; }
 :root .office-app .workspace .content .daily-first-contact td small { display: inline; margin: 0 0 0 6px; }
 
 @media (max-width: 720px) {
