@@ -1,3 +1,4 @@
+import {customerAnalysisEndpoint} from '../customer-analysis';
 import {allocationPerformanceEndpoint} from '../allocation-performance-server';
 import {communicationConnection} from '../communication-connections';
 import {allocationManagementEndpoint} from '../allocation-management';
@@ -37,6 +38,7 @@ import { notifications } from './notifications';
 import {dailyFirstContact} from '../daily-first-contact';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const analysis=await customerAnalysisEndpoint(db,user,actor,path,req.method,body);if(analysis!==undefined)return json(analysis);
  if(path==='role-workspace/daily-first-contact'){if(req.method!=='GET')throw new AllocationError('首联完成看板仅支持读取',405);return json(await dailyFirstContact(db,user,url));}
  if(path==='allocation/management/intake-status'&&req.method==='GET')return json(await allocationWhatsAppStatus(db,env as any,user));
  const performance=await allocationPerformanceEndpoint(db,user,actor,path,req.method,body,url);if(performance!==undefined)return json(performance);

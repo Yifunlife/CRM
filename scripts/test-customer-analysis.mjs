@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pathToFileURL} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+const dir=mkdtempSync(tmpdir()+'/crm-analysis-');
+try{
+ const compiled=await build({stdin:{contents:"export {customerAnalysisEndpoint} from './lib/customer-analysis';export {bridgeDeviceEndpoint} from './lib/workbench-bridge';export {digest} from './lib/crm';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'fixture-storage',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const env={};'}));}}]});
+ writeFileSync(dir+'/module.mjs',compiled.outputFiles[0].text);const {customerAnalysisEndpoint,bridgeDeviceEndpoint,digest}=await import(pathToFileURL(dir+'/module.mjs'));
+ const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ class Statement{constructor(q,a=[]){this.q=q;this.a=a;}bind(...a){return new Statement(this.q,a);}async first(){return sql.prepare(this.q).get(...this.a)||null;}async all(){return {results:sql.prepare(this.q).all(...this.a)};}async run(){return {meta:sql.prepare(this.q).run(...this.a)};}}
+ const db={prepare:q=>new Statement(q),batch:async list=>{sql.exec('BEGIN');try{const result=[];for(const s of list)result.push(await s.run());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}},alice={id:'alice',role:'sales'},bob={id:'bob',role:'sales'},admin={id:'admin',role:'admin'};
+ for(const u of [alice,bob,admin])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'fixture','2026-11-04');
+ sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('lead','Fixture customer','Meta','alice',?,'fixture','2026-11-04')").run(JSON.stringify({_customer_profile:{blocker:'等待客户场地图',nextAction:'确认场地'}}));
+ sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('note','lead','alice','客户需要儿童乐园方案','WhatsApp','核实面积','2026-11-04')").run();
+ sql.prepare("INSERT INTO crm_workbench_snapshots(owner_id,payload,updated,updated_by) VALUES('alice',?,'now','alice')").run(JSON.stringify({clients:[{id:'desktop',name:'Fixture',messages:[]}]}));
+ sql.prepare("INSERT INTO crm_workbench_links(lead_id,owner_id,desktop_id,created,created_by) VALUES('lead','alice','desktop','now','alice')").run();
+ sql.prepare("INSERT INTO crm_workbench_bridge(owner_id,token_hash,created_by) VALUES('alice',?,'alice')").run(await digest('fixture-device'));
+ const call=(body,user=alice,actor=user,lead='lead')=>customerAnalysisEndpoint(db,user,actor,'customer-analysis/'+lead,body===undefined?'GET':'POST',body||{});
+ const device=body=>bridgeDeviceEndpoint(db,new Request('https://fixture.invalid/api/bridge/poll',{headers:{authorization:'Bearer fixture-device'}}),body);
+ assert.equal((await call()).analysis,null);await assert.rejects(call(undefined,bob),e=>e.status===404);
+ const req={request_id:'fixture-analysis-request-001'};
+ await assert.rejects(call(req),/离线/);await device({heartbeat:true,status:{}});await assert.rejects(call(req),/更新并重启/);
+ await device({heartbeat:true,status:{customerAnalysis:true}});
+ const before=JSON.stringify(['crm_leads','crm_notes','crm_workbench_drafts','crm_ai_usage'].map(t=>sql.prepare('SELECT * FROM '+t).all()));
+ await assert.rejects(call(req,alice,admin),e=>e.status===403);
+ const job=await call(req);assert.equal((await call(req)).id,job.id);assert.equal((await call({request_id:'another-analysis-request-002'})).id,job.id);
+ const command=(await device({})).command;assert.equal(command.kind,'customer-analysis');assert.equal(command.payload.crm_lead_id,'lead');assert.equal(command.payload.context.manualBlocker,'等待客户场地图');assert.equal(command.payload.context.notes.length,1);
+ assert.equal((await device({})).command,null);
+ const analysis={needs:'儿童乐园方案',confirmed:'已提供需求',pending:'面积待核实',nextStep:'确认场地',source:'工作台 AI',sources:['工作台 WhatsApp 归档','CRM 跟进记录'],updatedAt:new Date().toISOString(),messageCount:1};
+ await assert.rejects(device({result:{id:job.id,state:'done',value:{analysis:{...analysis,needs:123}}}}),/格式无效/);
+ await device({result:{id:job.id,state:'done',value:{analysis}}});
+ assert.deepEqual((await call()).analysis,analysis);assert.deepEqual((await call(undefined,admin)).analysis,analysis,'management reads saved analysis without triggering another call');
+ await device({result:{id:job.id,state:'done',value:{analysis}}});assert.equal((await call()).analysis.updatedAt,analysis.updatedAt);
+ const second=await call({request_id:'fixture-analysis-request-002'});await device({});await device({result:{id:second.id,state:'failed',value:{error:'AI login expired'}}});
+ assert.deepEqual((await call()).analysis,analysis);assert.equal((await call()).job.state,'failed');
+ assert.equal(JSON.stringify(['crm_leads','crm_notes','crm_workbench_drafts','crm_ai_usage'].map(t=>sql.prepare('SELECT * FROM '+t).all())),before,'manual blockers, communication and cloud quota remain untouched');
+ const third=await call({request_id:'fixture-analysis-request-003'});await device({});sql.prepare("UPDATE crm_leads SET owner_id='bob' WHERE id='lead'").run();
+ await device({result:{id:third.id,state:'done',value:{analysis}}});assert.equal(sql.prepare('SELECT state FROM crm_workbench_commands WHERE id=?').get(third.id).state,'failed','late analysis is acknowledged without blocking all later bridge work');await assert.rejects(call(),e=>e.status===404);assert.equal((await call(undefined,bob)).analysis,null);
+ console.log('PASS customer analysis: device capability/offline checks, owner and actor isolation, single execution, durable readback, source/time, failed refresh preserves prior analysis, malformed result/reassignment denial, no manual-field/contact/quota writes.');
+}finally{rmSync(dir,{recursive:true,force:true});}

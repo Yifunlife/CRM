@@ -73,13 +73,19 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
- if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,error:clean(s.error,300)}),device.owner_id).run();}
+ if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({customerAnalysis:s.customerAnalysis===true,whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
   const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
   if(!completed)return {ok:true};
   if(completed.state==='done'&&(r.state!=='done'||JSON.stringify(await readJson(completed.result))!==JSON.stringify(r.value||{})))return {ok:true};
   if(JSON.parse(completed.payload).auto_first_contact&&r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&!r.value.messageId){r.state='uncertain';r.value={status:'uncertain',detail:'自动首联未收到可核对的发送回执，不会自动重发'};}
+  if(r.state==='done'&&completed.kind==='customer-analysis'){
+   const leadId=JSON.parse(completed.payload).crm_lead_id;
+   if(!await db.prepare('SELECT l.id FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id WHERE l.id=? AND l.owner_id=? AND w.desktop_id=?').bind(leadId,device.owner_id,completed.desktop_id).first()){r.state='failed';r.value={error:'分析客户归属已变化，未保存'};}
+   const a=r.value?.analysis;
+   if(r.state==='done'&&(!a||['needs','confirmed','pending','nextStep'].some(k=>typeof a[k]!=='string'||!a[k].trim()||a[k].length>4000)||a.source!=='工作台 AI'||!Array.isArray(a.sources)||a.sources.length>4||a.sources.some((x:any)=>!['工作台邮件归档','工作台 WhatsApp 归档','工作台项目记录','CRM 跟进记录'].includes(x))||!Number.isFinite(Date.parse(a.updatedAt))||Date.parse(a.updatedAt)>timestamp+60000))throw new AllocationError('工作台分析结果格式无效');
+  }
   await db.prepare("UPDATE crm_workbench_commands SET state=?,result=?,updated=? WHERE id=? AND owner_id=? AND state='running'").bind(r.state,await storeJson(r.value||{},`results/${device.owner_id}`),timestamp,r.id,device.owner_id).run();
   if(r.state==='done'&&Array.isArray(r.value?.clients)){
    const job:any=await db.prepare('SELECT kind FROM crm_workbench_commands WHERE id=? AND owner_id=?').bind(r.id,device.owner_id).first();
