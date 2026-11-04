@@ -4,7 +4,7 @@
  const button=document.createElement('button');button.id='crmAnalyzeButton';button.className='button';button.textContent='AI整理重点并上传CRM';anchor.after(button);
  const dialog=document.createElement('dialog');dialog.className='modal';dialog.style.cssText='padding:0;width:min(640px,90vw);border:1px solid var(--line);color:var(--text)';dialog.setAttribute('aria-labelledby','crmAnalysisTitle');
  dialog.innerHTML='<div class="modal-head"><h2 id="crmAnalysisTitle">聊天重点</h2><button class="modal-close" type="button" aria-label="关闭聊天重点">×</button></div><div class="modal-body"><p id="crmAnalysisMessage" role="status" aria-live="polite"></p><div id="crmAnalysisFields"></div><p style="color:var(--muted)">只上传当前客户的重点摘要。日常聊天原文保存在本机。</p></div><div class="modal-actions"><button class="button" id="crmAnalyzeAgain" type="button">重新整理并上传</button></div>';document.body.appendChild(dialog);
- const field=id=>dialog.querySelector('#'+id),pending=row=>row&&['preparing','queued','running','uncertain'].includes(row.state);let selected='',busy=false,latest=null;
+ const field=id=>dialog.querySelector('#'+id),pending=row=>row&&['preparing','queued','running'].includes(row.state);let selected='',busy=false,latest=null;
  function render(row){
   latest=row;
   field('crmAnalyzeAgain').disabled=!!(pending(row)&&row.jobId)||busy;field('crmAnalysisFields').replaceChildren();
