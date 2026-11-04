@@ -7,6 +7,7 @@ export const clean = (v: unknown, max = 4000) => String(v ?? "").trim().slice(0,
 export const phoneKey = (v: unknown) => clean(v).replace(/[^0-9]/g, "");
 export const emailKey = (v: unknown) => clean(v).toLowerCase();
 export const wechatKey = (v: unknown) => /^(?:[a-z][-_a-z0-9]{5,31}|\+?\d{7,15})$/i.test(clean(v,100)) ? clean(v,100).toLowerCase() : '';
+export const hasCustomerContact=(phone:unknown,wechat:unknown)=>!!(phoneKey(phone)||clean(wechat,500));
 export async function digest(value: string) { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))).map(v => v.toString(16).padStart(2, "0")).join(""); }
 export async function passwordHash(password: string, salt = id()) {
  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);

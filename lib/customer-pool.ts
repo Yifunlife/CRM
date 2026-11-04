@@ -3,7 +3,7 @@ import {customerProfile} from './customer-profile';
 import {customerMarket} from './operations-dashboard';
 import {SOURCE_KINDS} from './attribution';
 import {customerProgress} from './customer-progress';
-import {SOURCES,can,clean,emailKey,phoneKey,wechatKey,id,now} from './crm';
+import {SOURCES,can,clean,emailKey,phoneKey,hasCustomerContact,wechatKey,id,now} from './crm';
 import {BUSINESS_SCOPES} from './allocation';
 import {AllocationError,allocationWeights,distribute} from './allocation-server';
 import {enquiryNotification} from './lead-notifications';
@@ -79,7 +79,7 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
  const manages=manager(user),timestamp=now();
  if(path==='customer-pool/progress'&&method==='GET')return customerProgress(db,user);
  if(path==='customer-pool'&&method==='GET'){
-  const rows=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id'+(manages?'':user.role==='sales'?' WHERE l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL)':' WHERE p.created_by=? OR l.owner_id=?')+' ORDER BY p.created DESC,p.id LIMIT 300').bind(...(manages?[]:[user.id,user.id])).all<any>()).results;
+  const rows=(await db.prepare('SELECT p.*,u.name AS creator_name,l.owner_id,o.name AS owner_name,l.status AS lead_status,l.last_contact FROM crm_customer_pool p JOIN crm_users u ON u.id=p.created_by AND p.state<>\'放弃\' LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) LEFT JOIN crm_users o ON o.id=l.owner_id'+(manages?'':user.role==='sales'?' WHERE l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL)':' WHERE p.created_by=? OR l.owner_id=?')+' ORDER BY p.created DESC,p.id LIMIT 300').bind(...(manages?[]:[user.id,user.id])).all<any>()).results;
   const today=day(timestamp),leads=(await db.prepare("SELECT l.id,l.name,l.owner_id,u.name AS owner_name,l.status,l.next_date,l.created,l.cohort FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id WHERE "+(manages?'1=1':'l.owner_id=?')).bind(...(manages?[]:[user.id])).all<any>()).results;
   const assigned=(await db.prepare("SELECT a.owner_id,u.name AS owner_name,COUNT(*) AS count FROM crm_assignments a JOIN crm_users u ON u.id=a.owner_id WHERE EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=a.lead_id AND l.cohort='new') AND a.policy NOT IN ('historical-alignment','historical-sync') AND a.created>=? AND a.created<?"+(manages?'':' AND a.owner_id=?')+' GROUP BY a.owner_id').bind(...dayBounds(today),...(manages?[]:[user.id])).all<any>()).results;
   const todo=leads.filter(l=>l.next_date&&l.next_date<=today&&!['已成交','已结束','暂停跟进'].includes(l.status));
@@ -94,7 +94,7 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
   if(!/^[a-zA-Z0-9-]{16,80}$/.test(body.id||''))fail('提交编号无效，请刷新页面');
   if(!SOURCES.includes(body.source))fail('请选择客资来源');
   const raw=clean(body.raw,12000);if(!raw)fail('请粘贴客户原始消息或填写资料来源');
-  if(body.fields){const contact=fields(body.fields);if(!phoneKey(contact.phone))fail('联系方式（电话号码）必填，微信号不能代替电话号码');}
+  if(body.fields){const contact=fields(body.fields);if(!hasCustomerContact(contact.phone,contact.wechat))fail('微信号或电话号码至少填写一项');}
   const existing=await db.prepare('SELECT id,created_by,source,raw FROM crm_customer_pool WHERE id=?').bind(body.id).first<any>();
   if(existing){if(existing.created_by!==actor.id||existing.source!==body.source||existing.raw!==raw)fail('提交编号已使用，请刷新页面核对原记录后重新提交',409);return {ok:true,id:existing.id};}
   await db.batch([
@@ -104,7 +104,7 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
   // Normal complete intakes are recognized without a mandatory manual review. Allocation still follows the administrator policy.
   const cfg:any=await db.prepare("SELECT updated_by,payload FROM crm_allocation_configs WHERE scope='all'").first();
   const data=fields(body.fields),scope=BUSINESS_SCOPES.find(s=>s.id===data.business_scope);
-  if(cfg&&data.name&&(phoneKey(data.phone).length>=7)&&scope?.source===body.source&&data.requirement){
+  if(cfg&&data.name&&(phoneKey(data.phone).length>=7||hasCustomerContact('',data.wechat))&&scope?.source===body.source&&data.requirement){
    const candidates=await matches(db,data),owners=new Set(candidates.map(l=>l.owner_id).filter(Boolean));
    const reviewer:any=await db.prepare('SELECT * FROM crm_users WHERE id=? AND active=1').bind(cfg.updated_by).first();
    if(reviewer&&manager(reviewer)&&(!candidates.length||(owners.size===1&&candidates.every(l=>l.owner_id&&l.owner_active&&!l.review)))){
@@ -130,7 +130,7 @@ export async function customerPoolEndpoint(db:D1Database,user:any,actor:any,path
  if(path==='customer-pool/confirm'&&method==='POST'){
   if(row.state!=='待确认'||row.version!==body.version)fail('记录已变化，请刷新后核查',409);
   const data=fields({...JSON.parse(row.payload),...body.fields}),scope=BUSINESS_SCOPES.find(s=>s.id===data.business_scope);
-  if(!data.name||!phoneKey(data.phone))fail('请填写客户姓名和联系方式（电话号码）；微信号不能代替电话号码');
+  if(!hasCustomerContact(data.phone,data.wechat))fail('微信号或电话号码至少填写一项');
   if(data.phone&&phoneKey(data.phone).length<7)fail('电话号码不足7位，请核对');
   if(data.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))fail('邮箱格式不正确，请核对');
   if(!scope||scope.source!==row.source)fail('请选择与来源对应的业务范围');

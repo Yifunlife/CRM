@@ -1,5 +1,5 @@
 import { unzipSync,strFromU8 } from 'fflate';
-export const FIELDS=['客户名称','联系方式','邮箱','所在国家/地区','来源渠道','录入日期','项目类型','联系方式偏好','客户身份','公司名称','投资预算','6个月内投资计划','项目需求描述','推广产品','分配业务员','跟进状态','收件箱链接','客资滞留时长'];
+export const FIELDS=['客户名称','联系方式','微信号','邮箱','所在国家/地区','来源渠道','录入日期','项目类型','联系方式偏好','客户身份','公司名称','投资预算','6个月内投资计划','项目需求描述','推广产品','分配业务员','跟进状态','收件箱链接','客资滞留时长'];
 export type Grid={name:string;headers:string[];rows:string[][];date1904?:boolean};
 export function parseCSV(text:string){const rows:string[][]=[];let row:string[]=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(Boolean))rows.push(row);row=[];cell='';}else cell+=c;}if(quoted)throw new Error('CSV引号未闭合');row.push(cell);if(row.some(Boolean))rows.push(row);return rows;}
 function xml(text:string){const doc=new DOMParser().parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw new Error('表格内容无法解析');return doc;}

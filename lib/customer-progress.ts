@@ -2,7 +2,7 @@ import {can} from './crm';
 
 export async function customerProgress(db:D1Database,user:any){
  const all=can(user,'customers_all'),manage=all&&can(user,'leads_allocate');
- const pending=`SELECT p.id,p.lead_id,p.target_lead_id,p.state FROM crm_customer_pool p LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) WHERE p.state<>'已入CRM'${manage?'':user.role==='sales'?' AND (l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL))':' AND (p.created_by=? OR l.owner_id=?)'}`;
+ const pending=`SELECT p.id,p.lead_id,p.target_lead_id,p.state FROM crm_customer_pool p LEFT JOIN crm_leads l ON l.id=COALESCE(p.lead_id,p.target_lead_id) WHERE p.state NOT IN ('已入CRM','放弃')${manage?'':user.role==='sales'?' AND (l.owner_id=? OR (p.created_by=? AND l.owner_id IS NULL))':' AND (p.created_by=? OR l.owner_id=?)'}`;
  const stages=(await db.prepare(`WITH pending AS (${pending}), records AS (
   SELECT CASE WHEN state='待确认' THEN '待核查' ELSE '待分配' END AS stage FROM pending
   UNION ALL

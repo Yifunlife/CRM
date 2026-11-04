@@ -28,7 +28,7 @@ assert.equal(lead(one),undefined,'raw input must not create a lead');
 await call('/submit',{id:one,source:'WhatsApp／其他',raw:'原始消息1'},sales);
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_customer_pool').get().n,1);
 await assert.rejects(call('/submit',{id:one,source:'WhatsApp／其他',raw:'different'},sales),/编号已使用/);
-await assert.rejects(confirm(one,{name:'unknown'}),/联系方式/);
+await assert.rejects(confirm(one,{name:'unknown'}),/微信号或电话号码/);
 await assert.rejects(confirm(one,{...values(1),email:'not-an-email'}),/邮箱/);
 await assert.rejects(call('/confirm',{id:one,version:0,fields:values(1)},sales),/权限/);
 await assert.rejects(call('/confirm',{id:one,version:0,fields:values(1)},admin),/权限/);

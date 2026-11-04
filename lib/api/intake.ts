@@ -5,7 +5,7 @@ import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS,cust
 import { BUSINESS_SCOPES } from '../allocation';
 import { allocationWeights,distribute } from '../allocation-server';
 import { syncAssignments } from '../assignment-sync';
-import { clean,digest,emailKey,id,now,phoneKey,wechatKey,SOURCES,STATUSES } from '../crm';
+import { clean,digest,emailKey,id,now,phoneKey,hasCustomerContact,wechatKey,SOURCES,STATUSES } from '../crm';
 import { importForms } from '../form-intake';
 import type { ApiContext } from './context';
 import { json,Problem } from './http';
@@ -38,7 +38,7 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
    for(const raw of body.rows) {
     const detail: Record<string,string> = {};for(const [k,v] of Object.entries(raw))detail[clean(k,100)]=clean(v);
     const name = clean(detail["客户名称"]||detail["姓名"]||detail["name"],200)||'暂无',phone=clean(detail["联系方式"]||detail["电话"]||detail["phone"],100),email=clean(detail["邮箱"]||detail["email"],200),wk=wechatKey(detail['微信号']||detail.wechat);
-    if(!name || !phoneKey(phone)) { skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"缺少姓名或电话号码，跳过"});continue; }
+    if(!hasCustomerContact(phone,detail['微信号']||detail.wechat)) { skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"无微信号和电话号码，已放弃"});continue; }
     const metaId = body.source === "Meta" && detail["form_id"] ? clean(detail["id"],200) : "";
     const fingerprint = await digest(metaId ? "Meta:lead:"+metaId : body.source+JSON.stringify(Object.keys(detail).sort().map(k=>[k,detail[k]])));
     if(fingerprints.has(fingerprint)){skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"重复记录，跳过"});continue;}fingerprints.add(fingerprint);
