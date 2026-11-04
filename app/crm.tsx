@@ -50,7 +50,7 @@ async function api(path:string,body?:any,method='POST'){
  const control=['role-preview','role-preview/end'].includes(path);
  if(previewReadOnly&&!control&&body!==undefined&&path!=='logout')throw new Error('当前为只读验收，不能保存、发送或审批；请先退出验收');
  const r=await fetch('/api/'+path,{method:body===undefined?'GET':method,headers:{'X-CRM-View':control?'boss':activeView,...(!control&&previewContext?{'X-CRM-Preview':previewContext}:{}),...(body===undefined||body instanceof Blob?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:body instanceof Blob?body:JSON.stringify(body)});
- const d:any=await r.json();if(!r.ok)throw new Error(d.error||'操作失败');if(path==='me'){previewReadOnly=!!d.role_preview;previewContext=d.role_preview?.context_id||'';}if(path==='logout'){previewReadOnly=false;previewContext='';}return d;
+ const d:any=await r.json();if(!r.ok)throw Object.assign(new Error(d.error||'操作失败'),{status:r.status});if(path==='me'){previewReadOnly=!!d.role_preview;previewContext=d.role_preview?.context_id||'';}if(path==='logout'){previewReadOnly=false;previewContext='';}return d;
 }
 const opts=(v:string[])=>v.map(s=><option key={s} value={s}>{contactGradeLabel(s)}</option>);
 const stamp=(v:string)=>v?new Date(v).toLocaleString('zh-CN',{hour12:false}):'—';
