@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {moduleURL} from './test-form-intake.mjs';
+const {customerGeography,REGION_GRADES}=await import(moduleURL('lib/sales-board-geography.ts'));
+const lead=(country,grade,detail={})=>({country,grade,lead_detail:JSON.stringify(detail)});
+const original=[lead('USA','A'),lead('美国（US）','B'),lead('United States','VIP'),lead('AU','D'),lead('澳洲',''),lead('未登记','C'),lead('','A')];
+const before=JSON.stringify(original),d=customerGeography(original,'country');
+assert.equal(d.top.length,2);assert.equal(d.top[0].key,'US');assert.equal(d.top[0].total,3);assert.deepEqual(d.top[0].grades,{A:1,B:1,C:0,other:1});assert.equal(d.top[1].key,'AU');assert.equal(d.unknown,2);assert.deepEqual(d.grades,{A:2,B:1,C:1,other:3});assert.equal(JSON.stringify(original),before);
+const many=['US','AU','CA','GB','NZ','MY','SG','SA','AE','IR','FR','DE'].flatMap((country,i)=>Array.from({length:i+1},()=>lead(country,'A'))),ranked=customerGeography(many,'country');
+assert.equal(ranked.top.length,10);assert.equal(ranked.top[0].key,'DE');assert.equal(ranked.top[0].total,12);assert.equal(ranked.other,3);assert.equal(ranked.top.reduce((n,r)=>n+r.total,0)+ranked.other+ranked.unknown,ranked.total);
+const cities=customerGeography([lead('中国','A',{_customer_profile:{city:' 广州市 '}}),lead('CN','B',{城市:'广州'}),lead('CN','C',{_customer_profile:{city:''},城市:'深圳'}),lead('CN','VIP',{城市:'北京市'}),lead('CN','D',{city:'Shanghai'}),lead('CN','A',{城市:'shanghai'}),lead('CN','B',{城市:'unknown'}),lead('CN','C')],'city');
+assert.equal(cities.top.find(r=>r.name==='广州').total,2);assert.equal(cities.top.find(r=>r.key==='shanghai').total,2);assert.equal(cities.top.find(r=>r.name==='北京').grades.other,1);assert.equal(cities.unknown,3,'explicitly cleared city stays missing');assert.equal(cities.top.reduce((n,r)=>n+r.total,0)+cities.other+cities.unknown,cities.total);assert.equal(REGION_GRADES.reduce((n,g)=>n+cities.grades[g],0),cities.total);
+assert.deepEqual(customerGeography([],'country'),{kind:'country',total:0,grades:{A:0,B:0,C:0,other:0},top:[],other:0,unknown:0});
+console.log('PASS: country aliases, full country labels, top ten and descending counts, city aliases/manual clears, all grades, unknowns, exact totals, empty data and no mutations.');

@@ -12,3 +12,11 @@
 .daily-first-contact .is-complete{color:#236449}
 .daily-first-contact .is-pending{color:#a4262c}
 .daily-first-contact tfoot th,.daily-first-contact tfoot td{background:var(--canvas);border-top:1px solid var(--line);font-weight:600;white-space:nowrap}
+.daily-first-contact .first-contact-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.daily-first-contact .first-contact-columns>section { min-width:0; }
+.daily-first-contact .first-contact-columns h3 { margin:0 0 8px; font-size:15px; }
+.sales-overview .daily-first-contact .first-contact-columns table { min-width:460px; table-layout:fixed; }
+.daily-first-contact .first-contact-columns th:first-child { width:22%; }
+:root .office-app .workspace .content .daily-first-contact .first-contact-columns th,:root .office-app .workspace .content .daily-first-contact .first-contact-columns td { padding:7px 5px; white-space:normal; overflow-wrap:anywhere; font-size:12px; }
+.daily-first-contact .first-contact-columns .first-contact-note { display:block; font-size:12px; }
+@media(max-width:1000px) { .daily-first-contact .first-contact-columns { grid-template-columns:minmax(0,1fr); } }
