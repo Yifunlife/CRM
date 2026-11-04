@@ -1,0 +1,9 @@
+.management-workspace .customer-allocation-markets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.management-workspace .customer-allocation-markets>section { min-width:0; }
+.management-workspace .customer-allocation-markets>section:only-child { grid-column:1/-1; }
+.management-workspace .customer-allocation-markets h3 { margin:0 0 8px; font-size:14px; }
+.management-workspace .customer-allocation-markets .table-wrap { max-width:100%; }
+.management-workspace .customer-allocation-markets table { table-layout:fixed; }
+.management-workspace .customer-allocation-markets th:first-child { width:40%; }
+.management-workspace .customer-allocation-markets :is(th,td) { white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:1000px) { .management-workspace .customer-allocation-markets { grid-template-columns:minmax(0,1fr); } }

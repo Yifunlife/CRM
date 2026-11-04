@@ -9,6 +9,7 @@ const {digest}=await import(moduleURL('lib/crm.ts'));
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 const db=database(sql),admin={id:'admin',role:'admin'},other={id:'other',role:'admin'},sales={id:'a',role:'sales'};
 for(const u of [admin,other,...'abcdef'.split('').map(id=>({id,role:'sales'}))])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-10-30');
+sql.exec("UPDATE crm_users SET trade_scopes='[\"foreign\"]' WHERE role='sales'");
 const config={members:'abcdef'.split('').map(user_id=>({user_id,state:'参与',share:100/6})),rule:{automatic:false}};
 sql.prepare('INSERT INTO crm_allocation_configs VALUES(?,?,?,?)').run('all',JSON.stringify(config),'now','admin');
 const call=(path,body,user=admin,actor=user)=>service(db,user,actor,'service/'+path,body===undefined?'GET':'POST',body||{});
@@ -67,3 +68,9 @@ await assert.rejects(call('settings',{enabled:false,reply:''},ceo),e=>e.status==
 await assert.rejects(call('register',{id:ceoContact.id},ceo),e=>e.status===409);
 assert.equal(sql.prepare('SELECT total_changes() n').get().n,beforeCeo);
 console.log('PASS: CEO reads company service records and conversations but cannot modify system settings; customer registration reaches version validation.');
+sql.prepare('INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES(?,?,?,?,?,?,?)').run('domestic','domestic','domestic','sales','unused','["domestic"]','2026-01-01');
+config.members.push({user_id:'domestic',state:'参与',share:0});sql.prepare("UPDATE crm_allocation_configs SET payload=? WHERE scope='all'").run(JSON.stringify(config));
+for(const market of ['内贸','外贸']){const key='market-'+market;sql.prepare("INSERT INTO crm_leads(id,name,source,market,detail,fingerprint,created) VALUES(?,?,'WhatsApp',?,'{}',?,?)").run(key,key,market,key,new Date().toISOString());const r=await distributeServiceLead(db,key,'admin',false);assert.equal(r.owner_id==='domestic',market==='内贸');}
+sql.exec(`UPDATE crm_users SET trade_scopes='[]' WHERE id='domestic'`);sql.prepare("INSERT INTO crm_leads(id,name,source,market,detail,fingerprint,created) VALUES('no-domestic','No domestic','WhatsApp','内贸','{}','no-domestic','2026-11-05')").run();
+await assert.rejects(distributeServiceLead(db,'no-domestic','admin',false),e=>e.status===409);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='no-domestic'").get().owner_id,null);
+console.log('PASS: domestic/foreign service market isolation; no eligible receiver retains customer unassigned.');

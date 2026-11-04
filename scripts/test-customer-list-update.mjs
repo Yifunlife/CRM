@@ -9,7 +9,7 @@ const db=database(sql),admin={id:'admin',role:'admin'},sales={id:'sales',role:'s
 for(const u of [admin,sales,other,manager])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-11-01');
 for(const [id,owner] of [['one','sales'],['two','sales'],['third','other'],['own','manager']])sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,last_contact) VALUES(?,?,'Meta',?, ?,?,'2026-11-01','original-contact')").run(id,id,owner,JSON.stringify({original:'preserve',attachment:'existing.pdf',_customer_profile:{notes:'specific details'}}),id);
 const row=id=>sql.prepare('SELECT * FROM crm_leads WHERE id=?').get(id);
-const change=(id,patch)=>({id,base:Object.fromEntries(['grade','status','next_date','owner_id'].map(k=>[k,row(id)[k]])),patch});
+const change=(id,patch)=>({id,base:Object.fromEntries(['grade','status','next_date','owner_id','market'].map(k=>[k,row(id)[k]])),patch});
 const call=(changes,user=sales)=>update(db,user,user,{changes});
 const before=row('one');
 await call([change('one',{grade:'A'}),change('two',{grade:'B'})]);assert.equal(row('one').grade,'A');assert.equal(row('two').grade,'B');
@@ -41,6 +41,18 @@ await assert.rejects(call([]),/1–30/);
 for(const table of ['crm_notes','crm_deals','crm_receipts','crm_workbench_commands'])assert.equal(sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,0,table);
 assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length,0);
 console.log('PASS: single/batch status and classification, all-row validation, permissions, own-manager editing, stale snapshots, pause/end validation, direct sold status and contract supplementation, audit and original contact/files/details preserved.');
+const domestic={...sales,trade_scopes:['domestic']},marketBefore=row('two');
+await assert.rejects(call([change('two',{market:'外贸'})],domestic),e=>e.status===403);
+await assert.rejects(call([change('two',{market:'待确认'})],domestic),/内贸或外贸/);
+await call([change('two',{market:'内贸'})],domestic);
+assert.deepEqual({...row('two'),market:marketBefore.market},{...marketBefore},'market update preserves all other customer fields');
+const marketEvent=sql.prepare("SELECT * FROM crm_attribution_events WHERE entity_id='two' AND kind='客资市场变化'").get();
+assert.equal(marketEvent.created_by,'sales');assert(marketEvent.created);const marketPayload=JSON.parse(marketEvent.payload);assert.equal(marketPayload.before,marketBefore.market);assert.equal(marketPayload.after,'内贸');
+const staleMarket=change('two',{market:'外贸'});sql.prepare("UPDATE crm_leads SET market='外贸' WHERE id='two'").run();await assert.rejects(call([staleMarket],admin),e=>e.status===409);
+const marketAudit=sql.prepare('SELECT COUNT(*) n FROM crm_attribution_events').get().n;
+const marketRace={...db,batch:async statements=>{sql.prepare("UPDATE crm_leads SET market='内贸' WHERE id='two'").run();return db.batch(statements);}};
+await assert.rejects(update(marketRace,admin,admin,{changes:[change('two',{market:'内贸'})]}),e=>e.status===409);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_attribution_events').get().n,marketAudit);
+console.log('PASS: market enum/scope validation, preserved customer data, actor/time/before/after audit, stale and transaction-time market conflicts.');
 // Reassignment after preflight but before the transaction must reject every write.
 const auditTables=['crm_workflow_audit','crm_attribution_events','crm_lead_outcomes'];
 const auditSnapshot=()=>auditTables.map(t=>JSON.stringify(sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));

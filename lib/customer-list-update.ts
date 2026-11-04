@@ -1,4 +1,4 @@
-import {authorizedLead,clean,id,now,STATUSES} from './crm';
+import {authorizedLead,boardMarkets,canViewAllMarkets,clean,id,now,STATUSES} from './crm';
 import {canEditCustomerProfile} from './customer-profile';
 import {CONTACT_GRADES,cancelColleagueFirstContacts} from './contact-kind';
 import {customerChange} from './customer-changes';
@@ -19,14 +19,20 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
   if(!lead||!authorizedLead(user,lead))throw new Problem('客户不存在或无权维护',404);
   if(!canEditCustomerProfile(user,lead))throw new Problem('没有客户维护权限',403);
   const patch=change.patch;
-  if(!patch||!Object.keys(patch).length||Object.keys(patch).some(k=>!['grade','status','next_date','pause_reason','loss_reason','loss_note','contract_number'].includes(k)))throw new Problem('请选择状态或客户分类');
-  if(!Object.hasOwn(patch,'grade')&&!Object.hasOwn(patch,'status'))throw new Problem('请选择状态或客户分类');
+  if(!patch||!Object.keys(patch).length||Object.keys(patch).some(k=>!['market','grade','status','next_date','pause_reason','loss_reason','loss_note','contract_number'].includes(k)))throw new Problem('请选择状态或客户分类');
+  if(!Object.hasOwn(patch,'grade')&&!Object.hasOwn(patch,'status')&&!Object.hasOwn(patch,'market'))throw new Problem('请选择状态、客户分类或客资市场');
   if(!change.base||['grade','status','next_date','owner_id'].some(k=>change.base[k]!==lead[k]))throw new Problem('客户状态或归属已变化，请刷新后重试',409);
+  if(Object.hasOwn(patch,'market')){
+   if(!['内贸','外贸'].includes(patch.market))throw new Problem('请选择内贸或外贸');
+   if(!canViewAllMarkets(user)&&!boardMarkets(user).includes(patch.market))throw new Problem('没有此客资市场的维护权限',403);
+   if(change.base.market!==lead.market)throw new Problem('客资市场已变化，请刷新后重试',409);
+  }
   if(Object.hasOwn(patch,'grade')&&!['',...CONTACT_GRADES].includes(patch.grade))throw new Problem('请选择有效客户分类');
   if(Object.hasOwn(patch,'contract_number')&&(typeof patch.contract_number!=='string'||patch.contract_number.trim().length>200))throw new Problem('合同号最多200字');
   const detail=JSON.parse(lead.detail||'{}');
   const dealCount:any=await db.prepare('SELECT COUNT(*) n FROM crm_deals WHERE lead_id=? AND cancelled=0').bind(lead.id).first();
-  snapshots.push({id:lead.id,...change.base,deal_count:dealCount.n,contract_number:detail._customer_profile?.contractNumber??null});
+  snapshots.push({id:lead.id,...change.base,deal_count:dealCount.n,contract_number:detail._customer_profile?.contractNumber??null,...(Object.hasOwn(patch,'market')?{market:lead.market}:{})});
+  if(Object.hasOwn(patch,'market'))statements.push(customerChange(db,actor,lead.id,'market',patch.market,'客户管理确认客资市场',condition,args),db.prepare('UPDATE crm_leads SET market=? WHERE id=? AND '+condition).bind(patch.market,lead.id,...args));
   if(Object.hasOwn(patch,'status')){
    if(!STATUSES.includes(patch.status))throw new Problem('请选择有效客户状态');
    const nextDate=patch.next_date??lead.next_date;
@@ -50,6 +56,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
    AND l.grade IS json_extract(snapshot.value,'$.grade')
    AND l.status IS json_extract(snapshot.value,'$.status')
    AND l.next_date IS json_extract(snapshot.value,'$.next_date')
+   AND (json_type(snapshot.value,'$.market') IS NULL OR l.market IS json_extract(snapshot.value,'$.market'))
    AND json_extract(l.detail,'$._customer_profile.contractNumber') IS json_extract(snapshot.value,'$.contract_number')
    AND (SELECT COUNT(*) FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)=json_extract(snapshot.value,'$.deal_count'))=?`)
   .bind(token,'客户管理批量更新',changes[0].id,JSON.stringify({count:changes.length}),now(),actor.id,JSON.stringify(snapshots),changes.length);

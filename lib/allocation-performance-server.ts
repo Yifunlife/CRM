@@ -32,12 +32,13 @@ export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor
   if(!['参与','请假','暂停'].includes(body.state))throw new Problem('请选择参与、请假或暂停');
   const old=await db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>();if(!old)throw new Problem('请先设置接收名单');
   if(body.version!==old.payload)throw new Problem('接收名单已更新，请刷新后重试',409);
-  const config=JSON.parse(old.payload),member=config.members.find((m:any)=>m.user_id===body.user_id);
-  const person=await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo')").bind(body.user_id).first();
-  if(!member||!person)throw new Problem('只能修改接收名单中已启用人员的状态');
-  if(member.state===body.state)return {ok:true};
-  const before=member.state;member.state=body.state;
-  const result=await db.batch([db.prepare("UPDATE crm_allocation_configs SET payload=?,updated=?,updated_by=? WHERE scope='all' AND payload=? AND EXISTS(SELECT 1 FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo'))").bind(JSON.stringify(config),now(),actor.id,old.payload,body.user_id),db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,'修改接收状态',?,?,?,? WHERE changes()>0").bind(id(),body.user_id,JSON.stringify({before,after:body.state,operation:before+' → '+body.state}),now(),actor.id)]);
+  const config=JSON.parse(old.payload);let member=config.members.find((m:any)=>m.user_id===body.user_id);
+  const person=await db.prepare("SELECT id,trade_scopes FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo')").bind(body.user_id).first<any>();
+  if(!person)throw new Problem('只能设置已启用业务人员的接收状态');
+  if(!member&&(body.state!=='参与'||!JSON.parse(person.trade_scopes).some((s:string)=>['domestic','foreign'].includes(s))))throw new Problem('加入接收名单前，请先设置内贸或外贸范围');
+  if(member?.state===body.state)return {ok:true};
+  const before=member?.state||'未加入分配名单';if(!member){member={user_id:body.user_id,state:body.state,share:0};config.members.push(member);}else member.state=body.state;
+  const result=await db.batch([db.prepare("UPDATE crm_allocation_configs SET payload=?,updated=?,updated_by=? WHERE scope='all' AND payload=? AND EXISTS(SELECT 1 FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo') AND (?=0 OR EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value IN ('domestic','foreign'))))").bind(JSON.stringify(config),now(),actor.id,old.payload,body.user_id,before==='未加入分配名单'?1:0),db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,'修改接收状态',?,?,?,? WHERE changes()>0").bind(id(),body.user_id,JSON.stringify({before,after:body.state,operation:before+' → '+body.state}),now(),actor.id)]);
   if(!result[0].meta.changes)throw new Problem('接收名单或账号状态已更新，请刷新后重试',409);return {ok:true};
  }
  if(path==='allocation/management/policy'){

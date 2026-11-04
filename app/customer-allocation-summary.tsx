@@ -1,0 +1,5 @@
+'use client';
+import './customer-allocation-summary.css';
+export default function CustomerAllocationSummary({summary}:{summary:any}){
+ return <section className="panel mw-allocation-summary"><div className="section-heading"><h2>业务员客户分配</h2><span className="small muted">{summary.date} · 北京时间</span></div><p className="small muted">按客户的客资市场分组；每位业务员接收的客户去重，转交后保留接收记录。历史归属同步及流程演练不计入。</p><div className="customer-allocation-markets">{(summary.markets||[]).map((group:any)=><section key={group.market} aria-label={group.market+'客户分配'}><h3>{group.market}</h3><div className="table-wrap"><table aria-label={group.market+'当天当月累计分配'}><thead><tr><th scope="col">业务员</th><th scope="col">当天</th><th scope="col">当月</th><th scope="col">累计</th></tr></thead><tbody>{group.rows.map((r:any)=><tr key={r.id}><th scope="row">{r.name}{!r.active&&<small>已停用</small>}</th><td>{r.today}</td><td>{r.month}</td><td>{r.cumulative}</td></tr>)}</tbody><tfoot><tr><th scope="row">合计</th><td>{group.today}</td><td>{group.month}</td><td>{group.cumulative}</td></tr></tfoot></table></div>{!group.rows.length&&<p className="small muted">当前范围暂无接收记录。</p>}</section>)}</div></section>;
+}

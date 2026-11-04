@@ -6,7 +6,7 @@ const {customerAllocationSummary}=await import(moduleURL('lib/customer-allocatio
 const {salesWorkflowEndpoint}=await import(moduleURL('lib/sales-workflow-server.ts'));
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
-const db=database(sql),admin={id:'admin',role:'admin'},a={id:'a',role:'sales'};
+const db=database(sql),admin={id:'admin',role:'admin'},a={id:'a',role:'sales',trade_scopes:['domestic','foreign']};
 for(const [id,name,role,active] of [['admin','管理员','admin',1],['a','A','sales',1],['b','B','sales',1],['zero','A','sales',1],['inactive','停用业务员','sales',0],['ceo','老板','ceo',1],['manager','主管','management',1],['follow','跟单','followup',1]])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,?,?)').run(id,id,name,role,'unused',active,'2026-01-01');
 function lead(id,owner='a',extra={}){sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,original_owner,detail,fingerprint,created,review,cohort) VALUES(?,?,'Meta',?,?,?,?,?,?,?)").run(id,id,owner,extra.original_owner||'',JSON.stringify(extra.detail||{}),id,'2026-01-01',extra.review||0,extra.cohort||'new');}
 function assign(id,leadId,owner,date,policy='equal-global-v1'){sql.prepare('INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES(?,?,?,?,?,?)').run(id,leadId,'admin',owner,date,policy);}
@@ -23,6 +23,8 @@ lead('inactive','inactive');assign('inactive','inactive','inactive','2026-11-02T
 lead('prior-only');assign('prior-only','prior-only','a','2026-10-31T15:59:59Z');
 lead('month-start','b');assign('month-start','month-start','b','2026-10-31T16:00:00Z');
 assign('prior-repeat','boundary','a','2026-10-31T15:59:59Z');
+sql.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo'); UPDATE crm_users SET trade_scopes='[\"domestic\"]' WHERE id='zero'; UPDATE crm_leads SET market=CASE WHEN id IN ('past','transfer','inactive') THEN '内贸' ELSE '外贸' END");
+sql.exec(`UPDATE crm_leads SET market='待确认',detail='{"客资市场":"外贸"}' WHERE id='boundary'`);
 const snapshot=()=>JSON.stringify(['crm_users','crm_leads','crm_assignments','crm_notes'].map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY id').all()));
 const before=snapshot(),changes=sql.prepare('SELECT total_changes() n').get().n;
 const summary=await customerAllocationSummary(db,admin,'2026-11-02'),byId=id=>summary.rows.find(r=>r.id===id);
@@ -38,7 +40,11 @@ assert(!byId('admin'));assert(!byId('follow'));
 const own=await customerAllocationSummary(db,a,'2026-11-02');assert.equal(own.rows.length,1);assert.equal(own.rows[0].id,'a');assert.equal(own.today,2);assert.equal(own.month,4);assert.equal(own.cumulative,5);
 const get=(user,path='http://test/?owner=b')=>salesWorkflowEndpoint(db,user,user,'sales-management/customers','GET',{},new URL(path));
 const response=await get(a);assert.equal(response.allocationSummary.rows.length,1);assert.equal(response.allocationSummary.rows[0].id,'a');assert.equal(response.rows.length,0);
-const management=await get(admin);assert.deepEqual(management.allocationSummary,await customerAllocationSummary(db,admin));
+const management=await get(admin,'http://test/');const {markets,...legacySummary}=management.allocationSummary;assert.deepEqual(legacySummary,await customerAllocationSummary(db,admin));assert.deepEqual(markets.map(m=>m.market),['内贸','外贸']);
+assert(!management.overview.markets.some(m=>m.name==='待确认'),'overview recognizes legacy confirmed market labels like the list filter');
+const domestic=await customerAllocationSummary(db,admin,'2026-11-02','内贸'),foreign=await customerAllocationSummary(db,admin,'2026-11-02','外贸');assert.deepEqual([domestic.today,domestic.month,domestic.cumulative],[2,4,4]);assert.deepEqual([foreign.today,foreign.month,foreign.cumulative],[2,3,4]);assert.equal(domestic.rows.find(r=>r.id==='a').cumulative,2);assert(domestic.rows.some(r=>r.id==='zero'));assert(!foreign.rows.some(r=>r.id==='zero'));for(const key of ['today','month','cumulative'])assert.equal(domestic[key]+foreign[key],summary[key]);
+const ownDomestic=await customerAllocationSummary(db,a,'2026-11-02','内贸');assert.equal(ownDomestic.cumulative,2,'transferred customer receipt remains with original recipient');assert(ownDomestic.rows.every(r=>r.id==='a'));
+const restricted=await get({id:'scoped',role:'management',trade_scopes:['foreign'],permissions:{customers_all:true}},'http://test/');assert.deepEqual(restricted.allocationSummary.markets.map(m=>m.market),['外贸']);
 await assert.rejects(get({id:'follow',role:'followup'}),e=>e.status===403);
 const empty=await customerAllocationSummary(db,{id:'missing',role:'sales'},'2026-11-02');assert.deepEqual(empty.rows,[]);assert.equal(empty.today,0);assert.equal(empty.month,0);
 assert.equal(snapshot(),before);assert.equal(sql.prepare('SELECT total_changes() n').get().n,changes);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
