@@ -104,3 +104,8 @@
 :root .office-app .workspace .confirmed-allocation .op-execution summary span{float:right}
 @media(max-width:1050px){:root .office-app .workspace .confirmed-allocation .op-board-toolbar{align-items:flex-start;flex-direction:column;gap:12px}}
 @media(max-width:600px){:root .office-app .workspace .confirmed-allocation .op-board-controls{align-items:flex-start;flex-direction:column;gap:8px}:root .office-app .workspace .confirmed-allocation .op-execution summary{flex-wrap:wrap;gap:8px}}
+
+/* Keep original form columns readable while long messages wrap in their own cell. */
+.confirmed-allocation .op-form-preview{min-width:1040px;table-layout:auto}
+.confirmed-allocation .op-form-preview :is(th,td){vertical-align:top}
+.confirmed-allocation .op-form-preview .op-form-message{min-width:260px;max-width:480px;white-space:pre-wrap;overflow-wrap:anywhere}

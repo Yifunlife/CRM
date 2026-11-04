@@ -14,7 +14,7 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
  const known=new Set(submissions.results.map(s=>s.id)),seen=new Set<string>(),rows:any[]=[],statements:D1PreparedStatement[]=[],newIds:string[]=[];
  for(let i=0;i<body.rows.length;i++){
   const detail=Object.fromEntries(Object.entries(body.rows[i]||{}).map(([k,v])=>[clean(k,100),clean(v)])),name=clean(detail['客户名称']||detail.name,200),phone=clean(detail['联系方式']||detail.phone,100),email=clean(detail['邮箱']||detail.email,200),pk=phoneKey(phone),ek=emailKey(email),original=clean(detail['分配业务员'],80),market=body.form_source==='domestic'?'内贸':['内贸','外贸'].includes(detail['客资市场'])?detail['客资市场']:'待确认';
-  const entered=clean(detail['录入日期'],100)||at,date=new Date(entered.replace(/\//g,'-')),enteredDay=Number.isFinite(date.getTime())?date.toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):'',today=new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
+  const entered=clean(detail['录入日期'],100)||at,date=new Date(entered.replace(/\//g,'-')),enteredDay=/^\d{4}[-/年]/.test(entered)&&Number.isFinite(date.getTime())?date.toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):'',today=new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
   const fingerprint='manual-form:'+await digest(JSON.stringify([source,Object.keys(detail).sort().map(k=>[k,detail[k]])])),keys=[pk&&'p:'+pk,ek&&'e:'+ek].filter(Boolean) as string[];
   const reviewKey='manual-form:'+await digest(fingerprint+':review');let result='',kind='new',target:any=null;
   if(known.has(fingerprint)||known.has(reviewKey)){result='已处理过的记录，跳过';kind='duplicate';}
@@ -30,7 +30,7 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
    else if(enteredDay<'2026-11-01'){kind='historical';result='历史客资，保留资料，不进入新增分配';}
    else{result=original?'保留原负责人，不进入新增分配':'新增客资，进入规则分配';}
   }
-  keys.forEach(k=>seen.add(k));known.add(fingerprint);const row={name,market,kind,result,phone,email,owner_name:target?users.results.find(u=>u.id===target.owner_id)?.name||target.original_owner||'待分配':original};rows.push(row);
+  keys.forEach(k=>seen.add(k));known.add(fingerprint);const row={name,market,kind,result,phone,email,entered:detail['录入日期']||'',requirement:detail['项目需求描述']||'',owner_name:target?users.results.find(u=>u.id===target.owner_id)?.name||target.original_owner||'待分配':original};rows.push(row);
   if(body.preview===true||kind==='duplicate')continue;
   const raw=JSON.stringify({...detail,'客资市场':market,'来源平台':detail['来源平台']||(body.form_source==='whatsapp'?'WhatsApp':'内贸表单')});
   if(kind==='review'){
