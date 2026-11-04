@@ -1,7 +1,7 @@
 import {customerProfile} from '../customer-profile';
 import {customerMarket} from '../operations-dashboard';
 import {confirmedAllocationImport} from '../allocation-confirmed-import';
-import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS,customerOwnerEligible} from '../allocation-intake';
+import {prepareAllocationImport,ALLOCATION_ACCOUNTS,FOREIGN_INTAKE_CHANNELS,customerOwnerEligible,customerOwnerName} from '../allocation-intake';
 import { BUSINESS_SCOPES } from '../allocation';
 import { allocationWeights,distribute } from '../allocation-server';
 import { syncAssignments } from '../assignment-sync';
@@ -44,7 +44,7 @@ export async function customerImport({db,req,path,write,body,user,actor}:ApiCont
     if(fingerprints.has(fingerprint)){skipped++;if(previewRows.length<8)previewRows.push({...detail,result:"重复记录，跳过"});continue;}fingerprints.add(fingerprint);
     const pk=phoneKey(phone),ek=emailKey(email),review=(pk && phones.has(pk)) || (ek && emails.has(ek)) || (wk&&wechats.has(wk)) ? 1:0;
     if(pk)phones.add(pk);if(ek)emails.add(ek);if(wk)wechats.add(wk);if(review)reviewed++;
-    const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>u.name===original&&customerOwnerEligible(u,customerMarket({detail,country:detail['所在国家/地区'],source:body.source,business_scope:businessScope})));
+    const original=clean(detail["分配业务员"],80),matches=allUsers.filter((u:any)=>customerOwnerName(u.name)===customerOwnerName(original)&&customerOwnerEligible(u,customerMarket({detail,country:detail['所在国家/地区'],source:body.source,business_scope:businessScope})));
     const owner = original && matches.length===1 ? matches[0].id : null;if(original&&!owner)unmatched++;
     if(previewRows.length<8)previewRows.push({...detail,result:review?"相同联系方式，待核查":original?(owner?"保留原负责人":"原负责人待匹配"):"新增待分配"});
     const old=detail["跟进状态"],status=STATUSES.includes(old)?old:old==="已联系"?"已联系待回复":old==="在沟通"?"正在沟通":"待首次联系";

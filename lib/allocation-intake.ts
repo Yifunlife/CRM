@@ -33,3 +33,6 @@ export function prepareAllocationImport(user:any,actor:any,body:any){
 export function allocationRecipientMarket(user:any,market:string){try{const scopes=typeof user.trade_scopes==='string'?JSON.parse(user.trade_scopes):user.trade_scopes;return Array.isArray(scopes)&&scopes.includes(market==='内贸'?'domestic':market==='外贸'?'foreign':'');}catch{return false;}}
 
 export function customerOwnerEligible(user:any,market?:string){return ['sales','management','ceo'].includes(user.role)||user.role==='followup'&&(market?allocationRecipientMarket(user,market):['内贸','外贸'].some(m=>allocationRecipientMarket(user,m)));}
+
+// Winnie confirmed that the source-sheet label 方总 refers to 方星球.
+export function customerOwnerName(value:unknown){const name=String(value||'').trim().toLowerCase();return name==='方总'?'方星球':name;}

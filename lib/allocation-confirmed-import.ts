@@ -1,5 +1,5 @@
 import {importCustomerGrade} from './contact-kind';
-import {customerOwnerEligible} from './allocation-intake';
+import {customerOwnerEligible,customerOwnerName} from './allocation-intake';
 import {customerOrigin} from './customer-origin';
 import {customerProfile} from './customer-profile';
 import {clean,digest,emailKey,id,now,phoneKey,wechatKey} from './crm';
@@ -16,7 +16,7 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
   db.prepare("SELECT id FROM crm_form_submissions WHERE id LIKE 'manual-form:%' UNION SELECT id FROM crm_customer_pool WHERE id LIKE 'manual-form:%'").all<any>()
  ]);
  const ownerKey=(value:string)=>value.trim().toLowerCase();
- const matchOwners=(value:string)=>{const key=ownerKey(value),exact=users.results.filter(u=>ownerKey(u.name)===key||ownerKey(u.username)===key);return exact.length?exact:/^[a-z]+$/.test(key)?users.results.filter(u=>ownerKey(u.name).split(/\s+/)[0]===key):[];};
+ const matchOwners=(value:string)=>{const key=customerOwnerName(value),exact=users.results.filter(u=>ownerKey(u.name)===key||ownerKey(u.username)===key);return exact.length?exact:/^[a-z]+$/.test(key)?users.results.filter(u=>ownerKey(u.name).split(/\s+/)[0]===key):[];};
  users.results=users.results.filter(u=>customerOwnerEligible(u,body.form_source==='domestic'?'内贸':'外贸'));
  const known=new Set(submissions.results.map(s=>s.id)),seen=new Set<string>(),rows:any[]=[],statements:D1PreparedStatement[]=[];
  for(let i=0;i<body.rows.length;i++){

@@ -18,5 +18,10 @@ const page=await customerPage(db,ceo,new URL('https://fixture.invalid/?'+new URL
 assert.equal(sql.prepare("SELECT role FROM crm_users WHERE id='fd'").get().role,'followup');assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,0);
 // Multiple unnamed customers with different phones are never merged by the placeholder.
 r=await importForm(db,ceo,ceo,{...body,rows:[{'联系方式':'13800000103','录入日期':'2026-11-01'}]});assert.equal(r.inserted,1);assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_leads WHERE name='暂无'").get().n,3);
+// The user-confirmed source-sheet alias preserves its raw label and resolves one active account.
+sql.prepare("INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES('fang','fang','方星球','ceo','unused','[\"domestic\",\"foreign\"]','2026-01-01')").run();
+r=await importForm(db,ceo,ceo,{...body,rows:[{'联系方式':'13800000104','分配业务员':'方总'},{'分配业务员':'方总'}]});assert.equal(r.inserted,1);assert.equal(r.reviewed,1);
+const fang=sql.prepare("SELECT owner_id,detail FROM crm_leads WHERE phone='13800000104'").get();assert.equal(fang.owner_id,'fang');assert.equal(JSON.parse(fang.detail)['分配业务员'],'方总');
+const fangPage=await customerPage(db,ceo,new URL('https://fixture.invalid/?owner_id=fang&market='+encodeURIComponent('内贸')));assert.equal(fangPage.total,2);assert(fangPage.rows.some(row=>row.intake&&row.owner_pending&&row.owner_id==='fang'));
 assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
 console.log('PASS: followup owners in both scoped markets, preserved roles/permissions, original-owner filtering for pending rows without assigning them, 暂无 names and unique-phone identity, no-write preview and no allocation.');
