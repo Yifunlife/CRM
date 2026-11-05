@@ -58,6 +58,6 @@ const auditTables=['crm_workflow_audit','crm_attribution_events','crm_lead_outco
 const auditSnapshot=()=>auditTables.map(t=>JSON.stringify(sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
 const auditBefore=auditSnapshot(),twoBefore=row('two');
 const racingDb={...db,batch:async statements=>{sql.prepare("UPDATE crm_leads SET owner_id='other',grade='D' WHERE id='one'").run();return db.batch(statements);}};
-await assert.rejects(update(racingDb,sales,sales,{changes:[change('one',{grade:'VIP',status:'已结束',loss_reason:LOSS_REASONS[0],loss_note:'不应保存'}),change('two',{grade:'VIP'})]}),e=>e.status===409);
+await assert.rejects(update(racingDb,sales,sales,{changes:[change('one',{grade:'B',status:'已结束',loss_reason:LOSS_REASONS[0],loss_note:'不应保存'}),change('two',{grade:'B'})]}),e=>e.status===409);
 assert.equal(row('one').owner_id,'other');assert.equal(row('one').grade,'D');assert.deepEqual(row('two'),twoBefore);assert.deepEqual(auditSnapshot(),auditBefore);
 console.log('PASS: interleaved reassignment rejects the entire batch with 409; no partial classification, status, outcome or audit writes.');

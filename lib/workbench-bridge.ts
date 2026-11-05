@@ -1,6 +1,6 @@
 import {customerMarket} from './operations-dashboard';
 import {customerAnalysisEndpoint} from './customer-analysis';
-import {CONTACT_GRADES,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
+import {contactGrades,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {ensureCustomerCode} from './customer-code';
 import {customerProfile,validateCustomerProfile} from './customer-profile';
 import {queueFirstContacts,autoContactAllowed} from './auto-first-contact';
@@ -168,7 +168,7 @@ async function uploadNewWorkbenchClients(db:D1Database,owner:string,clients:any[
  const person:any=await db.prepare('SELECT name FROM crm_users WHERE id=? AND active=1').bind(owner).first();
  for(const desktop of ids){
   const c=clients.find(c=>c.id===desktop),p=phoneKey(c.whatsapp),e=emailKey(c.email),reject=(reason:string)=>conflicts.push({desktop_id:desktop,reason});
-  if(desktop.startsWith('crm-')||!c.name||c.grade&&!CONTACT_GRADES.includes(c.grade)){reject('本地客户资料需核对，未新建');continue;}
+  if(desktop.startsWith('crm-')||!c.name||c.grade&&!contactGrades(customerMarket(c)).includes(c.grade)){reject('本地客户资料需核对，未新建');continue;}
   if(p&&!/^\d{8,15}$/.test(p)||e&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){reject('本地联系方式需核对，未新建');continue;}
   const expected='wb-'+await digest(owner+':'+desktop),priorLink=links.find(l=>l.owner_id===owner&&l.desktop_id===desktop);
   const exact=contacts.find(l=>l.id===expected),matches=contacts.filter(l=>p&&phoneKey(l.phone)===p||e&&emailKey(l.email)===e);
@@ -228,7 +228,7 @@ async function synchronizeWorkbench(db:D1Database,owner:string,input:any){
    if(base&&typeof base[key]==='string'){
     if(local!==base[key]&&remote!==base[key]&&local!==remote){conflicts.push({lead_id:lead.id,desktop_id:client.id,field:key,local,remote,reason:'两端均已修改，请核对'});continue;}
     if(local!==base[key]&&remote===base[key]){
-     if(key==='name'&&!local||key==='grade'&&local&&!CONTACT_GRADES.includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
+     if(key==='name'&&!local||key==='grade'&&local&&!contactGrades(customerMarket(lead)).includes(local)||key==='nextContact'&&local&&!/^\d{4}-\d{2}-\d{2}$/.test(local)){conflicts.push({lead_id:lead.id,field:key,reason:'本地字段需核对'});continue;}
      if(['whatsapp','email'].includes(key)&&local&&(await db.prepare('SELECT id,phone,email FROM crm_leads WHERE id<>?').bind(lead.id).all<any>()).results.some(r=>key==='whatsapp'?phoneKey(r.phone)===phoneKey(local):emailKey(r.email)===emailKey(local))){conflicts.push({lead_id:lead.id,field:key,reason:'电话或邮箱重复，请核对'});continue;}
      const changed:any=await db.prepare(`UPDATE crm_leads SET ${column}=? WHERE id=? AND owner_id=? AND ${column}=? RETURNING id`).bind(local,lead.id,owner,remote).first();
      if(changed){values[key]=local;lead[column]=local;if(key==='grade')await cancelColleagueFirstContacts(db,lead.id).run();}else conflicts.push({lead_id:lead.id,field:key,reason:'CRM资料刚被修改，已保留两端内容'});

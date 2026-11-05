@@ -36,3 +36,7 @@ export function customerOwnerEligible(user:any,market?:string){return ['sales','
 
 // Winnie confirmed that the source-sheet label 方总 refers to 方星球.
 export function customerOwnerName(value:unknown){const name=String(value||'').trim().toLowerCase();return name==='方总'?'方星球':name;}
+
+// 方星球仅排除内贸自动分配；原归属和外贸接收保持不变。
+export const DOMESTIC_AUTO_EXCLUDED_USER='b9bde8d1-8f87-4981-956b-128423cd6651';
+export function automaticAllocationRecipient(user:any,market:string){return allocationRecipientMarket(user,market)&&(market==='内贸'?user.id!==DOMESTIC_AUTO_EXCLUDED_USER&&['sales','management','ceo','followup'].includes(user.role):['sales','management','ceo'].includes(user.role));}

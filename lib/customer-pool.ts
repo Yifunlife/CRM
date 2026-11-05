@@ -1,4 +1,4 @@
-import {CONTACT_GRADES} from './contact-kind';
+import {contactGrades} from './contact-kind';
 import {customerProfile} from './customer-profile';
 import {customerMarket} from './operations-dashboard';
 import {SOURCE_KINDS} from './attribution';
@@ -11,7 +11,7 @@ import {enquiryNotification} from './lead-notifications';
 const manager=(user:any)=>can(user,'customers_all')&&can(user,'leads_allocate');
 const day=(at:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
-function fields(input:any):Record<string,string>{const market=clean(input?.market,20);if(market&&!['内贸','外贸','待确认'].includes(market))fail('请选择内贸或外贸');const data=Object.fromEntries(['name','phone','email','country','province','city','wechat','grade','source_account','preferred_method','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));data.name=data.name||'暂无';if(data.grade&&!CONTACT_GRADES.includes(data.grade))fail('请选择有效客户等级');const platform=clean(input?.platform,20).toLowerCase();if(platform&&!['fb','ig','facebook','instagram'].includes(platform))fail('请选择Facebook或Instagram平台');return {...data,...(market?{market}:{}),...(platform?{platform}:{} )};}
+function fields(input:any):Record<string,string>{const market=clean(input?.market,20);if(market&&!['内贸','外贸','待确认'].includes(market))fail('请选择内贸或外贸');const data=Object.fromEntries(['name','phone','email','country','province','city','wechat','grade','source_account','preferred_method','requirement','summary','business_scope','source_kind','campaign_id','attribution_reason'].map(key=>[key,clean(input?.[key],['requirement','summary','attribution_reason'].includes(key)?4000:200)]));data.name=data.name||'暂无';if(data.grade&&!contactGrades(market).includes(data.grade))fail('请选择有效客户等级');const platform=clean(input?.platform,20).toLowerCase();if(platform&&!['fb','ig','facebook','instagram'].includes(platform))fail('请选择Facebook或Instagram平台');return {...data,...(market?{market}:{}),...(platform?{platform}:{} )};}
 function event(db:D1Database,key:string,actor:string,kind:string,payload:any){return db.prepare('INSERT INTO crm_pool_events(id,intake_id,actor_id,kind,payload,created) SELECT ?,?,?,?,?,? WHERE changes()>0').bind(id(),key,actor,kind,JSON.stringify(payload),now());}
 async function matches(db:D1Database,data:any){
  const rows=(await db.prepare('SELECT l.id,l.name,l.phone,l.email,l.detail,l.owner_id,l.original_owner,l.review,u.name AS owner_name,u.active AS owner_active FROM crm_leads l LEFT JOIN crm_users u ON u.id=l.owner_id').all<any>()).results;

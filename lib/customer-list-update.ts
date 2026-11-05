@@ -1,6 +1,7 @@
+import {customerMarket} from './operations-dashboard';
 import {authorizedLead,boardMarkets,canViewAllMarkets,clean,id,now,STATUSES} from './crm';
 import {canEditCustomerProfile} from './customer-profile';
-import {CONTACT_GRADES,cancelColleagueFirstContacts} from './contact-kind';
+import {contactGrades,cancelColleagueFirstContacts} from './contact-kind';
 import {customerChange} from './customer-changes';
 import {validateLeadFollowup} from './workflow-server';
 import {closingOutcome} from './attribution-server';
@@ -27,7 +28,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
    if(!canViewAllMarkets(user)&&!boardMarkets(user).includes(patch.market))throw new Problem('没有此客资市场的维护权限',403);
    if(change.base.market!==lead.market)throw new Problem('客资市场已变化，请刷新后重试',409);
   }
-  if(Object.hasOwn(patch,'grade')&&!['',...CONTACT_GRADES].includes(patch.grade))throw new Problem('请选择有效客户分类');
+  if(Object.hasOwn(patch,'grade')&&!['',...contactGrades(patch.market||customerMarket(lead))].includes(patch.grade))throw new Problem('请选择有效客户分类');
   if(Object.hasOwn(patch,'contract_number')&&(typeof patch.contract_number!=='string'||patch.contract_number.trim().length>200))throw new Problem('合同号最多200字');
   const detail=JSON.parse(lead.detail||'{}');
   const dealCount:any=await db.prepare('SELECT COUNT(*) n FROM crm_deals WHERE lead_id=? AND cancelled=0').bind(lead.id).first();

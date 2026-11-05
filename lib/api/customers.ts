@@ -1,5 +1,6 @@
+import {customerMarket} from '../operations-dashboard';
 import {updateCustomerList} from '../customer-list-update';
-import {CONTACT_GRADES,cancelColleagueFirstContacts} from '../contact-kind';
+import {contactGrades,cancelColleagueFirstContacts} from '../contact-kind';
 import {customerInquiry} from '../customer-inquiry';
 import {customerPage} from '../customer-page';
 import { assignmentCategory } from '../assignment-categories';
@@ -37,9 +38,9 @@ export async function customerRecords({db,req,path,write,body,user,actor}:ApiCon
    await db.batch([...outcomeStatements,customerChange(db,actor,lead.id,'status',body.status,clean(body.content)),db.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,?,?,?,?)").bind(noteId,lead.id,actor.id,clean(body.content)+(body.status==='暂停跟进'?'\n暂停原因：'+clean(body.pause_reason):''),clean(body.method,40),clean(body.next_step),recordedAt),...meetingStatements,db.prepare("UPDATE crm_leads SET status=?,next_date=?,last_contact=? WHERE id=?").bind(body.status,date,now(),lead.id)]);return json({ok:true});
   }
   if (path === "grade" && req.method === "POST") {
-   const lead: any = await db.prepare("SELECT owner_id FROM crm_leads WHERE id=?").bind(body.id).first();
+   const lead: any = await db.prepare("SELECT * FROM crm_leads WHERE id=?").bind(body.id).first();
    if (!lead || !authorizedLead(user,lead)) throw new Problem("客资不存在或无权操作",404);
-   if (!["",...CONTACT_GRADES].includes(body.grade)) throw new Problem("请选择有效客户等级或同事");
+   if (!["",...contactGrades(customerMarket(lead))].includes(body.grade)) throw new Problem("请选择有效客户等级或同事");
    await db.batch([customerChange(db,actor,body.id,'grade',body.grade),db.prepare("UPDATE crm_leads SET grade=? WHERE id=?").bind(body.grade,body.id),cancelColleagueFirstContacts(db,body.id)]);return json({ok:true});
   }
 }
