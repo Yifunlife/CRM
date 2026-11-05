@@ -1,5 +1,10 @@
 .management-workspace .customer-allocation-markets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
-.management-workspace .customer-allocation-markets>section { min-width:0; }
+.management-workspace .customer-allocation-markets>section { min-width:0; padding:12px; border:1px solid var(--allocation-market-color,var(--line)); border-radius:8px; background:transparent; }
+.management-workspace .customer-allocation-markets>[data-market="内贸"] { --allocation-market-color:#17634b; }
+.management-workspace .customer-allocation-markets>[data-market="外贸"] { --allocation-market-color:#0f6cbd; }
+.management-workspace .customer-allocation-markets>section>h3 { color:var(--allocation-market-color,var(--ink)); }
+:root .office-app .workspace .management-workspace .customer-allocation-markets :is(thead,tbody) :is(th,td) { border-bottom:1px solid var(--allocation-market-color,var(--line)); }
+:root .office-app .workspace .management-workspace .customer-allocation-markets tfoot :is(th,td) { border-top-color:var(--allocation-market-color,var(--line)); }
 .management-workspace .customer-allocation-markets>section:only-child { grid-column:1/-1; }
 .management-workspace .customer-allocation-markets h3 { margin:0 0 8px; font-size:14px; }
 .management-workspace .customer-allocation-markets .table-wrap { max-width:100%; }
