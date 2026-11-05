@@ -113,3 +113,21 @@ sqlite.prepare("UPDATE crm_leads SET grade='Yifun Staff' WHERE id='revoked-colle
 assert.equal((await bridgeDeviceEndpoint(db,req,{})).command,null);
 assert.equal(sqlite.prepare("SELECT state FROM crm_workbench_commands WHERE json_extract(payload,'$.crm_lead_id')='revoked-colleague'").get().state,'failed');
 console.log('PASS: web colleague classification survives stale sync; queued colleague first contact cannot be dispatched.');
+
+const followupConfig=JSON.parse(sqlite.prepare("SELECT value FROM crm_cloud_settings WHERE id='auto-first-contact:mark'").get().value);
+sqlite.prepare("UPDATE crm_cloud_settings SET value=? WHERE id='auto-first-contact:mark'").run(JSON.stringify({...followupConfig,followup_24h:true,whatsapp_daily_limit:20,email_daily_limit:10}));
+const firstAt=new Date(Date.now()-86401000).toISOString();
+sqlite.prepare("INSERT INTO crm_leads(id,name,phone,email,owner_id,source,detail,fingerprint,created,cohort,status) VALUES('followup-customer','Followup','16145550011','followup@example.invalid','mark','Meta','{}','followup-customer',?,'new','已联系待回复')").run(firstAt);
+sqlite.prepare("INSERT INTO crm_workbench_links VALUES('followup-customer','mark','followup-desktop',?,'mark')").run(firstAt);
+sqlite.prepare("INSERT INTO crm_notes(id,lead_id,user_id,method,content,next_step,created) VALUES('followup-first','followup-customer','mark','WhatsApp','线上发送已确认｜receipt','',?)").run(firstAt);
+await bridgeDeviceEndpoint(db,req,{heartbeat:true,status:{whatsapp:true,email:true,autoFirstContact:true,autoFollowup24h:true}});
+const snap=JSON.parse(sqlite.prepare("SELECT payload FROM crm_workbench_snapshots WHERE owner_id='mark'").get().payload);snap.clients.push({id:'followup-desktop',name:'Followup'});sqlite.prepare("UPDATE crm_workbench_snapshots SET payload=? WHERE owner_id='mark'").run(JSON.stringify(snap));
+const followupJob=sqlite.prepare("SELECT * FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_followup_24h')=1").get();assert(followupJob);
+assert.equal((await bridgeDeviceEndpoint(db,req,{})).command.id,followupJob.id);
+assert.equal((await bridgeDeviceEndpoint(db,req,{followup_check:{id:followupJob.id}})).allowed,true);
+const followupResult={id:followupJob.id,state:'done',value:{status:'sent',messageId:'followup-mail-receipt',text:'Approved message',sentAt:new Date().toISOString()}};
+await bridgeDeviceEndpoint(db,req,{result:followupResult});await bridgeDeviceEndpoint(db,req,{result:followupResult});
+const updated=sqlite.prepare("SELECT * FROM crm_leads WHERE id='followup-customer'").get();assert(updated.next_date);assert.equal(JSON.parse(updated.detail)._auto_followup_24h.state,'sent');
+assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_notes WHERE id=?').get(followupJob.id+':result:done').n,1);
+assert.equal((await bridgeDeviceEndpoint(db,req,{followup_check:{id:followupJob.id}})).allowed,false);
+console.log('PASS: real bridge followup heartbeat, single dispatch, pre-send eligibility, receipt-confirmed CRM contact and 7 day date, replay-safe audit and completed-job rejection.');

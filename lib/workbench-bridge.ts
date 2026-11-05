@@ -3,7 +3,7 @@ import {customerAnalysisEndpoint} from './customer-analysis';
 import {contactGrades,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {ensureCustomerCode} from './customer-code';
 import {customerProfile,validateCustomerProfile} from './customer-profile';
-import {queueFirstContacts,autoContactAllowed} from './auto-first-contact';
+import {queueFirstContacts,autoContactAllowed,autoContactQuota,recordAutoFollowupResult} from './auto-first-contact';
 import {readJson,storeJson} from './object-storage';
 import {digest,id,clean,phoneKey,emailKey,now,can} from './crm';
 import {AllocationError} from './allocation-server';
@@ -87,12 +87,13 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  if(body.history||body.sync){const policy:any=await db.prepare('SELECT value FROM crm_cloud_settings WHERE id=?').bind('workbench-sync:'+device.owner_id).first();manualSummary=!!policy&&JSON.parse(policy.value).chat_upload==='manual_summary';}
  if(body.history&&manualSummary)throw new AllocationError('日常聊天上传已关闭，请在工作台点击AI整理重点并上传CRM',403);
  if(body.sync&&manualSummary)body={...body,sync:{...body.sync,full_history:false,clients:Array.isArray(body.sync.clients)?body.sync.clients.map((c:any)=>({...c,messages:[]})):body.sync.clients}};
+ if(body.followup_check){const job:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state='running'").bind(clean(body.followup_check.id,150),device.owner_id).first();return {allowed:!!job&&!!JSON.parse(job.payload).auto_followup_24h&&await autoContactAllowed(db,device.owner_id,JSON.parse(job.payload))};}
  if(body.contact_receipts)return synchronizeContactReceipts(db,device.owner_id,body.contact_receipts);
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
  if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
- if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({customerAnalysis:s.customerAnalysis===true,whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,error:clean(s.error,300)}),device.owner_id).run();}
+ if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({customerAnalysis:s.customerAnalysis===true,whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,autoFollowup24h:!!s.autoFollowup24h,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
   const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
@@ -120,6 +121,10 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
   if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&['send','material'].includes(completed.kind)){
    await recordOnlineContact(db,device.owner_id,completed.desktop_id,r.value.messageId?'message:'+JSON.parse(completed.payload).channel+':'+r.value.messageId:'command:'+completed.id,JSON.parse(completed.payload).channel,(JSON.parse(completed.payload).auto_first_contact?r.value.text:JSON.parse(completed.payload).text)||'已发送客户资料',false,timestamp);
   }
+  if(JSON.parse(completed.payload).auto_followup_24h){
+   if(r.value?.replyAt&&Number.isFinite(Date.parse(r.value.replyAt))&&Date.parse(r.value.replyAt)<=timestamp)await recordOnlineContact(db,device.owner_id,completed.desktop_id,'followup-reply:'+completed.id,r.value.replyChannel||'whatsapp','发送前检查确认客户已有回复',true,Date.parse(r.value.replyAt));
+   await recordAutoFollowupResult(db,device.owner_id,completed,r.state,r.value,new Date(timestamp).toISOString());
+  }
   if(r.state==='done'&&completed.kind==='conversation'&&Array.isArray(r.value?.messages)){
    const prior:any=await db.prepare("SELECT result FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind='conversation' AND state='done' AND id<>? AND json_extract(payload,'$.channel')=? ORDER BY updated DESC LIMIT 1").bind(device.owner_id,completed.desktop_id,completed.id,JSON.parse(completed.payload).channel).first();
    if(prior){const previous=await readJson(prior.result),known=new Set((previous.messages||[]).map((m:any)=>m.key)),anchor=(previous.messages||[]).filter((m:any)=>m.key).at(-1)?.key,anchorIndex=anchor?r.value.messages.findIndex((m:any)=>m.key===anchor):-1;
@@ -136,9 +141,10 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  await db.prepare("UPDATE crm_workbench_commands SET state='uncertain',result=?,updated=? WHERE owner_id=? AND state='running' AND updated<?").bind(JSON.stringify({error:'执行结果待核实，不会自动重发'}),timestamp,device.owner_id,timestamp-300000).run();
  if(body.heartbeat&&body.status?.autoFirstContact)await queueFirstContacts(db,device.owner_id);
  if(body.heartbeat||body.result)return {ok:true};
- const next:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 1").bind(device.owner_id).first();
+ const candidates=(await db.prepare("SELECT * FROM crm_workbench_commands WHERE owner_id=? AND state='queued' ORDER BY CASE WHEN kind='read' THEN 0 WHEN kind='unread' THEN 1 ELSE 2 END,created LIMIT 50").bind(device.owner_id).all<any>()).results;
+ let next:any;for(const candidate of candidates){const p=JSON.parse(candidate.payload);if(!p.auto_first_contact||await autoContactQuota(db,device.owner_id,p,candidate.id)){next=candidate;break;}}
  if(!next)return {command:null};
- try{await ownedDesktop(db,device.owner_id,next.desktop_id);const automatic=JSON.parse(next.payload);if(automatic.auto_first_contact&&!await autoContactAllowed(db,device.owner_id,automatic))throw new AllocationError('自动首联条件已变化',409);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch{await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
+ try{await ownedDesktop(db,device.owner_id,next.desktop_id);const automatic=JSON.parse(next.payload);if(automatic.auto_first_contact&&!await autoContactAllowed(db,device.owner_id,automatic))throw new AllocationError('自动首联条件已变化',409);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch(error){await recordAutoFollowupResult(db,device.owner_id,next,'failed',{error:error instanceof Error?error.message:'执行条件已变化'},new Date(timestamp).toISOString());await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
  const claimed:any=await db.prepare(`UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' AND (COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=json_extract(crm_workbench_commands.payload,'$.crm_lead_id') AND ${customerLeadSQL()})) RETURNING id`).bind(timestamp,next.id).first();
  return {command:claimed?{id:next.id,desktop_id:next.desktop_id,kind:next.kind,payload:JSON.parse(next.payload)}:null};
 }

@@ -4,8 +4,8 @@ export function nextStepReminders(home:any,work:any){
  const rows=new Map<string,any>(),contacts=new Map<string,any>((home.contact_reminders||[]).map((r:any)=>[r.id,r]));
  const add=(row:any)=>rows.set(row.id,row);
  for(const r of contacts.values()){
-  if(!['first','review'].includes(r.kind)&&!(r.kind==='alternate'&&r.actionable))continue;
-  add({id:'customer:'+r.id,category:'客户跟进',target:'customer',target_id:r.id,name:r.name,title:r.title,description:r.reason,date:r.due_at||'',label:r.kind==='review'?'联系资料待核对':r.kind==='alternate'?'已到联系时间':'首次联系',rank:r.kind==='alternate'?1:3});
+  if(!['first','review'].includes(r.kind)&&!(['alternate','followup'].includes(r.kind)&&r.actionable))continue;
+  add({id:'customer:'+r.id,category:'客户跟进',target:'customer',target_id:r.id,name:r.name,title:r.title,description:r.reason,date:r.due_at||'',label:r.kind==='review'?'联系资料待核对':['alternate','followup'].includes(r.kind)?'已到联系时间':'首次联系',rank:['alternate','followup'].includes(r.kind)?1:3});
  }
  for(const r of home.todos||[]){
   const contact=contacts.get(r.id);

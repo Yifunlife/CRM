@@ -22,5 +22,15 @@ const run=async(overrides={})=>{
  r=await run({client:{country:'GB',whatsapp:'07911123456'},payload:{country:'GB',recipient_key:'07911123456'}});assert.equal(r.sent,1);assert.equal(r.client.whatsapp,'+447911123456');
  await assert.rejects(run({client:{country:'GB',whatsapp:'12345'},payload:{country:'GB',recipient_key:'12345'}}),/国际格式/);
  await assert.rejects(run({args:{clients:()=>[{id:'duplicate',whatsapp:'16145551234'}]}}),/号码与其他客户重合/);
+ const followup={auto_followup_24h:true,first_at:new Date(Date.now()-86401000).toISOString(),channel:'email',recipient_key:'customer@example.invalid'};
+ const oldOutbound={outgoing:true,speaker:'Winnie Wu',channel:'whatsapp',timestamp:followup.first_at};
+ r=await run({payload:followup,args:{refreshFollowup:async()=>{},archive:()=>[oldOutbound],read:name=>name==='whatsapp-outbox.json'?[{clientId:'client',status:'sent'}]:[]}});assert.equal(r.mail,1,'prior WhatsApp success allows the email followup');
+ r=await run({payload:{...followup,channel:'whatsapp',recipient_key:'16145551234'},args:{refreshFollowup:async()=>{},archive:()=>[{...oldOutbound,channel:'email'}]}});assert.equal(r.sent,1,'prior email success allows the WhatsApp followup');
+ r=await run({payload:followup,args:{refreshFollowup:async()=>{},archive:()=>[oldOutbound,{outgoing:false,channel:'whatsapp',timestamp:new Date().toISOString(),text:'Reply'}]}});assert.equal(r.result.status,'skipped');assert(r.result.replyAt);assert.equal(r.mail,0);
+ r=await run({payload:followup,args:{refreshFollowup:async()=>{},read:name=>name==='crm-mail-outbox.json'?[{clientId:'client',status:'sent'}]:[]}});assert.equal(r.result.status,'skipped');assert.equal(r.mail,0,'a successful target channel is never repeated');
+ await assert.rejects(run({payload:followup}),/缺少跟进发送前检查/);
+ await assert.rejects(run({payload:{...followup,first_at:new Date().toISOString()},args:{refreshFollowup:async()=>{}}}),/尚未满24小时/);
+ await assert.rejects(run({payload:followup,args:{refreshFollowup:async()=>{throw Error('CRM已取消')}}}),/CRM已取消/);
+ let checks=0;r=await run({payload:followup,args:{refreshFollowup:async()=>{checks++}}});assert(checks>=2);assert.equal(r.mail,1,'reply and CRM state are rechecked by the actual sender');
  console.log('PASS: international numbers independent of country, national country completion, invalid number rejection, approved greeting/email, existing history/uncertainty/draft/owner guards; no real messages sent');
 })().catch(e=>{console.error(e);process.exitCode=1});
