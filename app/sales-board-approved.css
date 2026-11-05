@@ -3,8 +3,9 @@
 .office-app .workspace .sales-board-approved>section { margin-bottom:14px; }
 .office-app .workspace .sales-board-approved .so-market-people { margin-bottom:0; }
 :root .office-app .workspace .sales-board-approved .so-progress-people { margin-bottom:0; }
-.office-app .workspace .sales-board-approved .so-board-ranking { display:flex; align-items:center; gap:8px; margin:0; font-size:12px; color:var(--muted); }
-.office-app .workspace .sales-board-approved .so-board-ranking select { width:auto; font-size:13px; }
+.office-app .workspace .sales-board-approved #sales-team>.section-heading { margin-bottom:8px; }
+.office-app .workspace .sales-board-approved #sales-team>.section-heading h2 { margin:0; }
+.sales-board-approved #sales-team .so-market-heading { gap:4px 12px; margin-bottom:6px; }
 :root .office-app .workspace .sales-board-approved .so-board-person { display:block; min-height:0; padding:8px 0; }
 .sales-board-approved .so-board-person-heading { display:flex; gap:8px; align-items:center; width:100%; }
 .sales-board-approved .so-board-person-heading .so-board-rank { flex:0 0 18px; }
@@ -85,7 +86,6 @@
  .sales-board-approved .so-board-person-heading .so-progress-name { max-width:110px; }
  .sales-board-approved .so-board-person-heading>svg { flex-basis:12px; }
  .sales-board-approved .so-board-person-metrics { gap:4px 12px; }
- .sales-board-approved .so-board-ranking { flex-wrap:wrap; }
 }
 @media(max-width:480px) {
  .sales-board-approved .so-board-person-metrics { grid-template-columns:minmax(0,1fr); }
