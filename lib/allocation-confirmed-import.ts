@@ -7,12 +7,12 @@ import {customerProfile} from './customer-profile';
 import {clean,hasCustomerContact,digest,emailKey,id,now,phoneKey,wechatKey} from './crm';
 import {Problem} from './api/http';
 import {customerMarket} from './operations-dashboard';
-export function confirmedImportAllowed(user:any,actor:any,body:any){return user?.active!==0&&actor?.active!==0&&user?.id===actor?.id&&user?.role===actor?.role&&['operations','management','ceo','admin'].includes(user?.role)&&body.confirmed_flow===true&&body.allocation_management===true&&body.allocate===false&&['domestic','whatsapp'].includes(body.form_source);}
+export function confirmedImportAllowed(user:any,actor:any,body:any){return user?.active!==0&&actor?.active!==0&&user?.id===actor?.id&&user?.role===actor?.role&&['operations','management','ceo','admin'].includes(user?.role)&&body.confirmed_flow===true&&body.allocation_management===true&&body.allocate===false&&['domestic','whatsapp','website'].includes(body.form_source);}
 export async function confirmedAllocationImport(db:D1Database,user:any,actor:any,body:any){
  if(!confirmedImportAllowed(user,actor,body))throw new Problem('没有此表单导入权限',403);
  if(!Array.isArray(body.rows)||!body.rows.length||body.rows.length>3000)throw new Problem('每次导入1至3000条');
  const assignUnowned=body.assign_unowned===true,notifyExisting=body.notify_existing===true;
- const at=now(),source=body.form_source==='whatsapp'?'WhatsApp／其他':'内贸表单',batchId=id();
+ const website=body.form_source==='website',at=now(),source=website?'独立站':body.form_source==='whatsapp'?'WhatsApp／其他':'内贸表单',batchId=id();
  const [leads,users,submissions]=await Promise.all([
   db.prepare('SELECT id,name,phone,email,source,owner_id,original_owner,market,country,business_scope,detail FROM crm_leads').all<any>(),
   db.prepare("SELECT id,name,username,role,trade_scopes FROM crm_users WHERE active=1 AND role IN ('sales','ceo','management','followup')").all<any>(),
@@ -31,7 +31,7 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
   const reviewKey='manual-form:'+await digest(fingerprint+':review');let result='',kind='new',target:any=null;
   if(known.has(fingerprint)||known.has(reviewKey)){result='已处理过的记录，跳过';kind='duplicate';}
   else if(!notifyExisting&&keys.some(k=>seen.has(k))){result='表内重复，跳过';kind='duplicate';}
-  else if(!hasCustomerContact(phone,wechat)){result='无微信号和电话号码，已放弃';kind='discard';}
+  else if(!hasCustomerContact(phone,wechat)&&!(website&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ek))){result=website?'无有效邮箱、微信号和电话号码，已跳过':'无微信号和电话号码，已放弃';kind='discard';}
   else if(original&&!owner){result='原负责人未唯一匹配启用账号，待核查';kind='review';}
   else{
    const matches=leads.results.filter(l=>pk&&phoneKey(l.phone)===pk||ek&&emailKey(l.email)===ek||wk&&wechatKey(customerProfile(l).wechat)===wk||handle&&l.source==='WhatsApp／其他'&&ownerKey(l.name)===handle);
@@ -47,11 +47,11 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
   const leadId=['new','historical','owned'].includes(kind)?id():'';
   if(leadId&&notifyExisting)leads.results.push({id:leadId,name,phone,email,country:detail['所在国家/地区']||'',source,owner_id:owner?.id||null,original_owner:owner?.name||original,market,detail:JSON.stringify(detail),in_batch:true});
   if(body.preview===true||['duplicate','discard'].includes(kind))continue;
-  const country=detail['所在国家/地区']||(market==='内贸'?'中国':''),method=detail['偏好联系方式']||detail['联系方式偏好']||(market==='内贸'?'微信':''),platform=['抖音','小红书','微信'].includes(detail['来源平台'])?detail['来源平台']:'抖音';
-  const account=customerOrigin({source:body.form_source==='whatsapp'?'WhatsApp／其他':platform,detail}).origin_account;
-  const raw=JSON.stringify({...detail,...(['乐园号','玩具号','工厂号'].includes(account)?{'来源账号':account}:{}),...(wechat?{'微信号':wechat}:{}),'客资市场':market,'来源平台':detail['来源平台']||(body.form_source==='whatsapp'?'WhatsApp':'内贸表单'),...(market==='内贸'?{'所在国家/地区':country,'偏好联系方式':method}:{})});
+  const country=detail['所在国家/地区']||(market==='内贸'?'中国':''),method=detail['偏好联系方式']||detail['联系方式偏好']||(website?'邮件':market==='内贸'?'微信':''),platform=website?'独立站':['抖音','小红书','微信'].includes(detail['来源平台'])?detail['来源平台']:'抖音';
+  const account=customerOrigin({source:website?'独立站':body.form_source==='whatsapp'?'WhatsApp／其他':platform,detail}).origin_account;
+  const raw=JSON.stringify({...detail,...(['乐园号','玩具号','工厂号'].includes(account)?{'来源账号':account}:{}),...(wechat?{'微信号':wechat}:{}),'客资市场':market,'来源平台':website?'独立站':detail['来源平台']||(body.form_source==='whatsapp'?'WhatsApp':'内贸表单'),...(website?{'偏好联系方式':method}:{}),...(market==='内贸'?{'所在国家/地区':country,'偏好联系方式':method}:{})});
   if(kind==='review'){
-   const poolId=reviewKey;statements.push(db.prepare("INSERT OR IGNORE INTO crm_customer_pool(id,source,raw,payload,state,target_lead_id,last_error,created,updated,created_by) VALUES(?,?,?,?,'待确认',?,?,?,?,?)").bind(poolId,body.form_source==='whatsapp'?'WhatsApp／其他':platform,raw,JSON.stringify({name,phone,email,country,province:detail['省份']||'',city:detail['城市']||'',wechat,grade,preferred_method:method,business_scope:market==='内贸'?platform==='小红书'?'xiaohongshu':platform==='微信'?'wechat':'douyin-local':'whatsapp',requirement:detail['项目需求描述']||'',market,original_owner:original,source_account:['乐园号','玩具号','工厂号'].includes(account)?account:detail['来源账号']||''}),target?.id||null,result,at,at,actor.id));continue;
+   const poolId=reviewKey;statements.push(db.prepare("INSERT OR IGNORE INTO crm_customer_pool(id,source,raw,payload,state,target_lead_id,last_error,created,updated,created_by) VALUES(?,?,?,?,'待确认',?,?,?,?,?)").bind(poolId,website?'独立站':body.form_source==='whatsapp'?'WhatsApp／其他':platform,raw,JSON.stringify({name,phone,email,country,province:detail['省份']||'',city:detail['城市']||'',wechat,grade,preferred_method:method,business_scope:market==='内贸'?platform==='小红书'?'xiaohongshu':platform==='微信'?'wechat':'douyin-local':website?'website':'whatsapp',requirement:detail['项目需求描述']||'',market,original_owner:original,source_account:['乐园号','玩具号','工厂号'].includes(account)?account:detail['来源账号']||''}),target?.id||null,result,at,at,actor.id));continue;
   }
   if(kind==='existing'){
    statements.push(db.prepare("UPDATE crm_leads SET market=?,detail=json_set(detail,'$.客资市场',?) WHERE id=? AND market='待确认'").bind(market,market,target.id));
@@ -68,8 +68,8 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
    }
    continue;
   }
-  if(assignUnowned&&kind==='new')unownedIds.push(leadId);const scope=body.form_source==='whatsapp'?'whatsapp':platform==='小红书'?'xiaohongshu':platform==='微信'?'wechat':'douyin-local';
-  statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope,market,grade,cohort) SELECT ?,?,?,?,?,?,?,?,?,?,'待首次联系',?,?,0,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM crm_form_submissions WHERE id=?) AND NOT EXISTS(SELECT 1 FROM crm_leads WHERE (?<>'' AND replace(replace(replace(replace(replace(replace(phone,' ',''),'+',''),'-',''),'(',''),')',''),'.','')=?) OR (?<>'' AND lower(email)=lower(?)) OR (?<>'' AND lower(trim(COALESCE(json_extract(detail,'$._customer_profile.wechat'),json_extract(detail,'$.微信号'),'')))=?))").bind(leadId,name,phone,email,country,body.form_source==='whatsapp'?'WhatsApp／其他':detail['来源平台']||'内贸表单',detail['来源平台']||source,entered,owner?.id||null,owner?.name||original,raw,fingerprint,batchId,at,scope,market,grade,assignUnowned&&kind==='new'?'new':'unknown',fingerprint,pk,pk,email,email,wk,wk));
+  if(assignUnowned&&kind==='new')unownedIds.push(leadId);const scope=website?'website':body.form_source==='whatsapp'?'whatsapp':platform==='小红书'?'xiaohongshu':platform==='微信'?'wechat':'douyin-local';
+  statements.push(db.prepare("INSERT OR IGNORE INTO crm_leads(id,name,phone,email,country,source,channel,entered,owner_id,original_owner,status,detail,fingerprint,review,batch_id,created,business_scope,market,grade,cohort) SELECT ?,?,?,?,?,?,?,?,?,?,'待首次联系',?,?,0,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM crm_form_submissions WHERE id=?) AND NOT EXISTS(SELECT 1 FROM crm_leads WHERE (?<>'' AND replace(replace(replace(replace(replace(replace(phone,' ',''),'+',''),'-',''),'(',''),')',''),'.','')=?) OR (?<>'' AND lower(email)=lower(?)) OR (?<>'' AND lower(trim(COALESCE(json_extract(detail,'$._customer_profile.wechat'),json_extract(detail,'$.微信号'),'')))=?))").bind(leadId,name,phone,email,country,website?'独立站':body.form_source==='whatsapp'?'WhatsApp／其他':detail['来源平台']||'内贸表单',website?'独立站':detail['来源平台']||source,entered,owner?.id||null,owner?.name||original,raw,fingerprint,batchId,at,scope,market,grade,assignUnowned&&kind==='new'?'new':'unknown',fingerprint,pk,pk,email,email,wk,wk));
   statements.push(db.prepare("INSERT OR IGNORE INTO crm_form_submissions(id,lead_id,phone,email,occurred,raw,kind,created) SELECT ?,id,?,?,?,?,'new',? FROM crm_leads WHERE id=?").bind(fingerprint,phone,email,entered,raw,at,leadId));
  }
  const result={inserted:rows.filter(r=>['new','historical','owned'].includes(r.kind)).length,repeated:rows.filter(r=>r.kind==='existing').length,skipped:rows.filter(r=>['duplicate','discard'].includes(r.kind)).length,reviewed:rows.filter(r=>r.kind==='review').length,previewRows:rows,autoAssigned:0,notified:0,allocationWarning:''};
