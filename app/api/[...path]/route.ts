@@ -76,7 +76,7 @@ async function execute(req: Request,trace:RequestTrace) {
   if(preview?.status==='blocked'&&path==='me'&&!write)return json({...actor,must_change_password:false,can_switch:false,can_role_preview:canRolePreview(actor),role_preview:rolePreviewInfo(preview),preview_blocked:true});
   if(preview){await guardRolePreview(db,preview,req,path);actor=preview.target;db=previewDatabase(db);if(!['boss','personal'].includes(req.headers.get('x-crm-view')||'boss'))throw new Problem('验收中请使用所选人员的公司或本人业务视角',403);}
   const user=await viewUser(db,actor,actor.must_change_password?null:req.headers.get('x-crm-view'));
-  if(user.role==='followup'&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
+  if(user.role==='followup'&&!path.startsWith('sales-board/')&&!['me','logout','password','profile','followup','workflow/report','workflow/handovers/accept'].includes(path)&&!path.startsWith('followup/')&&!path.startsWith('followup-phase1/')&&!path.startsWith('followup-notifications')&&!(path==='confirmations/releases'&&!write))throw new Problem('跟单员仅可访问本人订单跟单',403);
   const domesticImport=path==='import'&&(domesticAllocationImport(user,actor,body)||confirmedImportAllowed(user,actor,body));
   const managementWrite=!domesticImport&&write&&(managementSettingPath(path)||path==='import'&&(body.allocation_management===true||body.allocate!==false));
   const managementAllowed=canSetManagement(actor)&&canSetManagement(user)&&actor.id===user.id;

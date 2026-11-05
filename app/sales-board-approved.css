@@ -1,0 +1,65 @@
+/* Approved board layout: retain the current Fluent shell and business colors. */
+.office-app .workspace .sales-board-approved .so-caption { margin:0 0 10px; }
+.office-app .workspace .sales-board-approved>section { margin-bottom:14px; }
+.office-app .workspace .sales-board-approved .so-market-people { margin-bottom:0; }
+:root .office-app .workspace .sales-board-approved .so-progress-people { margin-bottom:0; }
+.office-app .workspace .sales-board-approved .so-board-ranking { display:flex; align-items:center; gap:8px; margin:0; font-size:12px; color:var(--muted); }
+.office-app .workspace .sales-board-approved .so-board-ranking select { width:auto; font-size:13px; }
+:root .office-app .workspace .sales-board-approved .so-board-person { display:block; min-height:0; padding:12px 0; }
+.sales-board-approved .so-board-person-heading { display:grid; grid-template-columns:18px minmax(72px,1fr) minmax(48px,1fr) 80px 14px; gap:8px; align-items:center; width:100%; }
+.sales-board-approved .so-board-rank { color:var(--muted); font-size:12px; }
+.sales-board-approved .so-board-person-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-top:10px; }
+.sales-board-approved .so-board-person-metrics>span { display:flex; flex-direction:column; min-width:0; font-size:12px; color:var(--muted); }
+.sales-board-approved .so-board-person-metrics strong { font-size:13px; color:var(--ink); font-weight:500; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-person-metrics small { display:block; font-weight:400; color:var(--muted); font-size:11px; }
+.sales-board-approved .so-market-people[data-market=domestic] .so-progress-track>span { background:#17634b; }
+.sales-board-approved .so-market-people[data-market=foreign] .so-progress-track>span { background:#0f6cbd; }
+.sales-board-approved .so-board-note { margin:8px 0 14px; }
+.sales-board-approved .so-board-trades { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+:root .office-app .workspace .sales-board-approved .so-board-trade { padding:14px; margin:0; }
+.sales-board-approved .so-board-trade h3 { margin:0; }
+.sales-board-approved .so-board-trade[data-market=domestic] h3 { color:#17634b; }
+.sales-board-approved .so-board-trade[data-market=foreign] h3 { color:#0f6cbd; }
+.sales-board-approved .so-board-trade[data-market=domestic] .mw-progress>span { background:#17634b; }
+.sales-board-approved .so-board-trade[data-market=foreign] .mw-progress>span { background:#0f6cbd; }
+.sales-board-approved .so-board-total { display:block; font-size:22px; font-weight:500; margin:8px 0 12px; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-trade .so-between { gap:8px; flex-wrap:wrap; margin-top:8px; }
+.sales-board-approved .so-board-followups table { min-width:560px; table-layout:fixed; }
+.sales-board-approved .so-board-followups th:first-child { width:18%; }
+.sales-board-approved .so-board-followups th:nth-child(2) { width:14%; }
+.sales-board-approved .so-board-followups th:nth-child(3) { width:48%; }
+.sales-board-approved .so-board-followups th:last-child { width:20%; }
+.sales-board-approved .so-board-stage-track { display:flex; height:8px; border-radius:3px; background:#eaf0f7; overflow:hidden; }
+.sales-board-approved .so-board-stage-track span { display:block; height:100%; }
+.sales-board-approved .so-board-stage-0 { background:#8055ad; }
+.sales-board-approved .so-board-stage-1 { background:#4e7fb2; }
+.sales-board-approved .so-board-stage-2 { background:#437e86; }
+.sales-board-approved .so-board-stage-3 { background:#bb8f38; }
+.sales-board-approved .so-board-stage-4 { background:#0f6cbd; }
+.sales-board-approved .so-board-stage-5 { background:#17634b; }
+.sales-board-approved .so-board-stage-labels { display:flex; flex-wrap:wrap; gap:3px 10px; margin-top:5px; font-size:12px; color:var(--muted); }
+.sales-board-approved .so-board-followup-detail { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.sales-board-approved .so-board-followup-detail h3 { margin:0; }
+.sales-board-approved .so-board-followup-detail th { width:auto!important; }
+.sales-board-approved .so-board-followup-detail td { white-space:normal; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-followup-detail td small { display:block; }
+.sales-board-approved .so-company-metric { display:flex; justify-content:flex-end; align-items:baseline; flex-wrap:wrap; gap:2px 8px; }
+.sales-board-approved .so-company-value { display:grid; gap:4px; }
+.sales-board-approved .so-company-metric .ui-currencies { font-size:13px; }
+.sales-board-approved .so-company-metric small { white-space:nowrap; }
+@media(min-width:1001px) {
+ :root .office-app .workspace .sales-board-approved .so-market-columns { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:720px) {
+ :root .office-app .workspace .sales-board-approved .so-statistics { display:contents; }
+ :root .office-app .workspace .sales-board-approved .so-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+ :root .office-app .workspace .sales-board-approved .so-three .so-metric:last-child { grid-column:1/-1; }
+ :root .office-app .workspace .sales-board-approved .so-metric { display:grid; border:1px solid var(--metric-line); border-radius:8px; box-shadow:none; }
+ :root .office-app .workspace .sales-board-approved .so-metric>small { display:block; }
+ :root .office-app .workspace .sales-board-approved .so-caption { display:block; font-size:12px; }
+ .sales-board-approved .so-board-trades { grid-template-columns:1fr; gap:10px; }
+ .sales-board-approved .so-board-person-heading { grid-template-columns:14px minmax(65px,1fr) minmax(36px,1fr) 70px 12px; gap:5px; }
+ .sales-board-approved .so-board-person-metrics { gap:8px 12px; }
+ .sales-board-approved .so-board-total { font-size:20px; }
+ .sales-board-approved .so-board-ranking { flex-wrap:wrap; }
+}

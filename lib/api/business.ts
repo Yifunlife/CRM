@@ -36,8 +36,10 @@ import { workflowEndpoint } from '../workflow-server';
 import type { ApiContext } from './context';
 import { notifications } from './notifications';
 import {dailyFirstContact} from '../daily-first-contact';
+import {salesBoardEndpoint} from '../sales-board-server';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const salesBoard=await salesBoardEndpoint(db,user,path,req.method,url,env.QUOTE_DB);if(salesBoard!==undefined)return json(salesBoard);
  const analysis=await customerAnalysisEndpoint(db,user,actor,path,req.method,body);if(analysis!==undefined)return json(analysis);
  if(path==='role-workspace/daily-first-contact'){if(req.method!=='GET')throw new AllocationError('首联完成看板仅支持读取',405);return json(await dailyFirstContact(db,user,url));}
  if(path==='allocation/management/intake-status'&&req.method==='GET')return json(await allocationWhatsAppStatus(db,env as any,user));
