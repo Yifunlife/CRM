@@ -38,7 +38,7 @@ export default function SalesOverview({api,user,openLead,openOrder,openProject}:
  function salesperson(p:any,name:string){
   const currency=p.currency,g=goal(name,p.id),open=owner===p.id&&cardMarket===name,rows=projectRows.filter((r:any)=>r.owner===p.id&&r.market===name&&(stage==='全部'||r.stage===stage));
   const annualRate=p.annual_target_minor>0&&!p.annual_unverified?p.annual_total_minor/p.annual_target_minor:null;
-  const amount=(n:number|null)=>n==null?'未设置':(n/1_000_000).toLocaleString('zh-CN',{maximumFractionDigits:2});
+  const amount=(n:number|null)=>n==null?'未设置':(n/1_000_000).toLocaleString('zh-CN',{maximumFractionDigits:2})+'万';
   return <SalesPersonPopover key={name+p.id} open={open} onOpenChange={value=>{O(value?p.id:'');CM(name);S('全部');}} name={p.name} market={name} cycle={cycle} newCount={data.performance.rows.find((r:any)=>r.id===p.id&&r.currency===currency)?.new_customers||0} dealCount={data.performance.rows.find((r:any)=>r.id===p.id&&r.currency===currency)?.deals||0} goal={g} amounts={{[currency]:g.actual}} rows={rows} stage={stage} onStageChange={S} readOnly={!canOpenDetails}>
    <button type="button" className="so-progress-row so-board-person" aria-label={p.name+'销售目标、客户数量与项目明细'}>
     <span className="so-board-person-heading"><span className="so-board-rank">{p.rank??'—'}</span><span className="so-progress-name">{p.name}</span><span className="so-progress-track" aria-hidden="true"><span style={{width:Math.min(100,Math.max(0,annualRate||0)*100)+'%'}}/></span><strong className="so-progress-rate">{p.annual_unverified?'金额待核实':annualRate==null?(p.annual_target_minor===0?'目标为 0':'未设目标'):(annualRate*100).toFixed(1)+'%'}</strong><ChevronRight size={14} aria-hidden="true"/></span>
