@@ -36,14 +36,16 @@
 :root .office-app .workspace .sales-board-approved .so-market-people .so-board-person[data-state=open] { background:transparent; }
 .sales-board-approved .so-board-note { margin:8px 0 14px; }
 .sales-board-approved .so-board-trades { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
-:root .office-app .workspace .sales-board-approved .so-board-trade { padding:14px; margin:0; }
+:root .office-app .workspace .sales-board-approved .so-board-trade { padding:10px 12px; margin:0; }
 .sales-board-approved .so-board-trade h3 { margin:0; }
+.sales-board-approved .so-board-trade-heading { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
 .sales-board-approved .so-board-trade[data-market=domestic] h3 { color:#17634b; }
 .sales-board-approved .so-board-trade[data-market=foreign] h3 { color:#0f6cbd; }
 .sales-board-approved .so-board-trade[data-market=domestic] .mw-progress>span { background:#17634b; }
 .sales-board-approved .so-board-trade[data-market=foreign] .mw-progress>span { background:#0f6cbd; }
-.sales-board-approved .so-board-total { display:block; font-size:22px; font-weight:500; margin:8px 0 12px; overflow-wrap:anywhere; }
-.sales-board-approved .so-board-trade .so-between { gap:8px; flex-wrap:wrap; margin-top:8px; }
+.sales-board-approved .so-board-total { display:block; font-size:18px; font-weight:500; margin:0; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-trade .mw-progress { height:6px; margin:8px 0; }
+.sales-board-approved .so-board-trade-details { display:flex; justify-content:space-between; align-items:baseline; gap:4px 12px; flex-wrap:wrap; }
 .sales-board-approved .so-board-followups table { min-width:560px; table-layout:fixed; }
 .sales-board-approved .so-board-followups th:first-child { width:18%; }
 .sales-board-approved .so-board-followups th:nth-child(2) { width:14%; }
@@ -83,7 +85,6 @@
  .sales-board-approved .so-board-person-heading .so-progress-name { max-width:110px; }
  .sales-board-approved .so-board-person-heading>svg { flex-basis:12px; }
  .sales-board-approved .so-board-person-metrics { gap:4px 12px; }
- .sales-board-approved .so-board-total { font-size:20px; }
  .sales-board-approved .so-board-ranking { flex-wrap:wrap; }
 }
 @media(max-width:480px) {
