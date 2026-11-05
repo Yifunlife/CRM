@@ -45,20 +45,20 @@ export function paymentPlanInvoiceTotal(rows:{quantity:string;unitPrice:string}[
 }
 export function calculatePaymentPlan(raw:unknown,amountMinor:number,currency:string){
  if(raw===undefined)return undefined;
- if(!Array.isArray(raw)||raw.length<1||raw.length>4)throw Error('请选择1至4期付款');
+ if(!Array.isArray(raw)||raw.length<1||raw.length>4)throw Error('请选择1至4个付款阶段');
  if(!Number.isSafeInteger(amountMinor)||amountMinor<=0||amountMinor>99999999999)throw Error('请先填写有效合同金额');
  const rows=raw.map((row:unknown,i:number)=>{
-  if(!row||typeof row!=='object')throw Error('请填写第'+(i+1)+'期付款节点和比例');
+  if(!row||typeof row!=='object')throw Error('请填写第'+(i+1)+'阶段付款节点和比例');
   const {milestone,percent}=row as Partial<PaymentPlanRow>;
-  if(typeof milestone!=='string'||!Object.hasOwn(PAYMENT_MILESTONES,milestone))throw Error('请选择第'+(i+1)+'期付款节点');
-  if(typeof percent!=='string'||!/^\d{1,3}(\.\d{1,2})?$/.test(percent)||Number(percent)<=0||Number(percent)>100)throw Error('第'+(i+1)+'期比例须大于0且不超过100%，最多两位小数');
+  if(typeof milestone!=='string'||!Object.hasOwn(PAYMENT_MILESTONES,milestone))throw Error('请选择第'+(i+1)+'阶段付款节点');
+  if(typeof percent!=='string'||!/^\d{1,3}(\.\d{1,2})?$/.test(percent)||Number(percent)<=0||Number(percent)>100)throw Error('第'+(i+1)+'阶段比例须大于0且不超过100%，最多两位小数');
   const [whole,fraction='']=percent.split('.');return {milestone:milestone as PaymentPlanRow['milestone'],percent,basisPoints:Number(whole)*100+Number(fraction.padEnd(2,'0'))};
  });
- if(rows.reduce((sum,row)=>sum+row.basisPoints,0)!==10000)throw Error('各期付款比例合计必须为100%');
+ if(rows.reduce((sum,row)=>sum+row.basisPoints,0)!==10000)throw Error('各阶段付款比例合计必须为100%');
  let cumulative=0,allocated=0;
  const payments=rows.map((row,i)=>{
   cumulative+=row.basisPoints;const rounded=Math.round(amountMinor*cumulative/10000),amount=((rounded-allocated)/100).toFixed(2);allocated=rounded;
-  return {label:'第'+(i+1)+'期 · '+PAYMENT_MILESTONES[row.milestone].zh+' · '+Number(row.percent)+'%',amount};
+  return {label:'第'+(i+1)+'阶段 · '+PAYMENT_MILESTONES[row.milestone].zh+' · '+Number(row.percent)+'%',amount};
  });
  const terms=rows.map((row,i)=>currency==='CNY'?`${i+1}、${PAYMENT_MILESTONES[row.milestone].zh}支付合同总金额的${Number(row.percent)}%，计人民币${payments[i].amount}元。`:`${i+1}. ${PAYMENT_MILESTONES[row.milestone].en}, Party A shall pay ${Number(row.percent)}% of the total contract amount, being ${currency} ${payments[i].amount}.`).join('\n');
  return {terms,payments};
