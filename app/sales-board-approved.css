@@ -10,7 +10,15 @@
 .sales-board-approved .so-board-rank { color:var(--muted); font-size:12px; }
 .sales-board-approved .so-board-person-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-top:10px; }
 .sales-board-approved .so-board-person-metrics>span { display:flex; flex-direction:column; min-width:0; font-size:12px; color:var(--muted); }
-.sales-board-approved .so-board-person-metrics strong { font-size:13px; color:var(--ink); font-weight:500; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-person-metrics strong { font-size:15px; color:var(--ink); font-weight:600; overflow-wrap:anywhere; }
+.sales-board-approved .so-board-person-metrics .so-board-number-target { color:#0f548c; }
+.sales-board-approved .so-board-person-metrics .so-board-number-completed { color:#17634b; }
+.sales-board-approved .so-board-person-metrics .so-board-number-annual { color:#8b4d08; }
+.sales-board-approved .so-board-person-metrics .so-board-number-monthly { color:#0f6cbd; }
+.sales-board-approved .so-board-person-metrics .so-board-number-grade { color:#684098; }
+.sales-board-approved .so-board-person-metrics .so-board-number-unset { color:var(--muted); font-weight:500; }
+.sales-board-approved .so-board-person-metrics .so-board-number-divider,
+.sales-board-approved .so-board-person-metrics .so-board-number-unit { color:var(--muted); font-size:13px; font-weight:400; }
 .sales-board-approved .so-board-person-metrics small { display:block; font-weight:400; color:var(--muted); font-size:11px; }
 .sales-board-approved .so-market-people[data-market=domestic] .so-progress-track>span { background:#17634b; }
 .sales-board-approved .so-market-people[data-market=foreign] .so-progress-track>span { background:#0f6cbd; }
