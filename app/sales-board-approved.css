@@ -27,13 +27,13 @@
 .sales-board-approved .so-board-person-metrics small { display:block; font-weight:400; color:var(--muted); font-size:11px; }
 .sales-board-approved .so-market-people[data-market=domestic] .so-progress-track>span { background:#17634b; }
 .sales-board-approved .so-market-people[data-market=foreign] .so-progress-track>span { background:#0f6cbd; }
-.sales-board-approved .so-market-people[data-market=domestic] { --so-market-ink:#17634b; --so-market-surface:#f1f8f4; --so-market-line:#c6dfd2; --so-market-hover:#e4f2ea; }
-.sales-board-approved .so-market-people[data-market=foreign] { --so-market-ink:#0f6cbd; --so-market-surface:#f0f6ff; --so-market-line:#c4d8f0; --so-market-hover:#e1edfb; }
+.sales-board-approved .so-market-people[data-market=domestic] { --so-market-ink:#17634b; --so-market-line:#17634b; }
+.sales-board-approved .so-market-people[data-market=foreign] { --so-market-ink:#0f6cbd; --so-market-line:#0f6cbd; }
 .sales-board-approved .so-market-people .so-market-heading h3 { color:var(--so-market-ink); }
-:root .office-app .workspace .sales-board-approved .so-market-people .so-progress-people { background:var(--so-market-surface); border-color:var(--so-market-line); }
+:root .office-app .workspace .sales-board-approved .so-market-people .so-progress-people { background:transparent; border-color:var(--so-market-line); }
 :root .office-app .workspace .sales-board-approved .so-market-people .so-board-person { border-bottom-color:var(--so-market-line); }
 :root .office-app .workspace .sales-board-approved .so-market-people .so-board-person:hover,
-:root .office-app .workspace .sales-board-approved .so-market-people .so-board-person[data-state=open] { background:var(--so-market-hover); }
+:root .office-app .workspace .sales-board-approved .so-market-people .so-board-person[data-state=open] { background:transparent; }
 .sales-board-approved .so-board-note { margin:8px 0 14px; }
 .sales-board-approved .so-board-trades { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 :root .office-app .workspace .sales-board-approved .so-board-trade { padding:14px; margin:0; }
