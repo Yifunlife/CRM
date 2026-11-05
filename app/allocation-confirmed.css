@@ -115,7 +115,7 @@
 .op-market-domestic h3{color:#176444}.op-market-foreign h3{color:#165a91}
 :root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table{min-width:1100px;table-layout:fixed}
 :root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n){text-align:center;padding:8px 12px}
-:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):first-child{width:18%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):first-child{width:18%;text-align:left}
 :root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(2){width:12%}
 :root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+3):nth-child(-n+6){width:7%}
 :root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(7){width:15%}
