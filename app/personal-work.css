@@ -4,22 +4,20 @@
 /* Keep daily intake readable without stacking each receipt under the customer name. */
 .office-app .workspace .personal-intake .section-heading{margin:0}
 .office-app .workspace .personal-intake h2{margin:0}
-.personal-leads-table{table-layout:fixed;min-width:960px}
-.personal-leads-table th:nth-child(1){width:23%}
+.personal-leads-table{table-layout:fixed;min-width:840px}
+.personal-leads-table th:nth-child(1){width:29%}
 .personal-leads-table th:nth-child(2){width:15%}
 .personal-leads-table th:nth-child(3){width:13%}
 .personal-leads-table th:nth-child(4){width:15%}
-.personal-leads-table th:nth-child(5){width:22%}
-.personal-leads-table th:nth-child(6){width:12%}
+.personal-leads-table th:nth-child(5){width:28%}
 .office-app .workspace .personal-leads-table :is(th,td){padding:6px 10px;white-space:normal;overflow-wrap:anywhere;vertical-align:middle}
 .personal-leads-table .personal-lead-name{font-weight:600}
 .office-app .workspace .personal-leads-table td:nth-child(3),.office-app .workspace .personal-leads-table td:nth-child(4){white-space:nowrap}
 .personal-work .personal-leads-table .personal-lead-country{margin:0;font-size:14px;line-height:1.45;font-weight:500}
 .personal-lead-receipts{display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;margin:0;font-size:12px;color:var(--muted,#586b84)}
 .personal-lead-receipts .badge{padding:1px 6px;font-size:12px;line-height:1.5;white-space:nowrap}
-.personal-leads-table td:last-child{white-space:nowrap}
 .personal-contact-followup table{table-layout:fixed;min-width:760px}
-.personal-contact-followup th:nth-child(1){width:18%}.personal-contact-followup th:nth-child(2){width:35%}.personal-contact-followup th:nth-child(3){width:30%}.personal-contact-followup th:nth-child(4){width:17%}
+.personal-contact-followup th:nth-child(1){width:25%}.personal-contact-followup th:nth-child(2){width:40%}.personal-contact-followup th:nth-child(3){width:35%}
 .office-app .workspace .personal-contact-followup :is(th,td){white-space:normal;overflow-wrap:anywhere;vertical-align:top}
 .personal-contact-followup small{display:block;margin-top:4px;line-height:1.5}
 .personal-contact-action{display:block;margin:6px 0 3px}
@@ -31,19 +29,26 @@
  .personal-contact-followup table{min-width:0}.personal-contact-followup thead{display:none}.personal-contact-followup tbody{display:block}
  .personal-contact-followup tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:12px 0;border-bottom:1px solid var(--line,#dbe3ee)}
  .office-app .workspace .personal-contact-followup td{padding:0;border:0}
- .personal-contact-followup td:nth-child(1){grid-column:1;grid-row:1}.personal-contact-followup td:nth-child(2){grid-column:1/-1;grid-row:2}.personal-contact-followup td:nth-child(3){grid-column:1/-1;grid-row:3}.personal-contact-followup td:nth-child(4){grid-column:2;grid-row:1;align-self:center;max-width:138px}
+ .personal-contact-followup td:nth-child(1){grid-column:1/-1;grid-row:1}.personal-contact-followup td:nth-child(2){grid-column:1/-1;grid-row:2}.personal-contact-followup td:nth-child(3){grid-column:1/-1;grid-row:3}
  .personal-leads-table{min-width:0}
  .personal-leads-table thead{display:none}
  .personal-leads-table tbody{display:block}
  .personal-leads-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--line,#dbe3ee)}
  .office-app .workspace .personal-leads-table td{padding:0;border:0}
- .personal-leads-table td:nth-child(1){grid-column:1;grid-row:1}
+ .personal-leads-table td:nth-child(1){grid-column:1/-1;grid-row:1}
  .personal-leads-table td:nth-child(2){grid-column:1;grid-row:2}
  .personal-leads-table td:nth-child(3){grid-column:2;grid-row:2;text-align:right;font-size:12px;color:var(--muted,#586b84)}
  .personal-leads-table td:nth-child(4){grid-column:1;grid-row:3}
  .personal-leads-table td:nth-child(5){grid-column:1/-1;grid-row:4}
- .personal-leads-table td:nth-child(6){grid-column:2;grid-row:1;align-self:center}
  .personal-lead-receipts{margin:0}
 }
 
 .next-step-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.next-step-toolbar p{margin:0}.next-step-toolbar label{flex:0 0 130px}.personal-contact-followup .personal-todo-late small{color:inherit}@media(max-width:720px){.next-step-toolbar{align-items:flex-start;flex-direction:column}.next-step-toolbar label{flex:auto;width:100%}}
+
+.personal-contact-followup>.next-step-summary{cursor:pointer;list-style:none;gap:8px 16px;flex-wrap:wrap}
+.personal-contact-followup>.next-step-summary::-webkit-details-marker{display:none}
+.personal-contact-followup>.next-step-summary h2{margin:0}
+.next-step-summary .next-step-counts{margin-left:auto}
+.next-step-summary .next-step-toggle{font-size:13px;color:var(--navy,#183765);font-weight:600;white-space:nowrap}
+.personal-contact-followup .next-step-collapse,.personal-contact-followup[open] .next-step-expand{display:none}
+.personal-contact-followup[open] .next-step-collapse{display:inline}

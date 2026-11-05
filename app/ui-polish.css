@@ -103,15 +103,13 @@
   .office-app .workspace .customer-management .ui-customer-table tr { position:relative; display:block; padding:12px 0; border-top:1px solid var(--line); min-height:96px; }
   .office-app .workspace .customer-management .ui-customer-table tr:first-child { border-top:0; }
   .office-app .workspace .customer-management .ui-customer-table td { display:none; border:0; padding:0; }
-  .office-app .workspace .customer-management .ui-customer-table .ui-customer-identity { display:block; padding-right:64px; }
+  .office-app .workspace .customer-management .ui-customer-table .ui-customer-identity { display:block; }
   .office-app .workspace .customer-management .ui-customer-identity > button { font-size:15px; font-weight:600; line-height:1.5; min-height:32px; }
   .office-app .workspace .customer-management .ui-customer-identity > small { display:none; }
   .office-app .workspace .customer-management .ui-next-date { position:absolute; right:0; bottom:12px; display:block; text-align:right; font-size:13px; }
   .office-app .workspace .customer-management .ui-next-date small { color:var(--muted); font-size:11px; margin:0; }
   .office-app .workspace .customer-management .ui-customer-table .ui-customer-status { display:block; margin-top:8px; padding-right:100px; }
   .office-app .workspace .customer-management .ui-customer-status .crm-status { padding:0; background:transparent; font-size:13px; font-weight:400; }
-  .office-app .workspace .customer-management .ui-customer-table .ui-customer-action { display:block; position:absolute; right:0; top:8px; }
-  .office-app .workspace .customer-management .ui-customer-action button { font-size:12px; background:transparent; border:0; color:var(--green); padding:0; }
   .office-app .workspace .customer-management .ui-customer-table tr:hover td { background:transparent; }
   .office-app .workspace .ui-personal-more { display:flex; font-size:12px; border:0; background:transparent; color:var(--muted); }
   .office-app .workspace .ui-personal-dashboard:not(.ui-expanded-metrics) .personal-metrics > [data-mobile-key=false] { display:none; }
