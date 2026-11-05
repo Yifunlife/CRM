@@ -113,7 +113,15 @@
 .op-market-group>.section-heading{margin-bottom:8px}
 .op-market-group>.section-heading span{font-size:13px}
 .op-market-domestic h3{color:#176444}.op-market-foreign h3{color:#165a91}
-:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table{min-width:1100px}
-:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n){width:auto}
-:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+3):nth-child(-n+6){text-align:right}
-:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+7){text-align:left}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table{min-width:1100px;table-layout:fixed}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n){text-align:center;padding:8px 12px}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):first-child{width:18%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(2){width:12%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+3):nth-child(-n+6){width:7%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(7){width:15%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(8){width:17%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(9){width:10%}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-cash{margin-inline:auto}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-assessment-line{justify-content:center}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-state-select{text-align:center;text-align-last:center}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table .op-adjust-cell{text-align:left}
