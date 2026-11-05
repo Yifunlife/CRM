@@ -1,3 +1,4 @@
+import {domesticProjectBudget} from './domestic-budget';
 import {can,canSetManagement,clean} from './crm';
 import {Problem} from './api/http';
 export const ALLOCATION_ACCOUNTS:Record<string,Record<string,string[]>>={
@@ -37,6 +38,6 @@ export function customerOwnerEligible(user:any,_market?:string){return ['sales',
 // Winnie confirmed that the source-sheet label 方总 refers to 方星球.
 export function customerOwnerName(value:unknown){const name=String(value||'').trim().toLowerCase();return name==='方总'?'方星球':name;}
 
-// 方星球仅排除内贸自动分配；原归属和外贸接收保持不变。
+// 普通内贸客资不分给方星球；明确达到200万元的项目预算例外。
 export const DOMESTIC_AUTO_EXCLUDED_USER='b9bde8d1-8f87-4981-956b-128423cd6651';
-export function automaticAllocationRecipient(user:any,market:string){return customerOwnerEligible(user)&&allocationRecipientMarket(user,market)&&(market!=='内贸'||user.id!==DOMESTIC_AUTO_EXCLUDED_USER);}
+export function automaticAllocationRecipient(user:any,market:string,lead?:any){return customerOwnerEligible(user)&&allocationRecipientMarket(user,market)&&(market!=='内贸'||user.id!==DOMESTIC_AUTO_EXCLUDED_USER||!!lead&&domesticProjectBudget(lead).qualifies);}
