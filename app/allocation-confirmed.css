@@ -109,3 +109,11 @@
 .confirmed-allocation .op-form-preview{min-width:1040px;table-layout:auto}
 .confirmed-allocation .op-form-preview :is(th,td){vertical-align:top}
 .confirmed-allocation .op-form-preview .op-form-message{min-width:260px;max-width:480px;white-space:pre-wrap;overflow-wrap:anywhere}
+.op-market-group{margin-top:20px;min-width:0}
+.op-market-group>.section-heading{margin-bottom:8px}
+.op-market-group>.section-heading span{font-size:13px}
+.op-market-domestic h3{color:#176444}.op-market-foreign h3{color:#165a91}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table{min-width:1100px}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n){width:auto}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+3):nth-child(-n+6){text-align:right}
+:root .office-app .workspace .confirmed-allocation .op-market-group .op-board-table :is(th,td):nth-child(n+7){text-align:left}

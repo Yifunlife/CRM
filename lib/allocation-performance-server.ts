@@ -1,3 +1,4 @@
+import {allocationMarketSummary} from './allocation-market-summary';
 import {can,canSetManagement,id,now} from './crm';
 import {monthNow,nextMonth,validMonth,defaultConfig} from './allocation';
 import {customerAllocationSummary} from './customer-allocation-summary';
@@ -25,7 +26,7 @@ export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor
   const [report,summary,priority]=await Promise.all([allocationPerformance(db,nextMonth(receiptMonth)),customerAllocationSummary(db,user),cumulativeAllocationCounts(db)]);
   const rows=report.rows.filter(p=>p.active||p.member||summary.rows.some(r=>r.id===p.id)).map(p=>{const counts=summary.rows.find(r=>r.id===p.id);return {...p,name:p.name.replace(/^Winnie Wu$/,'Winnie'),state:p.active?p.member?.state||'未加入分配名单':'停用',today:counts?.today||0,month:counts?.month||0,full:priority.find(r=>r.owner_id===p.id)?.full_count||0};});
   rows.sort((a:any,b:any)=>{const ai=report.config.members.findIndex((m:any)=>m.user_id===a.id),bi=report.config.members.findIndex((m:any)=>m.user_id===b.id);return (ai<0?100000:ai)-(bi<0?100000:bi)||a.name.localeCompare(b.name,'zh-CN');});
-  return {rows,receiptMonth,allocationMonth:report.month,date:summary.date,config:report.config,configVersion:report.configVersion,can_edit:canSetManagement(user)&&canSetManagement(actor)&&user.id===actor.id};
+  return {rows,markets:await allocationMarketSummary(db,summary.date),receiptMonth,allocationMonth:report.month,date:summary.date,config:report.config,configVersion:report.configVersion,can_edit:canSetManagement(user)&&canSetManagement(actor)&&user.id===actor.id};
  }
  if(method!=='POST'||!canSetManagement(user)||!canSetManagement(actor)||user.id!==actor.id)throw new Problem('只有分配管理负责人可以修改',403);
  if(path==='allocation/management/state'){
