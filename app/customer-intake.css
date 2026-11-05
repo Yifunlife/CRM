@@ -1,2 +1,42 @@
-.customer-intake>h2{margin-bottom:16px}.customer-intake>label{display:block;margin:16px 0}.customer-intake textarea{width:100%;resize:vertical;line-height:1.6}.customer-intake .intake-editor{min-width:0;border:1px solid #c8d7e8;border-radius:8px;padding:16px;margin:20px 0}.customer-intake legend{padding:0 8px;font-weight:600;color:#17365b}.customer-intake .intake-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;margin:16px 0}.customer-intake .intake-fields label{min-width:0;margin:0;font-size:13px}.customer-intake .intake-fields input{width:100%;margin-top:5px}.customer-intake .intake-raw{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;line-height:1.6;background:#f4f7fb;padding:12px}.customer-intake .op-import-actions{align-items:end}.customer-intake .op-import-source{margin:16px 0}.customer-intake .intake-editor>label{display:block}.customer-intake :is(input,textarea,select):focus-visible{outline:2px solid #264b82;outline-offset:2px}.customer-intake :is(input,textarea)::placeholder{color:#616161}
-@media(max-width:900px){.customer-intake .intake-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.customer-intake .intake-fields{grid-template-columns:minmax(0,1fr)}.customer-intake .intake-editor{padding:12px}.customer-intake .op-import-actions>button{min-height:40px}.customer-intake .op-import-source label{min-width:0;flex-basis:100%}}
+.office-app .customer-intake{padding:12px 14px}
+.customer-intake>h2{margin-bottom:8px}
+.customer-intake .intake-review>label{display:block;margin:10px 0 6px}
+.customer-intake textarea{width:100%;resize:vertical;line-height:1.45}
+.office-app .customer-intake :is(input,select){height:30px;min-height:30px;padding:3px 8px;font-size:13px}
+.office-app .customer-intake button{min-height:30px;padding:4px 10px;font-size:13px}
+.office-app .customer-intake label{font-size:12px;margin-bottom:0}
+.office-app .customer-intake label>:is(input,select,textarea){margin-top:3px}
+.customer-intake .intake-editor{min-width:0;border:1px solid #c8d7e8;border-radius:8px;padding:8px 10px 10px;margin:12px 0}
+.customer-intake legend{padding:0 6px;font-size:13px;font-weight:600;color:#17365b}
+.customer-intake .intake-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin:10px 0}
+.customer-intake .intake-fields label{min-width:0;margin:0;font-size:12px}
+.customer-intake .intake-fields input{width:100%}
+.customer-intake .intake-raw{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;line-height:1.45;background:#f4f7fb;padding:8px}
+.confirmed-allocation .customer-intake .op-import-actions{align-items:center;gap:8px;margin-top:10px}
+.confirmed-allocation .customer-intake .intake-editor>.op-import-actions{margin-top:2px}
+.customer-intake .intake-editor>.op-import-actions>label{display:flex;align-items:center;gap:8px}
+.customer-intake .intake-editor>.op-import-actions select{width:220px;max-width:100%;margin:0}
+.confirmed-allocation .customer-intake .op-import-source{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0}
+.confirmed-allocation .customer-intake .op-import-source label{flex:0 1 220px;min-width:150px}
+.customer-intake .intake-editor>label{display:block}
+.customer-intake .intake-editor textarea{min-height:64px;padding:6px 8px;font-size:13px}
+.customer-intake .intake-editor details{margin-top:6px}
+.customer-intake :is(input,textarea,select):focus-visible{outline:2px solid #264b82;outline-offset:2px}
+.customer-intake :is(input,textarea)::placeholder{color:#616161}
+.customer-intake>p{margin:6px 0;font-size:12px;line-height:1.45}
+.customer-intake .intake-editor>.notice{margin:6px 0;padding:6px 8px;font-size:12px}
+@media(max-width:480px){.customer-intake .intake-fields{grid-template-columns:minmax(0,1fr)}.customer-intake .intake-editor>.op-import-actions>label{width:100%}.customer-intake .intake-editor>.op-import-actions select{flex:1;min-width:0}.office-app .customer-intake{padding:10px}}
+@media(pointer:coarse){.office-app .customer-intake :is(input,select,button){min-height:40px;height:auto}}
+.customer-intake .intake-layout{min-width:0}
+.customer-intake .intake-layout-text{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr);gap:16px;align-items:start}
+.customer-intake .intake-review{min-width:0}
+.customer-intake .intake-layout-text .intake-editor{margin:8px 0 0}
+.customer-intake .intake-layout-text .op-import-source{margin-top:0}
+.customer-intake .intake-review>p{margin:6px 0;font-size:12px;line-height:1.45}
+.customer-intake .intake-paste{position:static;inset:auto;width:auto;min-width:0;background:transparent;color:inherit;padding:0;display:block}
+.customer-intake .intake-paste label{margin:0}
+.customer-intake .intake-paste textarea{min-height:260px;padding:8px;font-size:13px}
+.customer-intake .intake-paste p{margin:6px 0;font-size:12px;line-height:1.45}
+@media(max-width:1100px){.customer-intake .intake-layout-text .intake-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.customer-intake .intake-layout-text{grid-template-columns:minmax(0,1fr)}.customer-intake .intake-paste{grid-row:1}.customer-intake .intake-paste textarea{min-height:140px}}
+@media(max-width:480px){.customer-intake .intake-layout-text .intake-fields{grid-template-columns:minmax(0,1fr)}}
