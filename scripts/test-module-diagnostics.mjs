@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 const bundle=await build({entryPoints:['lib/api/diagnostics.ts'],bundle:true,write:false,platform:'node',format:'esm'});
-const {tracedRequest}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const {tracedRequest,databaseOverloaded}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const events=[],request=new Request('https://crm.test/api/confirmations/contract?access_token=DO-NOT-LOG',{method:'POST',headers:{authorization:'Bearer DO-NOT-LOG',cookie:'crm_session=DO-NOT-LOG','X-CRM-Request-ID':'untrusted'}});
 const result=await tracedRequest(request,async(req,trace)=>{trace.identify({project_id:'project-1',quote_id:'quote-1',reason:'PRIVATE CUSTOMER CONTENT',password:'DO-NOT-LOG'});trace.actor('sales-1');return new Response('{"ok":true,"id":"order-1"}',{headers:{'content-type':'application/json','set-cookie':'preserved-cookie'}});},e=>events.push(e));
 assert.deepEqual(await result.json(),{ok:true,id:'order-1'});assert.equal(result.headers.get('set-cookie'),'preserved-cookie');assert.equal(result.headers.get('X-CRM-Module'),'contracts');assert.notEqual(result.headers.get('X-CRM-Request-ID'),'untrusted');assert.equal(events[0].request_id,result.headers.get('X-CRM-Request-ID'));assert.deepEqual(events[0].references,{project_id:'project-1',quote_id:'quote-1'});
@@ -13,3 +13,11 @@ const malformed=await tracedRequest(request,async()=>new Response('unparseable u
 const contact=await tracedRequest(new Request('https://crm.test/api/followup',{method:'POST'}),async(req,trace)=>{trace.identify({id:'lead-1',content:'private'});return new Response('{}');},e=>events.push(e));assert.equal(contact.headers.get('X-CRM-Module'),'customers');
 const catalog=await tracedRequest(new Request('https://crm.test/api/followup/execution/quotes'),async()=>new Response('{}'),()=>{});assert.equal(catalog.headers.get('X-CRM-Module'),'execution');
 console.log('PASS: request correlation, module/step identification, permission and response compatibility, streamed files, diagnostic failure isolation, and no credentials/customer contents in logs.');
+
+assert(databaseOverloaded(new Error('D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window')));
+assert(databaseOverloaded(new Error('wrapper',{cause:new Error('D1_ERROR: DB is overloaded')})));
+assert(!databaseOverloaded(new Error('no such column: private_customer')));
+const busyEvents=[];await tracedRequest(new Request('https://crm.test/api/personal-work/report'),async(req,trace)=>{trace.failure(new Error('wrapper',{cause:new Error('D1_ERROR: DB is overloaded PRIVATE')}));return new Response('{}',{status:503});},e=>busyEvents.push(e));
+assert.equal(busyEvents[0].error_code,'database_overloaded');assert(!JSON.stringify(busyEvents).includes('PRIVATE'));
+assert.equal(busyEvents[0].operation,'personal-work/report');assert.equal(busyEvents[0].module,'reports');
+console.log('PASS: overloaded database and nested causes classified without leaking private error text.');

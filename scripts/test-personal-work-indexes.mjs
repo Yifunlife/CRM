@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {salesHomeEndpoint}=await import(moduleURL('lib/sales-home-server.ts'));
+const {personalWorkEndpoint}=await import(moduleURL('lib/personal-work-server.ts'));
+const sql=new DatabaseSync(':memory:');
+for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0041_')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
+sql.exec("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('own','own','own','sales','unused','2026-01-01'),('other','other','other','sales','unused','2026-01-01')");
+const day=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),user={id:'own',role:'sales'};
+for(let i=0;i<300;i++){
+ const id='lead-'+i,owner=i%3?'own':'other';
+ sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created,cohort) VALUES(?,?,'Meta',?,'{}',?,?,'new')").run(id,id,owner,id,day+'T01:00:00Z');
+ sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES(?,?,'own',?,?,'equal-global-v1')").run(id,id,owner,day+'T01:00:00Z');
+ sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,?,?,'actual conversation','邮件','follow up',?)").run(id,id,owner,day+'T02:00:00Z');
+}
+const base=database(sql),queries=[];
+const db={prepare(query){const statement=base.prepare(query);return {bind(...args){const bound=statement.bind(...args);queries.push({query,args});return bound;},all(){queries.push({query,args:[]});return statement.all();},first(){queries.push({query,args:[]});return statement.first();}};}};
+const read=async()=>{const home=await salesHomeEndpoint(db,user,'sales-home','GET'),work=await personalWorkEndpoint(db,user,user,'personal-work/report','GET',{},new URL('https://test.invalid/'));return {...home,at:null,work};};
+const snapshot=()=>JSON.stringify(['crm_leads','crm_notes','crm_assignments'].map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()));
+const records=snapshot(),before=await read();
+const hot=queries.filter(q=>q.query.startsWith('SELECT l.*,')||q.query.startsWith('WITH owned AS')||q.query.startsWith('SELECT l.id,l.name,l.country,l.source,l.channel'));
+assert.equal(hot.length,3);
+const plans=()=>hot.map(({query,args})=>sql.prepare('EXPLAIN QUERY PLAN '+query).all(...args).map(p=>p.detail).join('\n'));
+assert(plans().slice(0,2).every(p=>/SCAN (n|recent)/.test(p)),'reproduce repeated scans before migration');
+const migration=readFileSync('drizzle/0041_personal_work_read_indexes.sql','utf8');sql.exec(migration);sql.exec(migration);
+const afterPlans=plans();
+assert(afterPlans[0].includes('crm_leads_owner'));
+assert(afterPlans.slice(0,2).every(p=>p.includes('crm_assignments_lead_owner_created')&&p.includes('crm_notes_lead_created')));
+assert(afterPlans[0].includes('crm_pool_lead_state_updated'));
+assert(afterPlans.every(p=>!/SCAN (n|recent|a)\b/.test(p)),afterPlans.join('\n'));
+assert.deepEqual(await read(),before,'indexes preserve personal report output and owner isolation');
+assert.equal(snapshot(),records,'index migration changes no business records');
+assert(before.todos.every(l=>Number(l.id.split('-')[1])%3!==0),'other owners remain excluded');
+console.log('PASS: reproduced repeated customer subquery scans; indexes replace them with lookups, preserve complete personal results and business records, and apply idempotently.');

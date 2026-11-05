@@ -1,7 +1,13 @@
 import {identifyOperation,type Operation} from './operations';
-export type DiagnosticEvent={request_id:string;module:string;operation:string;method:string;outcome:string;status:number;elapsed_ms:number;actor_id?:string;references?:Record<string,string>;error_type?:string;location?:string};
+export type DiagnosticEvent={request_id:string;module:string;operation:string;method:string;outcome:string;status:number;elapsed_ms:number;actor_id?:string;references?:Record<string,string>;error_type?:string;location?:string;error_code?:string};
 export type DiagnosticSink=(event:DiagnosticEvent)=>void;
 const safeId=(value:any)=>typeof value==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(value)?value:undefined;
+export function databaseOverloaded(error:any):boolean{
+ for(let depth=0;error&&depth<4;depth++,error=error.cause){
+  if(typeof error.message==='string'&&/D1.*(?:overloaded|too many requests)|too many resources consumed within a 10 second window/i.test(error.message))return true;
+ }
+ return false;
+}
 export class RequestTrace{
  readonly id=crypto.randomUUID();
  readonly started=Date.now();
@@ -10,6 +16,7 @@ export class RequestTrace{
  references:Record<string,string>={};
  errorType:string|undefined;
  location:string|undefined;
+ errorCode:string|undefined;
  constructor(readonly request:Request,readonly sink:DiagnosticSink=event=>console.log(JSON.stringify({event:'crm.operation',...event}))){this.operation=identifyOperation(new URL(request.url).pathname.slice(5),request.method);}
  identify(body:any){
   this.operation=identifyOperation(new URL(this.request.url).pathname.slice(5),this.request.method,body);
@@ -17,11 +24,12 @@ export class RequestTrace{
  }
  actor(value:string){this.actorId=safeId(value);}
  failure(error:any){
+  if(databaseOverloaded(error))this.errorCode='database_overloaded';
   this.errorType=['Problem','AllocationError','TypeError','RangeError','Error'].includes(error?.constructor?.name)?error.constructor.name:'Error';
   // Keep only source locations, never exception messages, SQL parameters, URLs or customer content.
   this.location=typeof error?.stack==='string'?error.stack.split('\n').slice(1).map((line:string)=>line.match(/\b([\w.-]+\.(?:js|ts|mjs)):(\d+):(\d+)\b/)?.[0]).filter(Boolean).slice(0,3).join(' | ')||undefined:undefined;
  }
- event(status:number,outcome=status>=400?'failed':'completed'):DiagnosticEvent{return {request_id:this.id,...this.operation,method:this.request.method,outcome,status,elapsed_ms:Date.now()-this.started,actor_id:this.actorId,references:Object.keys(this.references).length?this.references:undefined,error_type:this.errorType,location:this.location};}
+ event(status:number,outcome=status>=400?'failed':'completed'):DiagnosticEvent{return {request_id:this.id,...this.operation,method:this.request.method,outcome,status,elapsed_ms:Date.now()-this.started,actor_id:this.actorId,references:Object.keys(this.references).length?this.references:undefined,error_type:this.errorType,location:this.location,error_code:this.errorCode};}
  emit(status:number){try{this.sink(this.event(status));}catch{/* Diagnostics must never change a business result. */}}
 }
 export async function tracedRequest(request:Request,execute:(request:Request,trace:RequestTrace)=>Promise<Response>,sink?:DiagnosticSink){
