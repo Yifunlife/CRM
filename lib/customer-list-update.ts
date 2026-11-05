@@ -36,8 +36,8 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
   if(Object.hasOwn(patch,'market'))statements.push(customerChange(db,actor,lead.id,'market',patch.market,'客户管理确认客资市场',condition,args),db.prepare('UPDATE crm_leads SET market=? WHERE id=? AND '+condition).bind(patch.market,lead.id,...args));
   if(Object.hasOwn(patch,'status')){
    if(!STATUSES.includes(patch.status))throw new Problem('请选择有效客户状态');
-   const nextDate=patch.next_date??lead.next_date;
-   await validateLeadFollowup(db,lead,{...patch,next_date:nextDate});
+   const nextDate=patch.next_date===''?lead.next_date:patch.next_date??lead.next_date;
+   if(Object.hasOwn(patch,'next_date')&&patch.next_date!==''||patch.status==='暂停跟进')await validateLeadFollowup(db,lead,{...patch,next_date:nextDate});
    statements.push(...await closingOutcome(db,lead,patch,actor,condition,args));
    statements.push(customerChange(db,actor,lead.id,'status',patch.status,clean(patch.pause_reason||patch.loss_note)||'客户管理总页更新',condition,args));
    statements.push(db.prepare('UPDATE crm_leads SET status=?,next_date=? WHERE id=? AND '+condition).bind(patch.status,nextDate,lead.id,...args));

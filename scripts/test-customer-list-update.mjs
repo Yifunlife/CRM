@@ -13,6 +13,12 @@ const change=(id,patch)=>({id,base:Object.fromEntries(['grade','status','next_da
 const call=(changes,user=sales)=>update(db,user,user,{changes});
 const before=row('one');
 await call([change('one',{grade:'A'}),change('two',{grade:'B'})]);assert.equal(row('one').grade,'A');assert.equal(row('two').grade,'B');
+// A status-only registration can omit the follow-up date; batch blanks preserve each existing plan.
+await call([change('one',{status:'正在沟通'})]);assert.equal(row('one').status,'正在沟通');assert.equal(row('one').next_date,'');
+await call([change('two',{status:'正在沟通',next_date:''})]);assert.equal(row('two').status,'正在沟通');assert.equal(row('two').next_date,'');
+sql.prepare("UPDATE crm_leads SET next_date=? WHERE id=?").run('2020-01-01','one');sql.prepare("UPDATE crm_leads SET next_date=? WHERE id=?").run('2099-02-01','two');
+await call([change('one',{status:'已联系待回复',next_date:''}),change('two',{status:'已联系待回复'})]);assert.equal(row('one').next_date,'2020-01-01');assert.equal(row('two').next_date,'2099-02-01');
+await assert.rejects(call([change('one',{status:'正在沟通',next_date:'2020-01-01'})]),/不能早于今天/);
 await call([change('one',{status:'正在沟通',next_date:'2099-01-01'}),change('two',{status:'正在沟通',next_date:'2099-01-01'})]);
 assert.equal(row('one').status,'正在沟通');assert.equal(row('one').last_contact,before.last_contact);assert.equal(row('one').detail,before.detail);assert.equal(row('one').owner_id,before.owner_id);
 const snapshot=()=>JSON.stringify(sql.prepare('SELECT * FROM crm_leads ORDER BY id').all()),saved=snapshot();
