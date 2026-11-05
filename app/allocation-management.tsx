@@ -5,6 +5,7 @@ import {automaticAllocationRecipient} from '../lib/allocation-intake';
 import {monthNow,nextMonth} from '../lib/allocation';
 import {suiteStamp} from '../lib/sales-suite';
 import AllocationSettings from './allocation-settings';
+import './management-workspace.css';
 import './allocation-management.css';
 import './allocation-confirmed.css';
 type Api=(path:string,body?:any)=>Promise<any>;
