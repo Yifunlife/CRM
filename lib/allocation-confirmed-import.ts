@@ -15,7 +15,7 @@ export async function confirmedAllocationImport(db:D1Database,user:any,actor:any
  const website=body.form_source==='website',at=now(),source=website?'独立站':body.form_source==='whatsapp'?'WhatsApp／其他':'内贸表单',batchId=id();
  const [leads,users,submissions]=await Promise.all([
   db.prepare('SELECT id,name,phone,email,source,owner_id,original_owner,market,country,business_scope,detail FROM crm_leads').all<any>(),
-  db.prepare("SELECT id,name,username,role,trade_scopes FROM crm_users WHERE active=1 AND role IN ('sales','ceo','management','followup')").all<any>(),
+  db.prepare("SELECT id,name,username,role,trade_scopes FROM crm_users WHERE active=1 AND role IN ('sales','ceo','management')").all<any>(),
   db.prepare("SELECT id FROM crm_form_submissions WHERE id LIKE 'manual-form:%' UNION SELECT id FROM crm_customer_pool WHERE id LIKE 'manual-form:%'").all<any>()
  ]);
  const ownerKey=(value:string)=>value.trim().toLowerCase();

@@ -40,7 +40,7 @@ export async function setAccountPermissions(db:D1Database,actor:any,body:any){
  if(body.role==='sales'&&SALES_PERSONAL_ONLY.some(k=>p[k]))throw new AllocationError('业务员仅使用本人客户功能；全公司管理请使用相应管理角色');
  if((p.leads_allocate||p.performance_view||p.customers_edit&&body.role!=='sales')&&!p.customers_all||p.followup_edit&&body.role!=='followup'&&!p.followup_all||p.advertising_edit&&!p.advertising_view)throw new AllocationError('维护或分配功能需要同时开放对应查看权限');
  if(body.role==='ceo'&&PERMISSION_FIELDS.some(([k])=>p[k]!==permissionDefaults('ceo')[k]))throw new AllocationError('CEO业务权限与管理员一致，系统功能配置仅限管理员');
- await db.prepare('UPDATE crm_users SET role=?,permissions=? WHERE id=?').bind(body.role,JSON.stringify(p),target.id).run();
+ await db.prepare("UPDATE crm_users SET role=?,permissions=?,trade_scopes=CASE WHEN ?='followup' THEN '[]' ELSE trade_scopes END WHERE id=?").bind(body.role,JSON.stringify(p),body.role,target.id).run();
  return {ok:true};
 }
 

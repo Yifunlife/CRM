@@ -7,6 +7,7 @@ export function accountSalesCompany(user:{id:string}){
  return ['b7e34925-ec83-4f4e-ad42-04be344dc82b','33e3947e-976c-4521-8128-7a18e60ed462'].includes(user.id)?'澳洲分公司':'';
 }
 export function accountTradeScopes(user:any):string[]{
+ if(user.role==='followup')return [];
  const value=typeof user.trade_scopes==='string'?JSON.parse(user.trade_scopes):user.trade_scopes;
  return Array.isArray(value)?value.filter(v=>v in TRADE_SCOPES):[];
 }

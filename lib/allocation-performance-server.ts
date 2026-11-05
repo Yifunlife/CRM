@@ -8,7 +8,7 @@ const list=async(db:D1Database,sql:string,args:any[]=[])=> (await db.prepare(sql
 export async function allocationPerformance(db:D1Database,month=monthNow()){
  const [settings,people,cash,overrides]=await Promise.all([
   db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>(),
-  list(db,"SELECT id,name,role,active,trade_scopes FROM crm_users WHERE role IN ('sales','management','ceo') OR (role='followup' AND EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value='domestic')) ORDER BY name,id"),
+  list(db,"SELECT id,name,role,active,trade_scopes FROM crm_users WHERE role IN ('sales','management','ceo') ORDER BY name,id"),
   list(db,"SELECT d.owner_id,substr(r.received_date,1,7) month,SUM(CASE WHEN r.currency='CNY' THEN r.amount_minor ELSE 0 END) cny,SUM(CASE WHEN r.currency='USD' THEN r.amount_minor ELSE 0 END) usd,COUNT(*) records FROM crm_receipts r JOIN crm_deals d ON d.id=r.deal_id WHERE d.cancelled=0 AND r.cancelled=0 AND r.received_date<? GROUP BY d.owner_id,substr(r.received_date,1,7)",[month+'-01']),
   list(db,"SELECT scope,payload FROM crm_allocation_configs WHERE scope LIKE 'performance:%'")
  ]);
@@ -33,12 +33,12 @@ export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor
   const old=await db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<any>();if(!old)throw new Problem('请先设置接收名单');
   if(body.version!==old.payload)throw new Problem('接收名单已更新，请刷新后重试',409);
   const config=JSON.parse(old.payload);let member=config.members.find((m:any)=>m.user_id===body.user_id);
-  const person=await db.prepare("SELECT id,trade_scopes FROM crm_users WHERE id=? AND active=1 AND (role IN ('sales','management','ceo') OR (role='followup' AND EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value='domestic')))").bind(body.user_id).first<any>();
+  const person=await db.prepare("SELECT id,trade_scopes FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo')").bind(body.user_id).first<any>();
   if(!person)throw new Problem('只能设置已启用业务人员的接收状态');
   if(!member&&(body.state!=='参与'||!JSON.parse(person.trade_scopes).some((s:string)=>['domestic','foreign'].includes(s))))throw new Problem('加入接收名单前，请先设置内贸或外贸范围');
   if(member?.state===body.state)return {ok:true};
   const before=member?.state||'未加入分配名单';if(!member){member={user_id:body.user_id,state:body.state,share:0};config.members.push(member);}else member.state=body.state;
-  const result=await db.batch([db.prepare("UPDATE crm_allocation_configs SET payload=?,updated=?,updated_by=? WHERE scope='all' AND payload=? AND EXISTS(SELECT 1 FROM crm_users WHERE id=? AND active=1 AND (role IN ('sales','management','ceo') OR (role='followup' AND EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value='domestic'))) AND (?=0 OR EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value IN ('domestic','foreign'))))").bind(JSON.stringify(config),now(),actor.id,old.payload,body.user_id,before==='未加入分配名单'?1:0),db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,'修改接收状态',?,?,?,? WHERE changes()>0").bind(id(),body.user_id,JSON.stringify({before,after:body.state,operation:before+' → '+body.state}),now(),actor.id)]);
+  const result=await db.batch([db.prepare("UPDATE crm_allocation_configs SET payload=?,updated=?,updated_by=? WHERE scope='all' AND payload=? AND EXISTS(SELECT 1 FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo') AND (?=0 OR EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value IN ('domestic','foreign'))))").bind(JSON.stringify(config),now(),actor.id,old.payload,body.user_id,before==='未加入分配名单'?1:0),db.prepare("INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,'修改接收状态',?,?,?,? WHERE changes()>0").bind(id(),body.user_id,JSON.stringify({before,after:body.state,operation:before+' → '+body.state}),now(),actor.id)]);
   if(!result[0].meta.changes)throw new Problem('接收名单或账号状态已更新，请刷新后重试',409);return {ok:true};
  }
  if(path==='allocation/management/policy'){
@@ -50,7 +50,7 @@ export async function allocationPerformanceEndpoint(db:D1Database,user:any,actor
  }
  if(path==='allocation/management/adjustment'){
   if(!validMonth(body.month)||body.month<monthNow()||body.month>nextMonth(monthNow()))throw new Problem('只能调整本月或下月的分配档位');
-  const person=await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND (role IN ('sales','management','ceo') OR (role='followup' AND EXISTS(SELECT 1 FROM json_each(trade_scopes) WHERE value='domestic')))").bind(body.user_id).first();if(!person)throw new Problem('请选择有效业务员');
+  const person=await db.prepare("SELECT id FROM crm_users WHERE id=? AND active=1 AND role IN ('sales','management','ceo')").bind(body.user_id).first();if(!person)throw new Problem('请选择有效业务员');
   if(!['manual','auto'].includes(body.mode)||!['pending','qualified','unqualified'].includes(body.assessment)||!['0','20','50','80','pause','review'].includes(body.tier))throw new Problem('调整选项无效');
   const reason=typeof body.reason==='string'?body.reason.trim():'';if(body.mode==='manual'&&(!reason||reason.length>160))throw new Problem('请填写160字内的调整原因');
   const scope='performance:'+body.month+':'+body.user_id,old=await db.prepare('SELECT payload FROM crm_allocation_configs WHERE scope=?').bind(scope).first<any>(),version=old?JSON.parse(old.payload).version:0;

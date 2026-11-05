@@ -8,7 +8,7 @@ const tmp=mkdtempSync(tmpdir()+'/crm-account-classification-');
 try{
  const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
  const migrations=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
- for(const f of migrations.filter(f=>!f.startsWith('0032_')))sql.exec(readFileSync('drizzle/'+f,'utf8'));
+ for(const f of migrations.filter(f=>!f.startsWith('0032_')&&!f.startsWith('0042_')))sql.exec(readFileSync('drizzle/'+f,'utf8'));
  const {digest,can,PERMISSION_FIELDS}=await import(moduleURL('lib/crm.ts'));
  for(const role of ['admin','ceo','management','sales','followup','operations']){
   sql.prepare('INSERT INTO crm_users(id,username,name,role,password,permissions,created) VALUES(?,?,?,?,?,?,?)').run(role,role,role,role,'test-only','{}','2026-10-30');
@@ -18,6 +18,7 @@ try{
  const usersBefore=sql.prepare('SELECT * FROM crm_users ORDER BY id').all(),leadBefore=sql.prepare('SELECT * FROM crm_leads').all();
  sql.exec(readFileSync('drizzle/0032_account_trade_scopes.sql','utf8'));
  assert.deepEqual(sql.prepare('SELECT * FROM crm_users ORDER BY id').all().map(({trade_scopes,...u})=>u),usersBefore.map(u=>({...u})));
+ sql.exec(readFileSync('drizzle/0042_followup_no_lead_allocation.sql','utf8'));
  globalThis.__accountTestEnv={DB:database(sql)};
  await build({entryPoints:['app/api/[...path]/route.ts'],bundle:true,platform:'node',format:'esm',outfile:tmp+'/route.mjs',plugins:[{name:'isolated-env',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const env=globalThis.__accountTestEnv;'}));}}],logLevel:'silent'});
  const handlers=await import(tmp+'/route.mjs'),origin='https://isolated.invalid';

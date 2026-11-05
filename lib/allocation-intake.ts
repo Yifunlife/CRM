@@ -32,11 +32,11 @@ export function prepareAllocationImport(user:any,actor:any,body:any){
 
 export function allocationRecipientMarket(user:any,market:string){try{const scopes=typeof user.trade_scopes==='string'?JSON.parse(user.trade_scopes):user.trade_scopes;return Array.isArray(scopes)&&scopes.includes(market==='内贸'?'domestic':market==='外贸'?'foreign':'');}catch{return false;}}
 
-export function customerOwnerEligible(user:any,market?:string){return ['sales','management','ceo'].includes(user.role)||user.role==='followup'&&(market?allocationRecipientMarket(user,market):['内贸','外贸'].some(m=>allocationRecipientMarket(user,m)));}
+export function customerOwnerEligible(user:any,_market?:string){return ['sales','management','ceo'].includes(user.role);}
 
 // Winnie confirmed that the source-sheet label 方总 refers to 方星球.
 export function customerOwnerName(value:unknown){const name=String(value||'').trim().toLowerCase();return name==='方总'?'方星球':name;}
 
 // 方星球仅排除内贸自动分配；原归属和外贸接收保持不变。
 export const DOMESTIC_AUTO_EXCLUDED_USER='b9bde8d1-8f87-4981-956b-128423cd6651';
-export function automaticAllocationRecipient(user:any,market:string){return allocationRecipientMarket(user,market)&&(market==='内贸'?user.id!==DOMESTIC_AUTO_EXCLUDED_USER&&['sales','management','ceo','followup'].includes(user.role):['sales','management','ceo'].includes(user.role));}
+export function automaticAllocationRecipient(user:any,market:string){return customerOwnerEligible(user)&&allocationRecipientMarket(user,market)&&(market!=='内贸'||user.id!==DOMESTIC_AUTO_EXCLUDED_USER);}

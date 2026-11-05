@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {database,moduleURL} from './test-form-intake.mjs';
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
+for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0042_')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),admin={id:'admin',role:'ceo'};
+for(const [id,role,scopes] of [['admin','ceo',[]],['sales','sales',['domestic','foreign']],['follow','followup',['domestic']],['follow-foreign','followup',['foreign']]])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES(?,?,?,?,?,?,?)').run(id,id,id,role,'unused',JSON.stringify(scopes),'2026-01-01');
+const config={members:['sales','follow','follow-foreign'].map(user_id=>({user_id,state:'参与',share:0})),rule:{automatic:true,performance:30,maxChange:10,minimum:5}};
+for(const [scope,payload] of [['all',config],['douyin-local',{...config,members:config.members.slice(1)}]])sql.prepare('INSERT INTO crm_allocation_configs(scope,payload,updated,updated_by) VALUES(?,?,?,?)').run(scope,JSON.stringify(payload),'unchanged','admin');
+sql.exec("INSERT INTO crm_leads(id,name,source,owner_id,detail,fingerprint,created) VALUES('history','Original customer','Meta','follow','{}','history','2026-01-01'); INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES('old','history','admin','follow','2026-01-01','equal-global-v1'); INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('note','history','follow','preserved original history','邮件','','2026-01-01');");
+sql.exec("INSERT INTO crm_followup_orders(id,order_number,lead_id,project,commercial_id,logistics_id,details,steps,change_token,created,created_by,updated,updated_by) VALUES('order','order','history','Original order','sales','follow','{}','[]','token','2026-01-01','admin','2026-01-01','admin')");
+const snapshot=()=>JSON.stringify(['crm_leads','crm_assignments','crm_notes','crm_followup_orders'].map(t=>sql.prepare('SELECT * FROM '+t+' ORDER BY id').all())),before=snapshot();
+const migration=readFileSync('drizzle/0042_followup_no_lead_allocation.sql','utf8');sql.exec(migration);sql.exec(migration);
+assert.equal(snapshot(),before);
+assert(sql.prepare("SELECT trade_scopes FROM crm_users WHERE role='followup'").all().every(r=>r.trade_scopes==='[]'));
+const current=JSON.parse(sql.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").get().payload);assert.deepEqual(current,{...config,members:[config.members[0]]});assert.deepEqual(JSON.parse(sql.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='douyin-local'").get().payload).members,[]);
+const {customerOwnerEligible,automaticAllocationRecipient}=await import(moduleURL('lib/allocation-intake.ts'));
+const {accountTradeScopes}=await import(moduleURL('lib/account-classification.ts'));
+const {validateConfig}=await import(moduleURL('lib/allocation.ts'));
+const stale={id:'follow',role:'followup',active:1,trade_scopes:'["domestic","foreign"]'};
+assert.deepEqual(accountTradeScopes(stale),[]);assert(!customerOwnerEligible(stale));for(const market of ['内贸','外贸'])assert(!automaticAllocationRecipient(stale,market));assert.throws(()=>validateConfig(config,[stale,{id:'sales',role:'sales',active:1}]),/业务员/);
+const {allocationPerformanceEndpoint}=await import(moduleURL('lib/allocation-performance-server.ts'));
+const staff=await allocationPerformanceEndpoint(db,admin,admin,'allocation/management/staff','GET',{},new URL('https://test.invalid/'));assert(!staff.rows.some(r=>r.role==='followup'));
+await assert.rejects(allocationPerformanceEndpoint(db,admin,admin,'allocation/management/state','POST',{user_id:'follow',state:'参与',version:JSON.stringify(current)},new URL('https://test.invalid/')),/业务人员/);
+// A stale database scope and old receiving list still cannot re-enable assignment.
+sql.prepare("UPDATE crm_users SET trade_scopes=? WHERE id='follow'").run(stale.trade_scopes);sql.prepare("UPDATE crm_allocation_configs SET payload=? WHERE scope='all'").run(JSON.stringify(config));
+const add=id=>sql.prepare("INSERT INTO crm_leads(id,name,source,market,business_scope,cohort,detail,fingerprint,created) VALUES(?,?,'WhatsApp','内贸','douyin-local','new','{}',?,'2026-11-05')").run(id,id,id);
+const {distribute}=await import(moduleURL('lib/allocation-server.ts'));const {distributeServiceLead}=await import(moduleURL('lib/service-allocation.ts'));
+add('new');assert.equal(await distribute(db,['new'],'all','admin'),1);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='new'").get().owner_id,'sales');add('service');await distributeServiceLead(db,'service','admin',false);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='service'").get().owner_id,'sales');
+// SQL guards re-check the role if it changes after candidates have been read.
+add('race');const racing={...db,batch:async statements=>{sql.exec("UPDATE crm_users SET role='followup' WHERE id='sales'");try{return await db.batch(statements);}finally{sql.exec("UPDATE crm_users SET role='sales' WHERE id='sales'");}}};assert.equal(await distribute(racing,['race'],'all','admin'),0);assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='race'").get().owner_id,null);
+const {setAccountPermissions,validateTradeScopes}=await import(moduleURL('lib/account-edit.ts'));const {permissionDefaults}=await import(moduleURL('lib/crm.ts'));
+assert.throws(()=>validateTradeScopes('followup',['domestic']),/只有业务员/);await setAccountPermissions(db,admin,{id:'sales',role:'followup',permissions:permissionDefaults('followup')});assert.equal(sql.prepare("SELECT trade_scopes FROM crm_users WHERE id='sales'").get().trade_scopes,'[]');
+assert.equal(sql.prepare("SELECT logistics_id FROM crm_followup_orders WHERE id='order'").get().logistics_id,'follow');assert.equal(sql.prepare("SELECT owner_id FROM crm_leads WHERE id='history'").get().owner_id,'follow');assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: followup scope and roster cleanup; original customers/history/orders preserved; role conversion clears scopes; stale configs and concurrent role changes cannot allocate; ordinary and service allocation still reach sales only.');
