@@ -14,7 +14,11 @@ const call=(changes,user=sales)=>update(db,user,user,{changes});
 const before=row('one');
 await call([change('one',{grade:'A'}),change('two',{grade:'B'})]);assert.equal(row('one').grade,'A');assert.equal(row('two').grade,'B');
 // A status-only registration can omit the follow-up date; batch blanks preserve each existing plan.
-await call([change('one',{status:'正在沟通'})]);assert.equal(row('one').status,'正在沟通');assert.equal(row('one').next_date,'');
+const statusResult=await call([change('one',{status:'正在沟通'})]);assert.equal(row('one').status,'正在沟通');assert.equal(row('one').next_date,'');assert(Number.isFinite(Date.parse(statusResult.updated_at)));
+const statusEvent=sql.prepare("SELECT * FROM crm_attribution_events WHERE entity_id='one' AND kind='跟进状态变化' ORDER BY rowid DESC LIMIT 1").get();assert.equal(statusEvent.created_by,'sales');assert(Number.isFinite(Date.parse(statusEvent.created)));assert.equal(JSON.parse(statusEvent.payload).after,'正在沟通');
+const {homeCustomer}=await import(moduleURL('lib/sales-home.ts')),{nextStepReminders}=await import(moduleURL('lib/next-step-reminders.ts'));
+const unscheduled=homeCustomer({...row('one'),cohort:'new'},new Date().toISOString());assert(unscheduled.tags.includes('unscheduled'));assert(nextStepReminders({today:new Date().toISOString().slice(0,10),todos:[unscheduled]},{reminders:[],projects:[],tasks:[]}).some(r=>r.target_id==='one'&&r.label==='待安排跟进'));
+
 await call([change('two',{status:'正在沟通',next_date:''})]);assert.equal(row('two').status,'正在沟通');assert.equal(row('two').next_date,'');
 sql.prepare("UPDATE crm_leads SET next_date=? WHERE id=?").run('2020-01-01','one');sql.prepare("UPDATE crm_leads SET next_date=? WHERE id=?").run('2099-02-01','two');
 await call([change('one',{status:'已联系待回复',next_date:''}),change('two',{status:'已联系待回复'})]);assert.equal(row('one').next_date,'2020-01-01');assert.equal(row('two').next_date,'2099-02-01');

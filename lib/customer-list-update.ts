@@ -12,7 +12,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
  const changes=body?.changes;
  if(!Array.isArray(changes)||!changes.length||changes.length>30)throw new Problem('每次请选择1–30位客户');
  if(new Set(changes.map(c=>c.id)).size!==changes.length)throw new Problem('客户选择重复，请重新选择');
- const token=id(),condition='EXISTS(SELECT 1 FROM crm_workflow_audit WHERE id=?)',args=[token];
+ const updatedAt=now(),token=id(),condition='EXISTS(SELECT 1 FROM crm_workflow_audit WHERE id=?)',args=[token];
  const snapshots:any[]=[];
  const statements:D1PreparedStatement[]=[];
  for(const change of changes){
@@ -47,7 +47,7 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
    statements.push(db.prepare('UPDATE crm_leads SET grade=? WHERE id=? AND '+condition).bind(patch.grade,lead.id,...args),cancelColleagueFirstContacts(db,lead.id,condition,args));
   }
   if(Object.hasOwn(patch,'contract_number'))statements.push(db.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._customer_profile.contractNumber',?,'$._profile_revision',COALESCE(json_extract(detail,'$._profile_revision'),0)+1) WHERE id=? AND "+condition).bind(patch.contract_number.trim(),lead.id,...args));
-  statements.push(db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE '+condition).bind(id(),'客户管理快捷更新',lead.id,JSON.stringify({before:change.base,patch}),now(),actor.id,...args));
+  statements.push(db.prepare('INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by) SELECT ?,?,?,?,?,? WHERE '+condition).bind(id(),'客户管理快捷更新',lead.id,JSON.stringify({before:change.base,patch}),updatedAt,actor.id,...args));
  }
  // Admit the whole batch only if every snapshot still matches inside the write transaction.
  const gate=db.prepare(`INSERT INTO crm_workflow_audit(id,kind,entity_id,payload,created,created_by)
@@ -63,5 +63,5 @@ export async function updateCustomerList(db:D1Database,user:any,actor:any,body:a
   .bind(token,'客户管理批量更新',changes[0].id,JSON.stringify({count:changes.length}),now(),actor.id,JSON.stringify(snapshots),changes.length);
  const result=await db.batch([gate,...statements]);
  if(!result[0].meta.changes)throw new Problem('客户状态或归属已变化，请刷新后重试',409);
- return {ok:true,updated:changes.length};
+ return {ok:true,updated:changes.length,updated_at:updatedAt};
 }

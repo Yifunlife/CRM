@@ -10,11 +10,11 @@ import StatusBadge from './status-badge';
 import CustomerSummary from './customer-summary';
 import CustomerManagement from './customer-management';
 import './management-workspace.css';
-type Props={section?:string;onSection?:(section:string)=>void;user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void};
-export default function CustomerWorkspace({user,api,openLead,section='总况',onSection}:Props){
+type Props={initialLeadId?:string;section?:string;onSection?:(section:string)=>void;user:any;api:(path:string,body?:any)=>Promise<any>;openLead:(id:string)=>void};
+export default function CustomerWorkspace({user,api,openLead,section='总况',onSection,initialLeadId}:Props){
  const tab=section;const [data,D]=useState<any>(null),[page,P]=useState(1),[query,Q]=useState(''),[revision,R]=useState(0),[error,E]=useState(''),[busy,B]=useState(false),[adding,A]=useState(false),[importing,I]=useState(false),[message,M]=useState(''),[selected,S]=useState<any>(null),[owner,O]=useState(user.role==='operations'?'':user.id),[state,STATE]=useState(''),[market,MK]=useState('全部');
  useEffect(()=>{if(tab==='档案')return;let live=true;E('');const timer=setTimeout(()=>api('sales-management/customers?'+new URLSearchParams({page:String(page),q:query,owner,state})).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}),query?200:0);return()=>{live=false;clearTimeout(timer);};},[api,page,query,owner,state,revision,user.id,tab]);
- if(tab==='档案')return <div className="management-workspace"><CustomerManagement initialMarket={market} initialOwner={owner} onOwnerChange={O} title="客户档案" user={user} api={api} openLead={openLead}/></div>;
+ if(tab==='档案')return <div className="management-workspace"><CustomerManagement initialLeadId={initialLeadId} initialMarket={market} initialOwner={owner} onOwnerChange={O} title="客户档案" user={user} api={api} openLead={openLead}/></div>;
  const stages=Object.fromEntries(PROJECT_STAGES);
  return <div className={'management-workspace'+(tab==='会议到访'?' mw-meetings':tab==='推进'?' mw-progress':'')}><div className="page-heading"><div><h1>{tab==='会议到访'?'会议与到访记录':'客户'+tab}</h1><p>{tab==='总况'?'看清客户分布、跟进状态与需要关注的客户。':tab==='推进'?'每次沟通都有结论，每位客户都有下一步。':'到访记录可从表单导入，线上会议随客户推进自动汇总。'}</p></div><EmployeeSelect user={user} api={api} value={owner} onChange={value=>{O(value);P(1);}}/><button onClick={()=>R(r=>r+1)}>刷新</button></div>
  {error&&<p className="notice error" role="alert">{error}</p>}{message&&<p role="status" className="notice">{message}</p>}{tab==='档案'?<CustomerManagement user={user} api={api} openLead={openLead}/>:<>{!data&&!error&&<p role="status">正在读取客户记录…</p>}{data&&<>

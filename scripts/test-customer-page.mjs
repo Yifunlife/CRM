@@ -6,6 +6,12 @@ for(let i=0;i<65;i++)sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,
 const read=(params={},u=admin)=>customerPage(db,u,new URL('http://test/?'+new URLSearchParams(params)));
 assert.equal((await read()).total,65);assert.equal((await read({},sales)).total,60);assert.equal((await read({page:'99'})).page,3);assert.equal((await read({q:"' OR 1=1 --"})).total,0);
 assert.equal((await read({q:'company 64'})).total,1);assert.equal((await read({cohort:'historical',status:'待首次联系'})).total,0);assert.equal((await read({queue:'待首次联系'},sales)).total,30);
+assert.deepEqual((await read({lead_id:'lead01'},sales)).rows.map(r=>r.id),['lead01']);assert.equal((await read({lead_id:'lead64'},sales)).total,0,'exact customer links keep ownership boundaries');assert.equal((await read({lead_id:"' OR 1=1 --"},sales)).total,0);
+const {updateCustomerList}=await import(moduleURL('lib/customer-list-update.ts'));
+const focusLead=sql.prepare("SELECT * FROM crm_leads WHERE id='lead01'").get();
+const savedStatus=await updateCustomerList(db,sales,sales,{changes:[{id:focusLead.id,base:Object.fromEntries(['grade','status','next_date','owner_id'].map(k=>[k,focusLead[k]])),patch:{status:'正在沟通'}}]});
+const focused=await read({lead_id:'lead01'},sales);assert.equal(focused.rows[0].status,'正在沟通');assert(Number.isFinite(Date.parse(focused.rows[0].status_updated_at)));assert(Number.isFinite(Date.parse(savedStatus.updated_at)));
+await updateCustomerList(db,sales,sales,{changes:[{id:focusLead.id,base:Object.fromEntries(['grade','status','next_date','owner_id'].map(k=>[k,focused.rows[0][k]])),patch:{status:'待首次联系'}}]});
 const ids=[];for(let page=1;page<=3;page++)ids.push(...(await read({page:String(page)})).rows.map(r=>r.id));assert.equal(new Set(ids).size,65);
 sql.prepare("INSERT INTO crm_customer_pool(id,source,raw,payload,created,updated,created_by,state,lead_id) VALUES('pool','Meta','Raw search token',?,'2026-11-03','2026-11-03','admin','待分配','lead00')").run(JSON.stringify({name:'Pending customer',phone:'1234567',country:'澳洲',business_scope:'meta-full'}));
 const first=await read();assert.equal(first.total,65);assert.equal(first.rows[0].id,'intake:pool');assert(!first.rows.some(r=>r.id==='lead00'));assert.equal((await read({stage:'待分配'})).total,1);assert.equal((await read({q:'raw search'})).total,1);assert.equal((await read({cohort:'historical'})).rows.some(r=>r.intake),false);
