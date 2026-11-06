@@ -22,6 +22,9 @@ const run=async(overrides={})=>{
  r=await run({client:{country:'GB',whatsapp:'07911123456'},payload:{country:'GB',recipient_key:'07911123456'}});assert.equal(r.sent,1);assert.equal(r.client.whatsapp,'+447911123456');
  await assert.rejects(run({client:{country:'GB',whatsapp:'12345'},payload:{country:'GB',recipient_key:'12345'}}),/国际格式/);
  await assert.rejects(run({args:{clients:()=>[{id:'duplicate',whatsapp:'16145551234'}]}}),/号码与其他客户重合/);
+ for(const stage of [2,4,5,6,7,8,9]){r=await run({client:{stage}});assert.equal(r.result.status,'skipped');assert.equal(r.sent,0);assert.equal(r.mail,0);}
+ for(const client of [{status:'已成交'},{projectStatus:'已交付'},{contractNumber:'YF-confirmed'}]){r=await run({client});assert.equal(r.result.status,'skipped');assert.equal(r.sent,0);}
+ r=await run({client:{stage:3}});assert.equal(r.sent,1,'a quote stage alone is not recorded as a deal');
  const historical={auto_historical_first_contact:true,historical_approved_at:new Date().toISOString(),assigned_at:'2025-01-01T00:00:00Z'};
  r=await run({payload:historical,args:{refreshFollowup:async()=>{}}});assert.equal(r.sent,1,'explicit historical approval allows an old assignment');
  await assert.rejects(run({payload:{...historical,historical_approved_at:''},args:{refreshFollowup:async()=>{}}}),/分配时间/);

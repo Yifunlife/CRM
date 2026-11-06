@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {queueFirstContacts,autoContactAllowed,autoContactKey,wonCustomerSQL}=await import(moduleURL('lib/auto-first-contact.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),at=new Date().toISOString();sql.prepare("INSERT INTO crm_users(id,username,name,role,password,created) VALUES('own','own','Own','sales','unused',?)").run(at);
+function seed(id,detail={}){sql.prepare("INSERT INTO crm_leads(id,name,owner_id,source,detail,phone,country,fingerprint,created,cohort,status) VALUES(?,?,'own','Meta',?,'16145551234','US',?,?,'new','待首次联系')").run(id,id,JSON.stringify({'偏好联系方式':'whatsapp',...detail}),id,at);sql.prepare("INSERT INTO crm_workbench_links VALUES(?,'own',?,?,'own')").run(id,id,at);sql.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,policy) VALUES(?,?,'own','own',?,'full-first-v1')").run('a-'+id,id,at);}
+seed('normal');seed('quote',{_customer_profile:{stage:'3'}});
+for(const stage of [2,4,5,6,7,8,9])seed('stage-'+stage,{_customer_profile:{stage:String(stage)}});
+seed('local-won',{_workbench:{stage:4}});seed('legacy-won',{'本地阶段':7});seed('profile-stale-local-won',{_customer_profile:{stage:'1'},_workbench:{stage:4}});
+seed('contract',{_customer_profile:{contractNumber:'YF-confirmed'}});seed('delivered',{_customer_profile:{projectStatus:'已交付'}});seed('marked',{_auto_contact_exclusion:{reason:'won_customer'}});
+seed('deal');sql.prepare("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES('deal','ORDER-WON','deal','own','foreign',?,?, 'own')").run(at,at);
+const won=sql.prepare(`SELECT id FROM crm_leads l WHERE ${wonCustomerSQL()} ORDER BY id`).all().map(l=>l.id);
+assert.equal(won.length,14);assert(!won.includes('normal'));assert(!won.includes('quote'),'quotation alone does not prove a deal');
+sql.prepare('INSERT INTO crm_cloud_settings VALUES(?,?,?,?)').run(autoContactKey('own'),JSON.stringify({enabled:true,assigned_from:at,options:['one','two','three'],whatsapp_daily_limit:20,email_daily_limit:10}),at,'own');sql.prepare("INSERT INTO crm_workbench_bridge(owner_id,token_hash,created_by,seen,status) VALUES('own','unused','own',?,?)").run(Date.now(),JSON.stringify({autoFirstContact:true,whatsapp:true,email:true}));
+await queueFirstContacts(db,'own');const jobs=sql.prepare('SELECT * FROM crm_workbench_commands').all();assert.deepEqual(jobs.map(j=>JSON.parse(j.payload).crm_lead_id).sort(),['normal','quote'],'normal new-intake sends exclude all deal/profile/contract/shipping evidence');
+const normal=jobs.find(j=>JSON.parse(j.payload).crm_lead_id==='normal');assert(await autoContactAllowed(db,'own',JSON.parse(normal.payload)));
+sql.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._customer_profile.stage','4') WHERE id='normal'").run();assert(!await autoContactAllowed(db,'own',JSON.parse(normal.payload)),'a new deal stage revokes an already queued command at dispatch');
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_notes').get().n,0,'eligibility checks do not fabricate contact records');
+console.log('PASS: formal deals, profile/workbench/legacy deal stages, delivered status, contract numbers and explicit exclusions; ordinary prospects stay eligible and later deal changes revoke queued sends.');

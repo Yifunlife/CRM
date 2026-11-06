@@ -3,7 +3,7 @@ import {customerAnalysisEndpoint} from './customer-analysis';
 import {contactGrades,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {ensureCustomerCode} from './customer-code';
 import {customerProfile,validateCustomerProfile} from './customer-profile';
-import {queueFirstContacts,autoContactAllowed,autoContactQuota,recordAutoFollowupResult} from './auto-first-contact';
+import {queueFirstContacts,autoContactAllowed,autoContactQuota,recordAutoFollowupResult,wonCustomerSQL} from './auto-first-contact';
 import {readJson,storeJson} from './object-storage';
 import {digest,id,clean,phoneKey,emailKey,now,can} from './crm';
 import {AllocationError} from './allocation-server';
@@ -148,7 +148,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  let next:any;for(const candidate of candidates){const p=JSON.parse(candidate.payload);if(!p.auto_first_contact||await autoContactQuota(db,device.owner_id,p,candidate.id)){next=candidate;break;}}
  if(!next)return {command:null};
  try{await ownedDesktop(db,device.owner_id,next.desktop_id);const automatic=JSON.parse(next.payload);if(automatic.auto_first_contact&&!await autoContactAllowed(db,device.owner_id,automatic))throw new AllocationError('自动首联条件已变化',409);const targetLead=JSON.parse(next.payload).crm_lead_id;if(targetLead&&!await db.prepare('SELECT id FROM crm_leads WHERE id=? AND owner_id=?').bind(targetLead,device.owner_id).first())throw new AllocationError('客资归属已变化',403);if(next.kind==='client-update')for(const change of JSON.parse(next.payload).changes)await ownedDesktop(db,device.owner_id,change.id);}catch(error){await recordAutoFollowupResult(db,device.owner_id,next,'failed',{error:error instanceof Error?error.message:'执行条件已变化'},new Date(timestamp).toISOString());await db.prepare("UPDATE crm_workbench_commands SET state='failed',result=?,updated=? WHERE id=? AND state='queued'").bind(JSON.stringify({error:'客户归属已变化，未执行'}),timestamp,next.id).run();return {command:null};}
- const claimed:any=await db.prepare(`UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' AND (COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=json_extract(crm_workbench_commands.payload,'$.crm_lead_id') AND ${customerLeadSQL()})) RETURNING id`).bind(timestamp,next.id).first();
+ const claimed:any=await db.prepare(`UPDATE crm_workbench_commands SET state='running',updated=? WHERE id=? AND state='queued' AND (COALESCE(json_extract(payload,'$.auto_first_contact'),0)<>1 OR EXISTS(SELECT 1 FROM crm_leads l WHERE l.id=json_extract(crm_workbench_commands.payload,'$.crm_lead_id') AND ${customerLeadSQL()} AND NOT ${wonCustomerSQL()})) RETURNING id`).bind(timestamp,next.id).first();
  return {command:claimed?{id:next.id,desktop_id:next.desktop_id,kind:next.kind,payload:JSON.parse(next.payload)}:null};
 }
 
