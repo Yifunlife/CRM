@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {readFileSync} from 'node:fs';
-const jobs={'company-cloud-intake':'retryCompanyCloudIntake','followup-notifications':'refreshFollowupNotifications','google-form-sync':'syncGoogleForms','sales-suite-server':'refreshSalesSuite'};
+const jobs={'notification-retention':'cleanupReadNotifications','company-cloud-intake':'retryCompanyCloudIntake','followup-notifications':'refreshFollowupNotifications','google-form-sync':'syncGoogleForms','sales-suite-server':'refreshSalesSuite'};
 const bundle=await build({entryPoints:['lib/workflow-scheduler.ts'],bundle:true,write:false,platform:'node',format:'esm',plugins:[{name:'job-fixtures',setup(b){b.onResolve({filter:/^\.\//},a=>jobs[a.path.slice(2)]?{path:a.path.slice(2),namespace:'jobs'}:undefined);b.onLoad({filter:/.*/,namespace:'jobs'},a=>({contents:`export async function ${jobs[a.path]}(...args){globalThis.__calls.push({job:${JSON.stringify(a.path)},args});if(globalThis.__fail===${JSON.stringify(a.path)})throw globalThis.__failure;}`}));}}]});
 const {runScheduledWorkflow}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const log=console.log,events=[];console.log=s=>events.push(JSON.parse(s));
@@ -15,7 +15,8 @@ try{
  assert.equal(new Set(events.map(e=>e.run_id)).size,1);
  for(const at of ['2026-11-02T00:05:00Z','2026-11-02T03:00:00Z','2026-11-02T22:00:00Z','2026-06-02T21:00:00Z'])assert.equal((await run(at)).length,0,at);
  for(const at of ['2026-11-02T21:00:00.000Z','2026-06-02T22:00:00.000Z']){const c=await run(at);assert.deepEqual(c,[{job:'google-form-sync',args:[db,{at}]}]);}
- for(const stamp of [at,'2026-11-02T21:00:00.000Z','2026-11-02T03:05:00.000Z']){globalThis.__calls=[];await runScheduledWorkflow(Date.parse(stamp),env,'*/5 * * * *');assert.deepEqual(globalThis.__calls.map(c=>c.job),['company-cloud-intake']);}
+ for(const stamp of [at,'2026-11-02T21:00:00.000Z','2026-11-02T03:05:00.000Z']){globalThis.__calls=[];await runScheduledWorkflow(Date.parse(stamp),env,'*/5 * * * *');assert.deepEqual(globalThis.__calls.map(c=>c.job),['company-cloud-intake','notification-retention']);}
+ for(const job of ['company-cloud-intake','notification-retention']){globalThis.__fail=job;globalThis.__calls=[];await assert.rejects(runScheduledWorkflow(Date.parse(at),env,'*/5 * * * *'),e=>e===globalThis.__failure);assert.deepEqual(globalThis.__calls.map(c=>c.job),['company-cloud-intake','notification-retention'],'cleanup and intake run independently');}globalThis.__fail=undefined;
  globalThis.__calls=[];await runScheduledWorkflow(0,{CRM_BACKEND_ORIGIN:'https://backend.test'});assert.equal(globalThis.__calls.length,0);
  await assert.rejects(runScheduledWorkflow(0,{}),/database binding/);
  globalThis.__fail='followup-notifications';await assert.rejects(run(at),e=>e===globalThis.__failure);

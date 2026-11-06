@@ -1,3 +1,4 @@
+import {visibleNotificationsSQL} from './notification-retention';
 import {assignmentReminders} from './assignment-reminders';
 import {can,id,now} from './crm';
 import {AllocationError} from './allocation-server';
@@ -40,14 +41,14 @@ export async function refreshFollowupNotifications(db:D1Database,at=now(),orderI
 export async function notificationEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
  if(!path.startsWith('followup-notifications'))return undefined;
  if(path==='followup-notifications'&&method==='GET'){
-  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE n.recipient_id=?'+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=n.order_id AND o.logistics_id=n.recipient_id)':'')+' ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
-  const enquiries=(await db.prepare("SELECT n.*,n.dedupe_key LIKE 'handoff:%' AS important_change,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200").bind(user.id,user.id).all<any>()).results.map(n=>user.role==='followup'?{...n,lead_id:null}:n);
+  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE '+visibleNotificationsSQL()+' AND n.recipient_id=?'+(user.role==='followup'?' AND EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.id=n.order_id AND o.logistics_id=n.recipient_id)':'')+' ORDER BY (n.resolved_at=\'\') DESC,n.created DESC LIMIT 200').bind(user.id).all()).results;
+  const enquiries=(await db.prepare(`SELECT n.*,n.dedupe_key LIKE 'handoff:%' AS important_change,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id JOIN crm_leads l ON l.id=n.lead_id WHERE ${visibleNotificationsSQL()} AND COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND l.owner_id=? ORDER BY n.created DESC LIMIT 200`).bind(user.id,user.id).all<any>()).results.map(n=>user.role==='followup'?{...n,lead_id:null}:n);
   return {assignments:await assignmentReminders(db,user),notifications:[...rows,...enquiries].sort((a:any,b:any)=>Number(!b.read_at)-Number(!a.read_at)||b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first(),channel:'站内通知',email:'未启用'};
  }
  if(path==='followup-notifications/audit'&&method==='GET'){
   if(!can(user,'followup_all'))throw new AllocationError('只有管理者可以查看全公司通知状态',403);
-  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id ORDER BY n.created DESC LIMIT 200').all<any>()).results;
-  const enquiries=can(user,'customers_all')?(await db.prepare("SELECT n.*,n.dedupe_key LIKE 'handoff:%' AS important_change,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id ORDER BY n.created DESC LIMIT 200").all<any>()).results:[];
+  const rows=(await db.prepare('SELECT n.*,u.name AS recipient_name FROM crm_followup_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE '+visibleNotificationsSQL()+' ORDER BY n.created DESC LIMIT 200').all<any>()).results;
+  const enquiries=can(user,'customers_all')?(await db.prepare(`SELECT n.*,n.dedupe_key LIKE 'handoff:%' AS important_change,u.name AS recipient_name,'站内' AS channel,'' AS resolved_at FROM crm_lead_notifications n JOIN crm_users u ON u.id=n.recipient_id WHERE ${visibleNotificationsSQL()} ORDER BY n.created DESC LIMIT 200`).all<any>()).results:[];
   return {notifications:[...rows,...enquiries].sort((a,b)=>b.created.localeCompare(a.created)).slice(0,200),run:user.role==='followup'?null:await db.prepare("SELECT finished,count FROM crm_followup_notification_run WHERE id='main'").first()};
  }
  if(path==='followup-notifications/read'&&method==='POST'){

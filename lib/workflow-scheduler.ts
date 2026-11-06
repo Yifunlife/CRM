@@ -1,3 +1,4 @@
+import {cleanupReadNotifications} from './notification-retention';
 import {retryCompanyCloudIntake} from './company-cloud-intake';
 import { refreshFollowupNotifications } from './followup-notifications';
 import { syncGoogleForms } from './google-form-sync';
@@ -12,7 +13,10 @@ export async function runScheduledWorkflow(scheduledTime:number,env:Cloudflare.E
  const step=async(module:string,operation:string,run:()=>Promise<unknown>)=>{
   const started=Date.now();try{await run();emit(module,operation,'completed',started);}catch(error){emit(module,operation,'failed',started);throw error;}
  };
- if(cron==='*/5 * * * *'){await step('whatsapp','pending-company-intake',()=>retryCompanyCloudIntake(db));return;}
+ if(cron==='*/5 * * * *'){
+  const results=await Promise.allSettled([step('whatsapp','pending-company-intake',()=>retryCompanyCloudIntake(db)),step('notifications','read-notice-retention',()=>cleanupReadNotifications(db,new Date(scheduledTime).toISOString()))]);
+  const failed=results.find(r=>r.status==='rejected');if(failed?.status==='rejected')throw failed.reason;return;
+ }
  const at=new Date(scheduledTime).toISOString(),utc=at.slice(11,16);
  if(utc==='00:00'){
   // Run both independent reminder families even if one fails; retain failure logs.

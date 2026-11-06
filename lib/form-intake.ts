@@ -118,7 +118,7 @@ export async function importForms(db:D1Database,rawRows:any[],actor:string,optio
     }
    }
    const undelivered=(await db.prepare(`SELECT s.* FROM crm_form_submissions s JOIN crm_leads l ON l.id=s.lead_id JOIN crm_users u ON u.id=l.owner_id
-    WHERE s.kind='repeat' AND u.active=1 AND NOT EXISTS(SELECT 1 FROM crm_lead_notifications n WHERE n.dedupe_key='form:'||s.id OR n.dedupe_key='handoff:form:'||s.id)`).all<any>()).results;
+    WHERE s.kind='repeat' AND u.active=1 AND NOT EXISTS(SELECT 1 FROM crm_lead_notifications n WHERE n.dedupe_key='form:'||s.id OR n.dedupe_key='handoff:form:'||s.id) AND NOT EXISTS(SELECT 1 FROM crm_notification_deduplication n WHERE n.notification_type='lead' AND n.dedupe_key IN ('form:'||s.id,'handoff:form:'||s.id))`).all<any>()).results;
    for(const s of undelivered){const r=formRow(JSON.parse(s.raw)),submitted=new Intl.DateTimeFormat('zh-CN',{timeZone:'Australia/Sydney',dateStyle:'short',timeStyle:'short',hour12:false}).format(new Date(s.occurred));await commit([enquiryNotification(db,'form:'+s.id,s.lead_id,`客户再次提交了咨询，请跟进。\n提交时间（悉尼）：${submitted}\n需求：${r.requirement}`,at)]);}
    await flush();
   }

@@ -1,3 +1,4 @@
+import {visibleNotificationsSQL} from './notification-retention';
 import {customerLeadSQL} from './contact-kind';
 import {salesHomeEndpoint} from './sales-home-server';
 import {assignmentReminders,teamAssignmentSummary} from './assignment-reminders';
@@ -39,7 +40,7 @@ async function report(db:D1Database,u:any,assigned?:Promise<any[]>){
   list(db,"SELECT id,name,role,active FROM crm_users WHERE active=1 AND role<>'followup' ORDER BY name"),
   list(db,'SELECT DISTINCT p.id,p.name,s.lead_id FROM crm_customer_projects p JOIN crm_customer_project_leads s ON s.project_id=p.id JOIN crm_leads l ON l.id=s.lead_id'+where,args),
   list(db,'SELECT o.id,o.order_number,o.project,o.lead_id,o.archived,o.stage FROM crm_followup_orders o JOIN crm_leads l ON l.id=o.lead_id'+(can(u,'followup_all')?'':' WHERE l.owner_id=? AND o.commercial_id=?'),can(u,'followup_all')?[]:[u.id,u.id]),
-  list(db,"SELECT n.* FROM crm_sales_notifications n JOIN crm_leads l ON l.id=n.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND n.resolved_at='' AND n.dedupe_key NOT LIKE 'dormant:%' AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(all?' OR 1=1':'')+") ORDER BY n.created DESC LIMIT 100",[u.id,u.id,u.id]),
+  list(db,"SELECT n.* FROM crm_sales_notifications n JOIN crm_leads l ON l.id=n.lead_id WHERE "+visibleNotificationsSQL()+" AND COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND n.recipient_id=? AND n.resolved_at='' AND n.dedupe_key NOT LIKE 'dormant:%' AND (l.owner_id=? OR EXISTS(SELECT 1 FROM crm_sales_tasks t WHERE t.id=n.task_id AND t.owner_id=?)"+(all?' OR 1=1':'')+") ORDER BY n.created DESC LIMIT 100",[u.id,u.id,u.id]),
   list(db,"SELECT e.*,u.name AS author,l.name AS customer_name FROM crm_sales_events e JOIN crm_users u ON u.id=e.created_by JOIN crm_leads l ON l.id=e.lead_id WHERE e.kind='申请归属复核' AND NOT EXISTS(SELECT 1 FROM crm_sales_events r WHERE r.kind='归属复核结论' AND json_extract(r.payload,'$.review_id')=e.id)"+(all?'':' AND l.owner_id=?')+' ORDER BY e.created',args)
  ]);
  const projects=rawProjects.map(p=>({...p,details:parse(p.details)}));
