@@ -25,7 +25,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Cloudflare.Env) {
     await runScheduledWorkflow(_event.scheduledTime,env,_event.cron);
   },
-  fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+  async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     // Keep the original company URL and desktop bridge working after cutover.
     if (env.CRM_BACKEND_ORIGIN === 'https://yifun-crm.yifunlife.workers.dev') {
       const source = new URL(request.url);
@@ -55,6 +55,12 @@ export default {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    const response = await runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    if (response.headers.get('Content-Type')?.includes('text/html')) {
+      const headers = new Headers(response.headers);
+      headers.set('Cache-Control', 'private, no-store');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    return response;
   },
 };
