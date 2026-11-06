@@ -131,3 +131,14 @@ const updated=sqlite.prepare("SELECT * FROM crm_leads WHERE id='followup-custome
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_notes WHERE id=?').get(followupJob.id+':result:done').n,1);
 assert.equal((await bridgeDeviceEndpoint(db,req,{followup_check:{id:followupJob.id}})).allowed,false);
 console.log('PASS: real bridge followup heartbeat, single dispatch, pre-send eligibility, receipt-confirmed CRM contact and 7 day date, replay-safe audit and completed-job rejection.');
+const historicalConfig=JSON.parse(sqlite.prepare("SELECT value FROM crm_cloud_settings WHERE id='auto-first-contact:mark'").get().value),approvalAt=new Date().toISOString();
+sqlite.prepare("UPDATE crm_cloud_settings SET value=? WHERE id='auto-first-contact:mark'").run(JSON.stringify({...historicalConfig,historical_first_contact:{approved_at:approvalAt,lead_ids:['historical-approved']}}));
+sqlite.prepare("INSERT INTO crm_leads(id,name,phone,email,owner_id,source,detail,fingerprint,created,cohort,status) VALUES('historical-approved','Historical','16145550012','historical@example.invalid','mark','Meta','{\"偏好联系方式\":\"email\"}','historical-approved','2025-01-01','historical','待首次联系')").run();
+sqlite.prepare("INSERT INTO crm_workbench_links VALUES('historical-approved','mark','historical-desktop','2025-01-01','mark')").run();
+const hs=JSON.parse(sqlite.prepare("SELECT payload FROM crm_workbench_snapshots WHERE owner_id='mark'").get().payload);hs.clients.push({id:'historical-desktop',name:'Historical'});sqlite.prepare("UPDATE crm_workbench_snapshots SET payload=? WHERE owner_id='mark'").run(JSON.stringify(hs));
+await bridgeDeviceEndpoint(db,req,{heartbeat:true,status:{whatsapp:true,email:true,autoFirstContact:true,autoFollowup24h:true,autoHistoricalFirstContact:true}});
+const historicalJob=sqlite.prepare("SELECT * FROM crm_workbench_commands WHERE json_extract(payload,'$.auto_historical_first_contact')=1").get();assert(historicalJob);assert.equal((await bridgeDeviceEndpoint(db,req,{})).command.id,historicalJob.id);
+assert.equal((await bridgeDeviceEndpoint(db,req,{followup_check:{id:historicalJob.id}})).allowed,true);
+await bridgeDeviceEndpoint(db,req,{result:{id:historicalJob.id,state:'done',value:{status:'sent',messageId:'historical-mail-receipt',text:'Approved message',sentAt:approvalAt}}});
+const historicalLead=sqlite.prepare("SELECT * FROM crm_leads WHERE id='historical-approved'").get(),historicalDetail=JSON.parse(historicalLead.detail);assert.equal(historicalLead.status,'已联系待回复');assert.equal(historicalLead.cohort,'historical');assert.equal(historicalDetail._historical_first_contact.state,'sent');assert.equal(Date.parse(historicalDetail._historical_first_contact.next_at)-Date.parse(approvalAt),86400000);
+console.log('PASS: real bridge historical allowlist, old assignment eligibility, pre-send check, actual-receipt CRM state and 24h next step without changing historical classification.');

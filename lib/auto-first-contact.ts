@@ -34,6 +34,7 @@ function fallbackAllowed(config:any,lead:any,prior:any[]){
 export async function autoContactAllowed(db:D1Database,owner:string,payload:any){
  const config=await configFor(db,owner);if(!config)return false;
  if(payload.auto_followup_24h)return followupAllowed(db,owner,payload,config);
+ if(payload.auto_historical_first_contact)return historicalContactAllowed(db,owner,payload,config);
  const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND EXISTS(SELECT 1 FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id AND a.id=? AND a.created>=? AND a.policy IN ${policies})`).bind(payload.crm_lead_id,owner,payload.assignment_id,config.assigned_from).first();
  if(!lead)return false;
  if((await contactFollowups(db,owner,[lead],new Date().toISOString())).some(r=>r.first_at))return false;
@@ -47,7 +48,10 @@ export async function queueFirstContacts(db:D1Database,owner:string){
  const status=JSON.parse(connection.status||'{}');if(status.autoFirstContact!==true)return;
  const at=new Date().toISOString();
  if(config.followup_24h===true&&status.autoFollowup24h===true)await queueFollowups(db,owner,config,status,at);
- const rows=(await db.prepare(`SELECT l.*,w.desktop_id,a.id AS assignment_id,a.created AS assigned_at FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id JOIN crm_assignments a ON a.lead_id=l.id AND a.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND a.created>=? AND a.policy IN ${policies} ORDER BY a.created,l.id LIMIT 100`).bind(owner,config.assigned_from).all<any>()).results;
+ const current=(await db.prepare(`SELECT l.*,w.desktop_id,a.id AS assignment_id,a.created AS assigned_at FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id JOIN crm_assignments a ON a.lead_id=l.id AND a.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND a.created>=? AND a.policy IN ${policies} ORDER BY a.created,l.id LIMIT 100`).bind(owner,config.assigned_from).all<any>()).results;
+ const batch=config.historical_first_contact;
+ const historical=batch&&status.autoHistoricalFirstContact===true&&Array.isArray(batch.lead_ids)&&Number.isFinite(Date.parse(batch.approved_at))?(await db.prepare(`SELECT l.*,w.desktop_id FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.id IN (SELECT value FROM json_each(?)) AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)`).bind(owner,JSON.stringify(batch.lead_ids)).all<any>()).results.map(l=>({...l,historical_approved_at:batch.approved_at})):[];
+ const rows=[...historical,...current.filter(l=>!historical.some(h=>h.id===l.id))];
  const alreadyContacted=new Set((await contactFollowups(db,owner,rows,at)).filter(r=>r.first_at).map(r=>r.id));
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const counts=(await db.prepare("SELECT json_extract(payload,'$.option') AS option,COUNT(*) AS n FROM crm_workbench_commands WHERE owner_id=? AND json_extract(payload,'$.auto_first_contact')=1 AND json_extract(payload,'$.channel')='whatsapp' AND date(created/1000,'unixepoch','+8 hours')=? GROUP BY option").bind(owner,today).all<any>()).results;
@@ -66,11 +70,22 @@ export async function queueFirstContacts(db:D1Database,owner:string){
   if(await db.prepare("SELECT id FROM crm_workbench_commands WHERE owner_id=? AND desktop_id=? AND kind IN ('send','material') AND state IN ('queued','running','uncertain')").bind(owner,lead.desktop_id).first())continue;
   const option=channel==='whatsapp'?(config.whatsapp_daily_limit===20?slots.indexOf(Math.min(...slots)):slots.findIndex((n:number)=>n<5)):-1;if(channel==='whatsapp'&&option<0)continue;
   const quota=contactQuota(owner,channel,at);
-  const payload={auto_first_contact:true,crm_lead_id:lead.id,assignment_id:lead.assignment_id,assigned_at:lead.assigned_at,name:lead.name,country:lead.country,recipient_key:recipient,channel,option,...(fallback?{fallback_from:'whatsapp'}:{}),text:channel==='whatsapp'?config.options[option]:'自动首次联系邮件：沿用已批准原模板、签名与压缩公司资料',include_materials:false,keep_desktop_draft:false};
+  const payload={auto_first_contact:true,...(lead.historical_approved_at?{auto_historical_first_contact:true,historical_approved_at:lead.historical_approved_at,command_id:commandId}:{}),crm_lead_id:lead.id,assignment_id:lead.assignment_id||'',assigned_at:lead.assigned_at||'',name:lead.name,country:lead.country,recipient_key:recipient,channel,option,...(fallback?{fallback_from:'whatsapp'}:{}),text:channel==='whatsapp'?config.options[option]:'自动首次联系邮件：沿用已批准原模板、签名与压缩公司资料',include_materials:false,keep_desktop_draft:false};
+  if(lead.historical_approved_at&&!await historicalContactAllowed(db,owner,payload,config))continue;
   const timestamp=Date.now();
   const inserted=await db.prepare("INSERT OR IGNORE INTO crm_workbench_commands(id,owner_id,desktop_id,kind,payload,state,created,updated,actor_id) SELECT ?,?,?,'send',?,'queued',?,?,? WHERE EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id=? AND COALESCE(grade,'') NOT IN ('Yifun Staff','同事') AND status='待首次联系' AND last_contact='' AND COALESCE(json_extract(detail,'$._contact_verified.first_at'),'')='') AND ("+quota.sql+")<?").bind(commandId,owner,lead.desktop_id,JSON.stringify(payload),timestamp,timestamp,owner,lead.id,owner,...quota.args,contactLimit(config,channel)).run();
   if(inserted.meta.changes){if(option>=0)slots[option]++;queued++;}
  }
+}
+
+
+async function historicalContactAllowed(db:D1Database,owner:string,p:any,config:any){
+ const batch=config.historical_first_contact;
+ if(!batch||!Array.isArray(batch.lead_ids)||!batch.lead_ids.includes(p.crm_lead_id)||batch.approved_at!==p.historical_approved_at||!Number.isFinite(Date.parse(batch.approved_at)))return false;
+ const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)`).bind(p.crm_lead_id,owner).first();
+ if(!lead||lead.name!==p.name||lead.country!==p.country||preferredContact(lead.detail)!==p.channel||(p.channel==='email'?emailKey(lead.email):phoneKey(lead.phone))!==p.recipient_key)return false;
+ const reminders=await contactFollowups(db,owner,[{...lead,cohort:'new'}],new Date().toISOString(),p.command_id);
+ return reminders.some(r=>r.kind==='first');
 }
 
 async function followupAllowed(db:D1Database,owner:string,p:any,config:any){
@@ -115,16 +130,17 @@ export async function autoContactQuota(db:D1Database,owner:string,p:any,commandI
  return Number(Object.values(row)[0])<contactLimit(config,p.channel);
 }
 export async function recordAutoFollowupResult(db:D1Database,owner:string,command:any,state:string,value:any,at:string){
- const p=JSON.parse(command.payload);if(!p.auto_followup_24h)return;
+ const p=JSON.parse(command.payload),historical=p.auto_historical_first_contact===true;if(!p.auto_followup_24h&&!historical)return;
  const success=state==='done'&&['sent','confirmed_sent'].includes(value?.status)&&!!value.messageId;
  const sentAt=Number.isFinite(Date.parse(value?.sentAt))&&Date.parse(value.sentAt)<=Date.parse(at)?new Date(value.sentAt).toISOString():at;
- const nextAt=success?new Date(Date.parse(sentAt)+7*86400000).toISOString():'';
+ const nextAt=success?new Date(Date.parse(sentAt)+(historical?1:7)*86400000).toISOString():'';
  const nextDate=nextAt?new Date(nextAt).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}):'';
  const detail=JSON.stringify({command_id:command.id,state:success?'sent':state==='done'?value.status:state,channel:p.channel,at,...(success?{sent_at:sentAt,next_at:nextAt}:{reason:value?.error||value?.detail||'发送结果待核实'})});
- const text=success?'24小时自动跟进已通过'+(p.channel==='email'?'邮件':'WhatsApp')+'确认发送；如仍未回复，安排7天后再联系。凭据：'+value.messageId:'24小时自动跟进'+(state==='done'?'已跳过':state==='uncertain'?'结果待核实':'未完成')+'：'+(value?.error||value?.detail||value?.status||'待核对');
+ const label=historical?'历史客资首次联系':'24小时自动跟进';
+ const text=success?label+'已通过'+(p.channel==='email'?'邮件':'WhatsApp')+(historical?'确认发送；24小时未回复后使用另一种方式联系。凭据：':'确认发送；如仍未回复，安排7天后再联系。凭据：')+value.messageId:label+(state==='done'?'已跳过':state==='uncertain'?'结果待核实':'未完成')+'：'+(value?.error||value?.detail||value?.status||'待核对');
  await db.batch([
-  db.prepare("INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) SELECT ?,id,?,?, '自动跟进',?,? FROM crm_leads WHERE id=? AND owner_id=?").bind(command.id+':result:'+state,owner,text,success?'未回复则于'+nextDate+'再次联系':'核对执行结果，不自动重发',at,p.crm_lead_id,owner),
-  db.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._auto_followup_24h',json(?)) WHERE id=? AND owner_id=?").bind(detail,p.crm_lead_id,owner)
+  db.prepare("INSERT OR IGNORE INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) SELECT ?,id,?,?, '自动跟进',?,? FROM crm_leads WHERE id=? AND owner_id=?").bind(command.id+':result:'+state,owner,text,success?'未回复则于'+nextDate+(historical?'改用另一种方式联系':'再次联系'):'核对执行结果，不自动重发',at,p.crm_lead_id,owner),
+  db.prepare("UPDATE crm_leads SET detail=json_set(detail,?,json(?)) WHERE id=? AND owner_id=?").bind(historical?'$._historical_first_contact':'$._auto_followup_24h',detail,p.crm_lead_id,owner)
  ]);
  if(success)await db.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._sales_progress.auto_next_date',?,'$._sales_progress.version',COALESCE(json_extract(detail,'$._sales_progress.version'),0)+1),next_date=? WHERE id=? AND owner_id=? AND status='已联系待回复' AND (next_date='' OR next_date=COALESCE(json_extract(detail,'$._sales_progress.auto_next_date'),''))").bind(nextDate,nextDate,p.crm_lead_id,owner).run();
 }

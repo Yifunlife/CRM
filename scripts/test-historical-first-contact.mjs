@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {queueFirstContacts,autoContactAllowed,autoContactKey,recordAutoFollowupResult}=await import(moduleURL('lib/auto-first-contact.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),at=new Date().toISOString(),old='2025-01-01T00:00:00.000Z',from='2026-11-01T16:00:00.000Z';
+for(const id of ['own','other'])sql.prepare("INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,'sales','unused',?)").run(id,id,id,old);
+const ids=['approved','mail','stale-both','stale-reply','draft','foreign'];
+const config={enabled:true,assigned_from:from,options:['one','two','three'],whatsapp_daily_limit:20,email_daily_limit:10,historical_first_contact:{approved_at:at,lead_ids:ids}};
+function save(){sql.prepare('INSERT OR REPLACE INTO crm_cloud_settings VALUES(?,?,?,?)').run(autoContactKey('own'),JSON.stringify(config),at,'own');}save();
+sql.prepare('INSERT INTO crm_workbench_bridge(owner_id,token_hash,created_by,seen,status) VALUES(?,?,?,?,?)').run('own','unused','own',Date.now(),JSON.stringify({whatsapp:true,email:true,autoFirstContact:true,autoHistoricalFirstContact:true}));
+for(const id of [...ids,'unlisted']){const owner=id==='foreign'?'other':'own';sql.prepare("INSERT INTO crm_leads(id,name,owner_id,source,detail,phone,email,country,fingerprint,created,cohort,status) VALUES(?,?,?,'Meta',?,'16145551234',?,'US',?,?,'historical','待首次联系')").run(id,id,owner,JSON.stringify({'偏好联系方式':id==='mail'?'email':'whatsapp'}),id+'@example.invalid',id,old);sql.prepare('INSERT INTO crm_workbench_links VALUES(?,?,?,?,?)').run(id,owner,id,old,owner);}
+for(const method of ['WhatsApp','邮件'])sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES(?,'stale-both','own','发送已确认｜receipt',?,'',?)").run('both:'+method,method,old);
+sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('reply','stale-reply','own','客户回复｜reply','系统收信','',?)").run(old);
+sql.prepare("INSERT INTO crm_workbench_drafts VALUES('draft','draft','own','邮件','human',?,'own')").run(old);
+await queueFirstContacts(db,'own');const jobs=sql.prepare('SELECT * FROM crm_workbench_commands').all();assert.equal(jobs.length,2);assert.deepEqual(jobs.map(j=>JSON.parse(j.payload).crm_lead_id).sort(),['approved','mail']);
+const job=jobs[0],p=JSON.parse(job.payload);assert.equal(p.assigned_at,'','historical approval never fabricates an assignment time');assert.equal(p.historical_approved_at,at);assert(p.auto_historical_first_contact);assert(await autoContactAllowed(db,'own',p));
+sql.prepare("UPDATE crm_workbench_commands SET state='running' WHERE id=?").run(job.id);assert(await autoContactAllowed(db,'own',p));
+config.historical_first_contact.lead_ids=[];save();assert(!await autoContactAllowed(db,'own',p),'removing batch approval revokes a queued historical send');config.historical_first_contact.lead_ids=ids;save();
+await queueFirstContacts(db,'own');assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_workbench_commands').get().n,2);
+await recordAutoFollowupResult(db,'own',job,'done',{status:'sent',messageId:'receipt',sentAt:at},at);
+const lead=sql.prepare('SELECT * FROM crm_leads WHERE id=?').get(p.crm_lead_id),detail=JSON.parse(lead.detail);assert.equal(detail._historical_first_contact.state,'sent');assert.equal(Date.parse(detail._historical_first_contact.next_at)-Date.parse(at),86400000);assert(!detail._auto_followup_24h,'first contact does not pretend the second channel has already been sent');assert.equal(lead.cohort,'historical');assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_assignments').get().n,0);
+assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length,0);
+console.log('PASS: explicit historical allowlist, old/missing assignments without fabricated reassignment, both/replied/draft/foreign/unapproved exclusions, revocation, shared existing quotas, idempotence and actual-receipt CRM audit with 24h next step.');
