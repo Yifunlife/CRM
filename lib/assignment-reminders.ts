@@ -1,3 +1,4 @@
+import {validAssignmentSQL} from './allocation-events';
 import {customerLeadSQL} from './contact-kind';
 import {assignmentCategory} from './assignment-categories';
 export const assignmentFields=`a.created AS assigned_at,a.policy AS assignment_policy,
@@ -5,7 +6,7 @@ export const assignmentFields=`a.created AS assigned_at,a.policy AS assignment_p
  AND json_valid(l.detail) AND json_type(CASE WHEN json_valid(l.detail) THEN l.detail ELSE '{}' END,'$.分配同步来源')='object'
  AND a.id=(SELECT first.id FROM crm_assignments first WHERE first.lead_id=l.id ORDER BY first.created,first.rowid LIMIT 1)
  THEN 1 ELSE 0 END AS legacy_sync`;
-export const assignmentJoin=`LEFT JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)`;
+export const assignmentJoin=`LEFT JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id AND ${validAssignmentSQL('recent')} ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)`;
 // Derive unresolved work from ownership and recorded follow-up, never notification read state.
 export async function assignmentReminders(db:D1Database,user:any){
  if(user.role==='followup')return [];
@@ -27,7 +28,7 @@ export async function teamAssignmentSummary(db:D1Database,month:string,owner='')
  const people=(await db.prepare(`SELECT u.id,u.name,u.role,u.active FROM crm_users u
  WHERE (u.role IN ('sales','ceo','management') OR EXISTS(SELECT 1 FROM crm_assignments a WHERE a.owner_id=u.id))
  AND (?='' OR u.id=?) ORDER BY u.active DESC,u.name`).bind(owner,owner).all<any>()).results;
- const allocatedEvents=(await db.prepare(`SELECT a.owner_id,a.lead_id,l.cohort,a.created AS allocated_at,${assignmentFields} FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE ${customerLeadSQL()} AND l.review=0 AND strftime('%Y-%m',a.created,'+8 hours')=? ORDER BY a.created,a.rowid`).bind(month).all<any>()).results;
+ const allocatedEvents=(await db.prepare(`SELECT a.owner_id,a.lead_id,l.cohort,a.created AS allocated_at,${assignmentFields} FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE ${customerLeadSQL()} AND ${validAssignmentSQL()} AND l.review=0 AND strftime('%Y-%m',a.created,'+8 hours')=? ORDER BY a.created,a.rowid`).bind(month).all<any>()).results;
  const allocated=[...new Map(allocatedEvents.map(a=>[a.owner_id+':'+a.lead_id,a])).values()].filter(a=>assignmentCategory(a)==='new');
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const leads=(await db.prepare(`SELECT l.id,l.name,l.country,l.source,l.status,l.cohort,l.next_date,l.owner_id,u.name AS owner_name,

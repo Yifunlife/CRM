@@ -1,16 +1,16 @@
+import {allocationMarketSQL,validAssignmentSQL} from './allocation-events';
 import {customerLeadSQL} from './contact-kind';
 import {can} from './crm';
 import {assignmentFields} from './assignment-reminders';
 import {suiteDay} from './sales-suite';
-import {customerMarket} from './operations-dashboard';
 
 export async function customerAllocationSummary(db:D1Database,user:any,today=suiteDay(),market=''){
  const all=can(user,'customers_all');
- const leadIds=market?(await db.prepare(`SELECT l.id,l.market,l.country,l.source,l.business_scope,l.detail FROM crm_leads l WHERE ${customerLeadSQL()}`).bind().all<any>()).results.filter(l=>customerMarket(l)===market).map(l=>l.id):[];
+ const leadIds=market?(await db.prepare(`SELECT l.id FROM crm_leads l WHERE ${customerLeadSQL()} AND (${allocationMarketSQL()})=?`).bind(market).all<any>()).results.map(l=>l.id):[];
  const rows=(await db.prepare(`WITH events AS (
   SELECT a.owner_id,a.lead_id,${assignmentFields}
   FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id
-  WHERE l.review=0 AND ${customerLeadSQL()} AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'} ${market?'AND l.id IN (SELECT value FROM json_each(?))':''}
+  WHERE l.review=0 AND ${customerLeadSQL()} AND ${validAssignmentSQL()} AND a.policy<>'test-simulation' ${all?'':'AND a.owner_id=?'} ${market?'AND l.id IN (SELECT value FROM json_each(?))':''}
  ), counted AS (
   SELECT owner_id,
    COUNT(DISTINCT CASE WHEN date(assigned_at,'+8 hours')=? THEN lead_id END) AS today,

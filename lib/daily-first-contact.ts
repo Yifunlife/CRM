@@ -1,3 +1,4 @@
+import {validAssignmentSQL} from './allocation-events';
 import {customerLeadSQL} from './contact-kind';
 import {boardMarkets,can,canViewAllMarkets,now} from './crm';
 import {isSalesPerson,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
@@ -14,14 +15,14 @@ export async function dailyFirstContact(db:D1Database,user:any,url:URL,at=now())
  const today=salesDay(at),date=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
  const [users,assigned,settings]=await Promise.all([
   db.prepare("SELECT id,name,role,trade_scopes,active FROM crm_users WHERE role IN ('sales','ceo','management') ORDER BY name").all<any>(),
-  db.prepare(`SELECT l.id,l.name,l.owner_id,l.country,l.source,l.business_scope,l.detail,a.created assigned_at,
+  db.prepare(`SELECT l.id,l.name,l.owner_id,l.market,l.country,l.source,l.business_scope,l.detail,a.created assigned_at,
    (SELECT json_object('at',MAX(n.created,COALESCE(e.created,t.created,n.created)),'method',n.method,'message_sent',n.id LIKE 'online-%' AND n.content LIKE '线上发送已确认｜%') FROM crm_notes n
     LEFT JOIN crm_sales_events e ON e.id=n.id AND e.kind='业务员跟进记录'
     LEFT JOIN crm_attribution_events t ON t.id=n.id AND t.kind='销售流程记录'
     WHERE n.lead_id=l.id AND n.user_id=l.owner_id AND n.created>=a.created AND n.created<=? AND COALESCE(e.created,t.created,n.created)<=?
     AND trim(n.content)<>'' AND n.method IN ('WhatsApp','邮件','电话','线上会议','到访公司','其他','首次WhatsApp','首次邮件')
     ORDER BY MAX(n.created,COALESCE(e.created,t.created,n.created)),n.rowid LIMIT 1) completed_contact
-   FROM crm_leads l JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)
+   FROM crm_leads l JOIN crm_assignments a ON a.id=(SELECT recent.id FROM crm_assignments recent WHERE recent.lead_id=l.id AND recent.owner_id=l.owner_id AND ${validAssignmentSQL('recent')} ORDER BY recent.created DESC,recent.rowid DESC LIMIT 1)
    WHERE l.review=0 AND ${customerLeadSQL()} AND a.policy IN ${allocationPoliciesSQL} AND a.created<=?`).bind(at,at,at).all<any>(),
   db.prepare("SELECT payload FROM crm_allocation_configs WHERE scope='all'").first<{payload:string}>()
  ]);

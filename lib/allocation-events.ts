@@ -1,0 +1,4 @@
+// A correction retains the original event; only its allocation count is withdrawn.
+export const validAssignmentSQL=(alias='a')=>`NOT EXISTS(SELECT 1 FROM crm_workflow_audit withdrawn WHERE withdrawn.id='allocation-withdrawn:'||${alias}.id AND withdrawn.kind='撤销客资分配' AND withdrawn.entity_id=${alias}.id)`;
+// Explicit markets take precedence. Legacy events with a clear intake channel retain that market.
+export const allocationMarketSQL=(alias='l')=>`CASE WHEN ${alias}.market IN ('内贸','外贸') THEN ${alias}.market WHEN json_extract(${alias}.detail,'$.客资市场') IN ('内贸','外贸') THEN json_extract(${alias}.detail,'$.客资市场') WHEN ${alias}.business_scope IN ('douyin-local','xiaohongshu','wechat') OR ${alias}.source IN ('抖音','小红书','微信') THEN '内贸' WHEN ${alias}.business_scope IN ('meta-product','meta-full','google','website','whatsapp','alibaba') OR ${alias}.source IN ('Meta','Google 广告','独立站','WhatsApp','WhatsApp／其他','阿里') THEN '外贸' ELSE '待确认' END`;

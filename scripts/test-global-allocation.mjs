@@ -22,7 +22,7 @@ assert.deepEqual((await allocationWeights(db,'google')).weights.map(w=>w.user_id
 const call=(path,body={},method='POST',query='')=>allocationEndpoint(db,{id:'reviewer',role:'ceo'},path,method,body,new URL('https://test.invalid/api/'+path+query));
 await assert.rejects(allocationEndpoint(db,{id:'admin',role:'admin'},'allocation/config','POST',{},new URL('https://test.invalid')),e=>e.status===403);
 await assert.rejects(call('allocation/config',{scope:'google',config}),/全渠道|刷新/);
-const ids=[];for(let i=0;i<30;i++){const id='mixed-'+i;insert(id,BUSINESS_SCOPES[i%BUSINESS_SCOPES.length].id);ids.push(id);}
+const foreignScopes=BUSINESS_SCOPES.filter(s=>!['douyin-local','xiaohongshu','wechat','referral'].includes(s.id));const ids=[];for(let i=0;i<30;i++){const id='mixed-'+i;insert(id,foreignScopes[i%foreignScopes.length].id);ids.push(id);}
 assert.equal((await call('allocation/distribute',{ids})).assigned,30);
 assert.deepEqual(sqlite.prepare('SELECT owner_id,COUNT(*) n FROM crm_assignments GROUP BY owner_id ORDER BY owner_id').all().map(r=>[r.owner_id,r.n]),[['a',11],['b',11],['c',11]]);
 assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_assignments a JOIN crm_leads l ON l.id=a.lead_id WHERE a.business_scope<>l.business_scope').get().n,0);

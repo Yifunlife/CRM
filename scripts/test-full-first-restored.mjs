@@ -9,6 +9,7 @@ const {cumulativeAllocationCounts}=await import(moduleURL('lib/allocation-priori
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 const db=database(sql),user={id:'b7e34925-ec83-4f4e-ad42-04be344dc82b',role:'management'},other={id:'other',role:'admin'};
 for(const u of [user,other,...['a','b','paused','disabled'].map(id=>({id,role:'sales'}))])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,active,created) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused',u.id==='disabled'?0:1,'2026-01-01');
+sql.exec("UPDATE crm_users SET trade_scopes='[\"domestic\",\"foreign\"]' WHERE role IN ('sales','management','ceo')");
 const config={members:[{user_id:'a',state:'参与',share:50},{user_id:'b',state:'参与',share:50},{user_id:'paused',state:'暂停',share:0}],rule:{automatic:false,performance:30,maxChange:10,minimum:5}};
 sql.prepare("INSERT INTO crm_allocation_configs VALUES('all',?,'now',?)").run(JSON.stringify(config),user.id);
 function lead(id,full=false,extra={}){sql.prepare("INSERT INTO crm_leads(id,name,source,business_scope,owner_id,original_owner,review,cohort,entered,detail,fingerprint,created) VALUES(?,?,?,?,?,?,?,'new','2026-11-01',?,?,'2026-11-01')").run(id,id,extra.source||'Meta',full?'meta-full':'meta-product',extra.owner||null,extra.original||'',extra.review||0,JSON.stringify(extra.detail||{}),id);}
