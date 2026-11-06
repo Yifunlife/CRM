@@ -1,3 +1,4 @@
+import {intakeDay} from './auto-contact-intake';
 // Pending and uncertain sends reserve slots; confirmed failures release them.
 export function contactQuota(owner:string,channel:string,at:string,exclude=''){
  const day=new Date(at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
@@ -15,7 +16,9 @@ export function contactQuota(owner:string,channel:string,at:string,exclude=''){
    AND m.status IN ('sent','delivered','read') AND COALESCE(m.provider_id,'')<>'' AND date(m.created,'+8 hours')=?
  )`,args:[owner,exclude,channel,day,owner,channel==='email'?'邮件':'WhatsApp',day,owner,channel,day]};
 }
-export function contactLimit(config:any,channel:string){
+export function contactLimit(config:any,channel:string,at=new Date().toISOString(),leadId=''){
+ const extra=config.extra_new_intake;
+ const allowance=extra?.date===intakeDay(at).day&&Array.isArray(extra.lead_ids)&&extra.lead_ids.includes(leadId)?1:0;
  const value=config[channel==='email'?'email_daily_limit':'whatsapp_daily_limit'];
- return Number.isInteger(value)&&value>0?value:channel==='whatsapp'?15:1000000;
+ return (Number.isInteger(value)&&value>0?value:channel==='whatsapp'?15:1000000)+allowance;
 }
