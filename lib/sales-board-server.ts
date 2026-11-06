@@ -6,6 +6,7 @@ import {accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-cl
 import {customerMarket} from './operations-dashboard';
 import {suiteDay} from './sales-suite';
 import {boardFollowups} from './sales-board';
+import {salesBoardIntake} from './sales-board-intake';
 const pick=(row:any,keys:string[])=>Object.fromEntries(keys.map(key=>[key,row[key]]));
 function boardReport(report:any){
  const customer=(row:any)=>pick(row,['id','name','owner_id','grade','created','company','market']);
@@ -27,14 +28,15 @@ export async function salesBoardEndpoint(db:D1Database,user:any,path:string,meth
  const month=query.searchParams.get('month')||suiteDay().slice(0,7),monthUrl=new URL(query);monthUrl.searchParams.set('period','month');monthUrl.searchParams.set('month',month);
  const read=(market:string)=>{const scoped=new URL(query);scoped.searchParams.set('market',market);return roleWorkspaceEndpoint(db,viewer,viewer,'role-workspace/report','GET',{},scoped,source);};
  const list=async(sql:string)=>(await db.prepare(sql).all<any>()).results;
- const [all,domestic,foreign,performance,monthly,orders,people,tasks,deals]=await Promise.all([
+ const [all,domestic,foreign,performance,monthly,orders,people,tasks,deals,intake]=await Promise.all([
   read('全部'),read('内贸'),read('外贸'),
   salesManagementEndpoint(db,viewer,viewer,'sales-management/report','GET',{},query),
   salesManagementEndpoint(db,viewer,viewer,'sales-management/report','GET',{},monthUrl),
   list('SELECT o.*,s.name AS logistics_name,c.name AS commercial_name FROM crm_followup_orders o JOIN crm_users s ON s.id=o.logistics_id JOIN crm_users c ON c.id=o.commercial_id WHERE s.active=1'),
   list("SELECT id,name,role,active FROM crm_users WHERE active=1 AND (role='followup' OR EXISTS(SELECT 1 FROM crm_followup_orders o WHERE o.logistics_id=crm_users.id AND o.archived=0)) ORDER BY name"),
   list("SELECT order_id,step,owner_id,kind,meta,due_at,next_action,status FROM crm_followup_tasks WHERE status='待处理'"),
-  list("SELECT d.id,d.owner_id,d.deal_date,l.market,l.country,l.source,l.business_scope,l.detail,c.currency,c.total_minor FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id AND u.active=1 JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0")
+  list("SELECT d.id,d.owner_id,d.deal_date,l.market,l.country,l.source,l.business_scope,l.detail,c.currency,c.total_minor FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id AND u.active=1 JOIN crm_leads l ON l.id=d.lead_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.cancelled=0"),
+  salesBoardIntake(db,month,suiteDay())
  ]);
  const period=(all as any).period,year=period.start.slice(0,4),annual={start:year+'-01-01',end:(Number(year)+1)+'-01-01'};
  const companies=['总公司',...SALES_COMPANIES].map(name=>({name,total:{} as Record<string,number>,period:{} as Record<string,number>,unverified:0,deals:0}));
@@ -51,5 +53,6 @@ export async function salesBoardEndpoint(db:D1Database,user:any,path:string,meth
   if(deal.deal_date>=month+'-01'&&deal.deal_date<(monthly as any).period.end)trade.monthly+=deal.total_minor;
  }
  const safePerformance=(report:any)=>({period:report.period,rows:report.rows.filter((r:any)=>r.active).map((r:any)=>pick(r,['id','name','active','currency','new_customers','annual_customers','effective_customers','deals','total_minor','unverified','target_minor','annual_target_minor','annual_total_minor','annual_unverified','annual_completion','completion']))});
- return {all:boardReport(all),domestic:boardReport(domestic),foreign:boardReport(foreign),performance:safePerformance(performance),monthly:safePerformance(monthly),followups:boardFollowups(orders.map(o=>({...o,details:JSON.parse(o.details||'{}'),steps:JSON.parse(o.steps||'{}')})),people,tasks,suiteDay()),companies,trades};
+ const monthlyReport=safePerformance(monthly);
+ return {all:boardReport(all),domestic:boardReport(domestic),foreign:boardReport(foreign),performance:safePerformance(performance),monthly:{...monthlyReport,rows:monthlyReport.rows.map((r:any)=>({...r,system_customers:intake.find(c=>c.id===r.id&&c.currency===r.currency)?.system_customers||0,other_customers:intake.find(c=>c.id===r.id&&c.currency===r.currency)?.other_customers||0}))},followups:boardFollowups(orders.map(o=>({...o,details:JSON.parse(o.details||'{}'),steps:JSON.parse(o.steps||'{}')})),people,tasks,suiteDay()),companies,trades};
 }

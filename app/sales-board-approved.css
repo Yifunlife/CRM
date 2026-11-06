@@ -16,6 +16,8 @@
 .sales-board-approved .so-board-rank { color:var(--muted); font-size:12px; }
 .sales-board-approved .so-board-person-metrics { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px 16px; margin-top:6px; }
 .sales-board-approved .so-board-person-metrics>span { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 8px; min-width:0; font-size:12px; color:var(--muted); }
+.sales-board-approved .so-board-person-metrics>.so-board-person-customer-metrics { grid-column:1/-1; gap:4px 16px; }
+.sales-board-approved .so-board-person-customer-metrics>span { display:flex; align-items:baseline; gap:6px; }
 .sales-board-approved .so-board-person-metrics strong { font-size:15px; color:var(--ink); font-weight:600; overflow-wrap:anywhere; }
 .sales-board-approved .so-board-person-metrics .so-board-number-target { color:#0f548c; }
 .sales-board-approved .so-board-person-metrics .so-board-number-completed { color:#17634b; }
@@ -86,6 +88,7 @@
  .sales-board-approved .so-board-person-heading .so-progress-name { max-width:110px; }
  .sales-board-approved .so-board-person-heading>svg { flex-basis:12px; }
  .sales-board-approved .so-board-person-metrics { gap:4px 12px; }
+ .sales-board-approved .so-board-person-metrics>.so-board-person-customer-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; }
 }
 @media(max-width:480px) {
  .sales-board-approved .so-board-person-metrics { grid-template-columns:minmax(0,1fr); }
