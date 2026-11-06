@@ -76,6 +76,7 @@ console.log('PASS: background sync queues automatic first contact, offline persi
 const {notificationEndpoint}=await import(moduleURL('lib/followup-notifications.ts'));
 for(const [suffix,state,value,expected] of [
  ['failed','failed',{error:'not sent'},1],
+ ['interrupted','failed',{error:'Connection lost after request'},1],
  ['uncertain','uncertain',{status:'uncertain'},1],
  ['skipped','done',{status:'skipped'},1],
  ['missing-receipt','done',{status:'sent'},1],
@@ -86,6 +87,7 @@ for(const [suffix,state,value,expected] of [
  await bridgeDeviceEndpoint(db,req,{result:{id:jobId,state,value}});
  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM crm_lead_notifications').get().n,expected,suffix+' notification count');
 }
+assert.equal(sqlite.prepare("SELECT state FROM crm_workbench_commands WHERE id='notice-interrupted'").get().state,'uncertain','an interrupted send cannot release a slot without proof it was not sent');
 assert.equal(sqlite.prepare("SELECT content FROM crm_lead_notifications WHERE content LIKE '%邮件%'").get().content,'工作台已通过邮件发送信息。');
 const markUser={id:'mark',role:'ceo'},otherUser={id:'other',role:'sales'};
 let inbox=await notificationEndpoint(db,markUser,markUser,'followup-notifications','GET',{});assert.equal(inbox.notifications.length,2);

@@ -17,6 +17,7 @@ sql.prepare("INSERT INTO crm_workbench_drafts VALUES('draft','draft','own','é‚®ä
 await queueFirstContacts(db,'own');const jobs=sql.prepare('SELECT * FROM crm_workbench_commands').all();assert.equal(jobs.length,2);assert.deepEqual(jobs.map(j=>JSON.parse(j.payload).crm_lead_id).sort(),['approved','mail']);
 const job=jobs[0],p=JSON.parse(job.payload);assert.equal(p.assigned_at,'','historical approval never fabricates an assignment time');assert.equal(p.historical_approved_at,at);assert(p.auto_historical_first_contact);assert(await autoContactAllowed(db,'own',p));
 sql.prepare("UPDATE crm_workbench_commands SET state='running' WHERE id=?").run(job.id);assert(await autoContactAllowed(db,'own',p));
+sql.prepare("UPDATE crm_leads SET detail=json_set(detail,'$._contact_plan.state','hold') WHERE id=?").run(p.crm_lead_id);assert(!await autoContactAllowed(db,'own',p),'a later planning hold revokes an already queued send');sql.prepare("UPDATE crm_leads SET detail=json_remove(detail,'$._contact_plan') WHERE id=?").run(p.crm_lead_id);
 config.historical_first_contact.lead_ids=[];save();assert(!await autoContactAllowed(db,'own',p),'removing batch approval revokes a queued historical send');config.historical_first_contact.lead_ids=ids;save();
 await queueFirstContacts(db,'own');assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_workbench_commands').get().n,2);
 await recordAutoFollowupResult(db,'own',job,'done',{status:'sent',messageId:'receipt',sentAt:at},at);

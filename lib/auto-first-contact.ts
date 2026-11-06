@@ -35,7 +35,7 @@ export async function autoContactAllowed(db:D1Database,owner:string,payload:any)
  const config=await configFor(db,owner);if(!config)return false;
  if(payload.auto_followup_24h)return followupAllowed(db,owner,payload,config);
  if(payload.auto_historical_first_contact)return historicalContactAllowed(db,owner,payload,config);
- const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND EXISTS(SELECT 1 FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id AND a.id=? AND a.created>=? AND a.policy IN ${policies})`).bind(payload.crm_lead_id,owner,payload.assignment_id,config.assigned_from).first();
+ const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND EXISTS(SELECT 1 FROM crm_assignments a WHERE a.lead_id=l.id AND a.owner_id=l.owner_id AND a.id=? AND l.cohort<>'historical' AND a.created>=? AND a.policy IN ${policies})`).bind(payload.crm_lead_id,owner,payload.assignment_id,config.assigned_from).first();
  if(!lead)return false;
  if((await contactFollowups(db,owner,[lead],new Date().toISOString())).some(r=>r.first_at))return false;
  const matchingChannel=payload.fallback_from==='whatsapp'&&payload.channel==='email'?fallbackAllowed(config,lead,await priorContacts(db,owner,lead.id)):!payload.fallback_from&&preferredContact(lead.detail)===payload.channel;
@@ -47,17 +47,18 @@ export async function queueFirstContacts(db:D1Database,owner:string){
  if(!connection||Date.now()-connection.seen>=30000)return;
  const status=JSON.parse(connection.status||'{}');if(status.autoFirstContact!==true)return;
  const at=new Date().toISOString();
- if(config.followup_24h===true&&status.autoFollowup24h===true)await queueFollowups(db,owner,config,status,at);
- const current=(await db.prepare(`SELECT l.*,w.desktop_id,a.id AS assignment_id,a.created AS assigned_at FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id JOIN crm_assignments a ON a.lead_id=l.id AND a.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND a.created>=? AND a.policy IN ${policies} ORDER BY a.created,l.id LIMIT 100`).bind(owner,config.assigned_from).all<any>()).results;
+ const current=(await db.prepare(`SELECT l.*,w.desktop_id,a.id AS assignment_id,a.created AS assigned_at FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id JOIN crm_assignments a ON a.lead_id=l.id AND a.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND l.cohort<>'historical' AND a.created>=? AND a.policy IN ${policies} ORDER BY a.created,l.id LIMIT 100`).bind(owner,config.assigned_from).all<any>()).results;
  const batch=config.historical_first_contact;
  const historical=batch&&status.autoHistoricalFirstContact===true&&Array.isArray(batch.lead_ids)&&Number.isFinite(Date.parse(batch.approved_at))?(await db.prepare(`SELECT l.*,w.desktop_id FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.id IN (SELECT value FROM json_each(?)) AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)`).bind(owner,JSON.stringify(batch.lead_ids)).all<any>()).results.map(l=>({...l,historical_approved_at:batch.approved_at})):[];
- const rows=[...historical,...current.filter(l=>!historical.some(h=>h.id===l.id))];
+ const rows=[...current,...historical.filter(l=>!current.some(c=>c.id===l.id))];
  const alreadyContacted=new Set((await contactFollowups(db,owner,rows,at)).filter(r=>r.first_at).map(r=>r.id));
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const counts=(await db.prepare("SELECT json_extract(payload,'$.option') AS option,COUNT(*) AS n FROM crm_workbench_commands WHERE owner_id=? AND json_extract(payload,'$.auto_first_contact')=1 AND json_extract(payload,'$.channel')='whatsapp' AND date(created/1000,'unixepoch','+8 hours')=? GROUP BY option").bind(owner,today).all<any>()).results;
  const slots=config.options.map((_:string,i:number)=>counts.find((r:any)=>r.option===i)?.n||0);
  let queued=(await db.prepare("SELECT COUNT(*) AS n FROM crm_workbench_commands WHERE owner_id=? AND state IN ('queued','running')").bind(owner).first<{n:number}>())!.n;
- for(const lead of rows){
+ const followups=async(fresh:boolean)=>{if(config.followup_24h===true&&status.autoFollowup24h===true)await queueFollowups(db,owner,config,status,at,fresh);};
+ for(const group of [current,historical]){
+ for(const lead of group){
   if(alreadyContacted.has(lead.id))continue;
   if(queued>=20)break;
   const prior=await priorContacts(db,owner,lead.id);
@@ -76,6 +77,9 @@ export async function queueFirstContacts(db:D1Database,owner:string){
   const inserted=await db.prepare("INSERT OR IGNORE INTO crm_workbench_commands(id,owner_id,desktop_id,kind,payload,state,created,updated,actor_id) SELECT ?,?,?,'send',?,'queued',?,?,? WHERE EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id=? AND COALESCE(grade,'') NOT IN ('Yifun Staff','同事') AND status='待首次联系' AND last_contact='' AND COALESCE(json_extract(detail,'$._contact_verified.first_at'),'')='') AND ("+quota.sql+")<?").bind(commandId,owner,lead.desktop_id,JSON.stringify(payload),timestamp,timestamp,owner,lead.id,owner,...quota.args,contactLimit(config,channel)).run();
   if(inserted.meta.changes){if(option>=0)slots[option]++;queued++;}
  }
+ await followups(group===current);
+ queued=(await db.prepare("SELECT COUNT(*) AS n FROM crm_workbench_commands WHERE owner_id=? AND state IN ('queued','running')").bind(owner).first<{n:number}>())!.n;
+ }
 }
 
 
@@ -83,6 +87,7 @@ async function historicalContactAllowed(db:D1Database,owner:string,p:any,config:
  const batch=config.historical_first_contact;
  if(!batch||!Array.isArray(batch.lead_ids)||!batch.lead_ids.includes(p.crm_lead_id)||batch.approved_at!==p.historical_approved_at||!Number.isFinite(Date.parse(batch.approved_at)))return false;
  const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND l.status='待首次联系' AND l.last_contact='' AND COALESCE(json_extract(l.detail,'$._contact_verified.first_at'),'')='' AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'') AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)`).bind(p.crm_lead_id,owner).first();
+ if(lead&&JSON.parse(lead.detail||'{}')._contact_plan?.state&&!['ready','waiting'].includes(JSON.parse(lead.detail||'{}')._contact_plan.state))return false;
  if(!lead||lead.name!==p.name||lead.country!==p.country||preferredContact(lead.detail)!==p.channel||(p.channel==='email'?emailKey(lead.email):phoneKey(lead.phone))!==p.recipient_key)return false;
  const reminders=await contactFollowups(db,owner,[{...lead,cohort:'new'}],new Date().toISOString(),p.command_id);
  return reminders.some(r=>r.kind==='first');
@@ -91,13 +96,14 @@ async function historicalContactAllowed(db:D1Database,owner:string,p:any,config:
 async function followupAllowed(db:D1Database,owner:string,p:any,config:any){
  if(config.followup_24h!==true)return false;
  const lead:any=await db.prepare(`SELECT l.* FROM crm_leads l WHERE ${customerLeadSQL()} AND l.id=? AND l.owner_id=? AND l.review=0 AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0)`).bind(p.crm_lead_id,owner).first();
+ if(lead&&JSON.parse(lead.detail||'{}')._contact_plan?.state&&!['ready','waiting'].includes(JSON.parse(lead.detail||'{}')._contact_plan.state))return false;
  if(!lead||lead.name!==p.name||lead.country!==p.country||(p.channel==='email'?emailKey(lead.email):phoneKey(lead.phone))!==p.recipient_key)return false;
  if(await db.prepare("SELECT id FROM crm_workbench_drafts WHERE lead_id=? AND owner_id=? AND trim(content)<>''").bind(lead.id,owner).first())return false;
  const rows=await contactFollowups(db,owner,[lead],new Date().toISOString(),p.command_id,true);
  return rows.some(r=>r.kind==='alternate'&&r.actionable&&r.alternate===p.channel&&r.first_at===p.first_at);
 }
-async function queueFollowups(db:D1Database,owner:string,config:any,status:any,at:string){
- const leads=(await db.prepare(`SELECT l.*,w.desktop_id FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='已联系待回复' AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'')`).bind(owner).all<any>()).results;
+async function queueFollowups(db:D1Database,owner:string,config:any,status:any,at:string,fresh:boolean){
+ const leads=(await db.prepare(`SELECT l.*,w.desktop_id FROM crm_leads l JOIN crm_workbench_links w ON w.lead_id=l.id AND w.owner_id=l.owner_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND l.review=0 AND l.status='已联系待回复' AND ${fresh?"l.cohort='new'":"l.cohort<>'new'"} AND (json_extract(l.detail,'$._contact_plan.state') IS NULL OR json_extract(l.detail,'$._contact_plan.state') IN ('ready','waiting')) AND NOT EXISTS(SELECT 1 FROM crm_deals d WHERE d.lead_id=l.id AND d.cancelled=0) AND NOT EXISTS(SELECT 1 FROM crm_workbench_drafts d WHERE d.lead_id=l.id AND d.owner_id=l.owner_id AND trim(d.content)<>'')`).bind(owner).all<any>()).results;
  const reminders=await contactFollowups(db,owner,leads,at,'',true);
  const existing=(await db.prepare("SELECT id,desktop_id,state FROM crm_workbench_commands WHERE owner_id=? AND kind IN ('send','material')").bind(owner).all<any>()).results;
  const commandIds=new Set(existing.map(c=>c.id)),blocked=new Set(existing.filter(c=>['queued','running','uncertain'].includes(c.state)).map(c=>c.desktop_id));

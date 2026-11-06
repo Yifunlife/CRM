@@ -99,6 +99,9 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
   const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
   if(!completed)return {ok:true};
   if(completed.state==='done'&&(r.state!=='done'||JSON.stringify(await readJson(completed.result))!==JSON.stringify(r.value||{})))return {ok:true};
+  if(JSON.parse(completed.payload).auto_first_contact&&r.state==='failed'&&!r.value?.preSendNotLaunched&&!/^(?:not sent$|客户.*(?:未发送|停止自动|停止自动跟进)|CRM.*未发送|请保持WhatsApp和邮件在线|号码国际格式待核实|号码位数异常|国家或号码格式|邮箱.*(?:待核实|无法确认|重合)|号码与其他客户重合|工作台缺少跟进发送前检查|邮件回复检查尚未完成|客户回复检查尚未完成|请配置已批准的压缩公司介绍PDF)/.test(r.value?.error||'')){
+   r.state='uncertain';r.value={...r.value,status:'uncertain',detail:'发送执行中断，是否已发送待核实，保留名额且不自动重发'};
+  }
   if(JSON.parse(completed.payload).auto_first_contact&&r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&!r.value.messageId){r.state='uncertain';r.value={status:'uncertain',detail:'自动首联未收到可核对的发送回执，不会自动重发'};}
   if(r.state==='done'&&completed.kind==='customer-analysis'){
    const leadId=JSON.parse(completed.payload).crm_lead_id;
