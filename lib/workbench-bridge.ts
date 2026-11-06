@@ -87,13 +87,13 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
  if(body.history||body.sync){const policy:any=await db.prepare('SELECT value FROM crm_cloud_settings WHERE id=?').bind('workbench-sync:'+device.owner_id).first();manualSummary=!!policy&&JSON.parse(policy.value).chat_upload==='manual_summary';}
  if(body.history&&manualSummary)throw new AllocationError('日常聊天上传已关闭，请在工作台点击AI整理重点并上传CRM',403);
  if(body.sync&&manualSummary)body={...body,sync:{...body.sync,full_history:false,clients:Array.isArray(body.sync.clients)?body.sync.clients.map((c:any)=>({...c,messages:[]})):body.sync.clients}};
- if(body.followup_check){const job:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state='running'").bind(clean(body.followup_check.id,150),device.owner_id).first();return {allowed:!!job&&!!JSON.parse(job.payload).auto_followup_24h&&await autoContactAllowed(db,device.owner_id,JSON.parse(job.payload))};}
+ if(body.followup_check){const job:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state='running'").bind(clean(body.followup_check.id,150),device.owner_id).first();return {allowed:!!job&&(!!JSON.parse(job.payload).auto_followup_24h||!!JSON.parse(job.payload).auto_historical_first_contact)&&await autoContactAllowed(db,device.owner_id,JSON.parse(job.payload))};}
  if(body.contact_receipts)return synchronizeContactReceipts(db,device.owner_id,body.contact_receipts);
  if(body.history)return synchronizeHistory(db,device.owner_id,body.history);
  if(body.sync){const result=await synchronizeWorkbench(db,device.owner_id,{...body.sync,catalog_only:body.sync.catalog_only===true||device.role==='sales'&&!can(device,'customers_edit')});await queueFirstContacts(db,device.owner_id);return result;}
  const timestamp=Date.now();
  await db.prepare("DELETE FROM crm_workbench_commands WHERE owner_id=? AND kind='conversation' AND updated<?").bind(device.owner_id,timestamp-600000).run();
- if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({customerAnalysis:s.customerAnalysis===true,whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,autoFollowup24h:!!s.autoFollowup24h,error:clean(s.error,300)}),device.owner_id).run();}
+ if(body.status){const s=body.status;await db.prepare('UPDATE crm_workbench_bridge SET seen=?,status=? WHERE owner_id=?').bind(timestamp,JSON.stringify({customerAnalysis:s.customerAnalysis===true,whatsapp:!!s.whatsapp,email:!!s.email,reception:!!s.reception,autoFirstContact:!!s.autoFirstContact,autoFollowup24h:!!s.autoFollowup24h,autoHistoricalFirstContact:!!s.autoHistoricalFirstContact,error:clean(s.error,300)}),device.owner_id).run();}
  if(body.result){
   const r=body.result;if(!['done','failed','uncertain'].includes(r.state)||JSON.stringify(r.value||{}).length>1500000)throw new AllocationError('操作结果无效');
   const completed:any=await db.prepare("SELECT * FROM crm_workbench_commands WHERE id=? AND owner_id=? AND state IN ('running','done')").bind(r.id,device.owner_id).first();
@@ -121,7 +121,7 @@ export async function bridgeDeviceEndpoint(db:D1Database,req:Request,body:any){
   if(r.state==='done'&&['sent','confirmed_sent'].includes(r.value?.status)&&['send','material'].includes(completed.kind)){
    await recordOnlineContact(db,device.owner_id,completed.desktop_id,r.value.messageId?'message:'+JSON.parse(completed.payload).channel+':'+r.value.messageId:'command:'+completed.id,JSON.parse(completed.payload).channel,(JSON.parse(completed.payload).auto_first_contact?r.value.text:JSON.parse(completed.payload).text)||'已发送客户资料',false,timestamp);
   }
-  if(JSON.parse(completed.payload).auto_followup_24h){
+  if(JSON.parse(completed.payload).auto_followup_24h||JSON.parse(completed.payload).auto_historical_first_contact){
    if(r.value?.replyAt&&Number.isFinite(Date.parse(r.value.replyAt))&&Date.parse(r.value.replyAt)<=timestamp)await recordOnlineContact(db,device.owner_id,completed.desktop_id,'followup-reply:'+completed.id,r.value.replyChannel||'whatsapp','发送前检查确认客户已有回复',true,Date.parse(r.value.replyAt));
    await recordAutoFollowupResult(db,device.owner_id,completed,r.state,r.value,new Date(timestamp).toISOString());
   }

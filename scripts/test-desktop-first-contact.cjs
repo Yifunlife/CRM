@@ -22,6 +22,11 @@ const run=async(overrides={})=>{
  r=await run({client:{country:'GB',whatsapp:'07911123456'},payload:{country:'GB',recipient_key:'07911123456'}});assert.equal(r.sent,1);assert.equal(r.client.whatsapp,'+447911123456');
  await assert.rejects(run({client:{country:'GB',whatsapp:'12345'},payload:{country:'GB',recipient_key:'12345'}}),/国际格式/);
  await assert.rejects(run({args:{clients:()=>[{id:'duplicate',whatsapp:'16145551234'}]}}),/号码与其他客户重合/);
+ const historical={auto_historical_first_contact:true,historical_approved_at:new Date().toISOString(),assigned_at:'2025-01-01T00:00:00Z'};
+ r=await run({payload:historical,args:{refreshFollowup:async()=>{}}});assert.equal(r.sent,1,'explicit historical approval allows an old assignment');
+ await assert.rejects(run({payload:{...historical,historical_approved_at:''},args:{refreshFollowup:async()=>{}}}),/分配时间/);
+ r=await run({payload:historical,args:{refreshFollowup:async()=>{},archive:()=>[{outgoing:false,channel:'email',timestamp:new Date().toISOString(),text:'reply'}]}});assert.equal(r.result.status,'skipped');assert.equal(r.sent,0);
+ r=await run({payload:historical,args:{refreshFollowup:async()=>{},archive:()=>[{outgoing:true,channel:'email',speaker:'我方'}]}});assert.equal(r.result.status,'skipped');assert.equal(r.sent,0,'historical first contact never repeats any prior outgoing channel');
  const followup={auto_followup_24h:true,first_at:new Date(Date.now()-86401000).toISOString(),channel:'email',recipient_key:'customer@example.invalid'};
  const oldOutbound={outgoing:true,speaker:'Winnie Wu',channel:'whatsapp',timestamp:followup.first_at};
  r=await run({payload:followup,args:{refreshFollowup:async()=>{},archive:()=>[oldOutbound],read:name=>name==='whatsapp-outbox.json'?[{clientId:'client',status:'sent'}]:[]}});assert.equal(r.mail,1,'prior WhatsApp success allows the email followup');
