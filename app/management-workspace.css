@@ -112,7 +112,7 @@
 
 /* Project facts stay in distinct columns; wide lists scroll inside the panel. */
 .management-workspace .mw-project-overview{--project-name-width:180px;isolation:isolate}
-.management-workspace .mw-project-overview table{min-width:1220px;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}
+.management-workspace .mw-project-overview table{min-width:1100px;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}
 .office-app .management-workspace .mw-project-overview :is(th,td){white-space:normal;overflow-wrap:anywhere;text-align:center;vertical-align:middle}
 .management-workspace .mw-project-overview th{white-space:nowrap}
 .management-workspace .mw-project-overview :is(th,td):first-child{position:sticky;left:0;z-index:2;background:var(--white,#fff);width:var(--project-name-width);min-width:var(--project-name-width);max-width:var(--project-name-width);box-shadow:1px 0 var(--line)}

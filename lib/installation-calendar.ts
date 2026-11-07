@@ -11,11 +11,12 @@ export function calendarRangeDays(month:string,from:string,to:string){
  return start>end?[]:days.filter((_,i)=>days[Math.floor(i/7)*7]<=end&&days[Math.floor(i/7)*7+6]>=start);
 }
 export function shiftCalendarMonth(month:string,by:number){const d=new Date(month+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()+by);return d.toISOString().slice(0,7);}
-export function calendarProjectColor(projectId:string){
+const projectPalette=[['#1565c0','#ffffff'],['#f28e2b','#1b1b1b'],['#238636','#ffffff'],['#b51f78','#ffffff'],['#f2d14b','#242424'],['#00acc1','#0d2630'],['#6f42c1','#ffffff'],['#8b5e34','#ffffff'],['#a3cf39','#18210c'],['#c62828','#ffffff'],['#37474f','#ffffff'],['#f5b68a','#3b2518'],['#b6a0da','#26183b'],['#00695c','#ffffff'],['#73c4f2','#123147']];
+export function calendarProjectColor(projectId:string,projectNumber?:number){
  const suffix=projectId.match(/-(\d+)$/);let hash=2166136261;
- for(const char of suffix?projectId.slice(0,-suffix[0].length):projectId)hash=Math.imul(hash^char.charCodeAt(0),16777619);
- const hue=((hash>>>0)%360+(suffix?Number(suffix[1])*137.508:0))%360;
- return {backgroundColor:`hsl(${hue.toFixed(2)} 65% 91%)`,color:`hsl(${hue.toFixed(2)} 65% 24%)`};
+ for(const char of projectId)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+ const index=projectNumber?projectNumber-1:suffix?Number(suffix[1])-1:hash>>>0,[backgroundColor,color]=projectPalette[((index%projectPalette.length)+projectPalette.length)%projectPalette.length];
+ return {backgroundColor,color};
 }
 export function calendarProjectNumbers(rows:any[]){
  const numbers:Record<string,number>={},used=new Set<number>(),ordered=[...rows].sort((a,b)=>a.id.localeCompare(b.id));

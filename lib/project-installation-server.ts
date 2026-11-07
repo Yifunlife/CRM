@@ -23,21 +23,33 @@ async function entity(db:D1Database,u:any,key:string){
  return {source,lead,order,aliases,key:order?'order:'+order.id:key,archived:!!order?.archived||!!source.archived,projectId:type==='sales'?keyId:projects[0]?.project_id||null};
 }
 async function records(db:D1Database,aliases:string[]){return list(db,`SELECT e.id AS revision,e.payload,e.created,u.name AS author FROM crm_sales_events e LEFT JOIN crm_users u ON u.id=e.created_by WHERE e.kind=? AND json_extract(e.payload,'$.entity') IN (${aliases.map(()=>'?').join(',')}) ORDER BY e.rowid DESC LIMIT 20`,[kind,...aliases]);}
-export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL){
- if(!['project-installation/plans','project-installation/plan'].includes(path))return undefined;
+export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL):Promise<any>{
+ if(!['project-installation/plans','project-installation/plan','project-installation/dossier'].includes(path))return undefined;
  if(!['sales','admin','ceo','management'].includes(u.role)||u.role!=='sales'&&!can(u,'customers_all'))fail('没有项目安装计划查看权限',403);
+ if(path==='project-installation/dossier'){
+  if(method!=='GET')fail('请求方式无效',405);
+  const leadId=url.searchParams.get('lead')||'',lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(leadId).first();
+  if(!lead||!authorizedLead(u,lead)||!boardLeadVisible(u,lead))fail('客户不存在或无权查看',404);
+  const sources=await list(db,"SELECT 'sales:'||project_id AS entity,name FROM crm_sales_projects WHERE lead_id=? UNION ALL SELECT 'order:'||id AS entity,project AS name FROM crm_followup_orders WHERE lead_id=?",[leadId,leadId]);
+  const seen=new Set<string>(),items=[];
+  for(const source of sources){
+   let detail;try{detail=await projectInstallationEndpoint(db,u,actor,'project-installation/plan','GET',{},new URL('https://crm.invalid/?entity='+encodeURIComponent(source.entity)));}catch(error){if(error instanceof AllocationError&&error.status===404)continue;throw error;}
+   if(!seen.has(detail.entity)){seen.add(detail.entity);items.push({...detail,name:source.name});}
+  }
+  return {items};
+ }
  if(path==='project-installation/plans'){
   if(method!=='GET')fail('请求方式无效',405);
   const all=u.role!=='sales'&&can(u,'customers_all');
-  const rows=await list(db,`SELECT e.id AS revision,e.payload,e.created,l.id AS lead_id,l.owner_id,l.grade,l.market,l.country,l.source,l.business_scope,l.detail FROM crm_sales_events e JOIN crm_leads l ON l.id=e.lead_id LEFT JOIN crm_sales_projects p ON json_extract(e.payload,'$.entity')='sales:'||p.project_id LEFT JOIN crm_followup_orders o ON json_extract(e.payload,'$.entity')='order:'||o.id OR p.lead_id=o.lead_id AND json_extract(p.details,'$.deal_id')=o.deal_id WHERE e.kind=? AND (p.project_id IS NOT NULL OR o.id IS NOT NULL) AND ${all?'1=1':'l.owner_id=? AND (o.id IS NULL OR o.commercial_id=?)'} AND NOT EXISTS(SELECT 1 FROM crm_sales_events n WHERE n.kind=e.kind AND json_extract(n.payload,'$.entity')=json_extract(e.payload,'$.entity') AND n.rowid>e.rowid) ORDER BY e.rowid DESC`,[kind,...(all?[]:[u.id,u.id])]);
-  return {items:rows.filter(r=>boardLeadVisible(u,r)).map(r=>({revision:r.revision,created:r.created,...JSON.parse(r.payload)}))};
+  const rows=await list(db,`SELECT e.id AS revision,e.payload,e.created,COALESCE(o.project,p.name) AS project_name,CASE WHEN o.id IS NOT NULL THEN 'order:'||o.id ELSE json_extract(e.payload,'$.entity') END AS canonical_entity,l.id AS lead_id,l.owner_id,l.grade,l.market,l.country,l.source,l.business_scope,l.detail FROM crm_sales_events e JOIN crm_leads l ON l.id=e.lead_id LEFT JOIN crm_sales_projects p ON json_extract(e.payload,'$.entity')='sales:'||p.project_id LEFT JOIN crm_followup_orders o ON json_extract(e.payload,'$.entity')='order:'||o.id OR p.lead_id=o.lead_id AND json_extract(p.details,'$.deal_id')=o.deal_id WHERE e.kind=? AND (p.project_id IS NOT NULL OR o.id IS NOT NULL) AND ${all?'1=1':'l.owner_id=? AND (o.id IS NULL OR o.commercial_id=?)'} AND NOT EXISTS(SELECT 1 FROM crm_sales_events n WHERE n.kind=e.kind AND json_extract(n.payload,'$.entity')=json_extract(e.payload,'$.entity') AND n.rowid>e.rowid) ORDER BY e.rowid DESC`,[kind,...(all?[]:[u.id,u.id])]);
+  const seen=new Set<string>();return {items:rows.filter(r=>{if(!boardLeadVisible(u,r)||seen.has(r.canonical_entity))return false;seen.add(r.canonical_entity);return true;}).map(r=>({revision:r.revision,created:r.created,name:r.project_name,...JSON.parse(r.payload),entity:r.canonical_entity}))};
  }
  if(method!=='GET'&&method!=='POST')fail('请求方式无效',405);
  if(method==='POST'&&(!body||typeof body!=='object'||Array.isArray(body)))fail('请求格式无效');
  const p=await entity(db,u,method==='GET'?url.searchParams.get('entity')||'':text(body.entity,150)),history=await records(db,p.aliases),current=history[0];
  const previous:InstallationPlan=current?JSON.parse(current.payload).plan:blankInstallation();
  const canFactory=factoryEditor(u,actor),canCommercial=u.id===actor.id&&(canFactory||u.role==='sales'&&can(u,'customers_edit'));
- if(method==='GET')return {entity:p.key,revision:current?.revision||'',plan:previous,can_factory:canFactory&&!p.archived,can_commercial:canCommercial&&!p.archived,history:history.map(r=>({id:r.revision,created:r.created,author:r.author,action:JSON.parse(r.payload).action})),archived:p.archived};
+ if(method==='GET')return {entity:p.key,revision:current?.revision||'',plan:previous,can_factory:canFactory&&!p.archived,can_commercial:canCommercial&&!p.archived,history:history.map(r=>({id:r.revision,created:r.created,author:r.author,action:JSON.parse(r.payload).action,plan:JSON.parse(r.payload).plan})),archived:p.archived};
  if(p.archived)fail('项目订单已归档，不能修改安装安排',409);
  const action=text(body.action,50),section=action==='profile'?'profile':['factory-draft','factory-confirm'].includes(action)?'factory':['client-save','client-confirm'].includes(action)?'client':action==='travel-confirm'?'travel':action==='acceptance-save'?'acceptance':'';
  if(!section)return fail('安装安排操作无效');
@@ -59,6 +71,7 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  }
  if(section==='factory'){
   for(const key of ['people','days'])if(values[key]&&(!/^\d+$/.test(values[key])||Number(values[key])<1||Number(values[key])>1000))fail('安装人数和天数需为有效正整数');
+  if(values.transfer_days&&(!/^\d+$/.test(values.transfer_days)||Number(values.transfer_days)>365))fail('转场天数需为 0 至 365 的整数');
   if(values.departure_date&&values.available_date&&values.departure_date<values.available_date||values.end_date&&values.departure_date&&values.end_date<values.departure_date)fail('请核对工厂可出发、安装出发与结束日期');
   if(action==='factory-confirm')requireFields(['factory','technicians','people','project_lead','days','available_date','departure_date','end_date','internal_owner','evidence']);
   const changed=INSTALLATION_FACTORY_FIELDS.some(([k])=>k!=='due_date'&&values[k]!==previous.factory[k]);

@@ -1,7 +1,10 @@
-import {can} from './crm';
+import {can,canSetManagement,hasCustomerContact} from './crm';
+import {boardLeadVisible} from './market-access';
 
-// Management's company view retains the own-customer maintenance available in personal view.
-export function canEditCustomerProfile(user:any,lead:any){return can(user,'customers_edit')||user?.role==='management'&&!!user.id&&lead?.owner_id===user.id;}
+// Preserve own-customer editing and let company maintainers complete imported installation dossiers.
+export function canEditCustomerProfile(user:any,lead:any){return can(user,'customers_edit')||user?.role==='management'&&!!user.id&&(lead?.owner_id===user.id||!user.personal_business&&can(user,'customers_all')&&canSetManagement(user)&&isInstallationCustomer(lead)&&boardLeadVisible(user,lead));}
+export function isInstallationCustomer(lead:any){const detail=typeof lead?.detail==='string'?JSON.parse(lead.detail||'{}'):lead?.detail||{},source=detail._installation_source;return typeof source?.title==='string'&&Number.isInteger(source.row)&&source.row>0;}
+export function installationCustomerWithoutContact(lead:any){return isInstallationCustomer(lead)&&!hasCustomerContact(lead.phone,customerProfile(lead).wechat);}
 
 export const CUSTOMER_PROJECT_STAGES=['客户沟通/客户分级','设计单成交','报价环节','设备单成交','工程下单/施工图','工程安装图','货品装箱运输','安装与指导','售后'];
 export const CUSTOMER_PROJECT_STATUSES=['交涉中','进行中','已暂停','已交付','已丢单'];

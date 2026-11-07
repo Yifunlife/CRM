@@ -72,3 +72,21 @@ await post({...payload(),customer_source:'Facebook'},ownManager);assert.equal(cu
 assert.equal(JSON.parse(row().detail).platform,'ig','original imported platform is retained as evidence');
 assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_deals').get().n,0);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_receipts').get().n,0);assert.equal(notes(),notesBefore);
 console.log('PASS: own-customer contract supplementation and explicit source corrections without administrator approval; original evidence, ownership and financial records preserved; source SQL/display parity and stale/invalid-source rejection.');
+
+// Imported installation customers have known project facts before an owner/contact is assigned.
+const winnie={id:'b7e34925-ec83-4f4e-ad42-04be344dc82b',role:'management',trade_scopes:['foreign'],permissions:{customers_all:true,customers_edit:false}};
+sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(winnie.id,'installation-manager','Winnie','management','unused','2026-11-01');
+const importedDetail={_installation_source:{title:'亦玩集团2026年订单安装计划表',row:5},_customer_profile:{contact:'',project:'导入项目'},原始资料:'保留'};
+sql.prepare("INSERT INTO crm_leads(id,name,source,country,market,detail,fingerprint,created) VALUES('imported-installation','导入项目','订单安装计划表','中国','内贸',?,'installation-dossier','2026-11-07')").run(JSON.stringify(importedDetail));
+const installationRow=()=>sql.prepare("SELECT * FROM crm_leads WHERE id='imported-installation'").get();
+const installationPayload=()=>{const l=installationRow();return {id:l.id,revision:JSON.parse(l.detail)._profile_revision||0,base:Object.fromEntries(['source','name','country','phone','email','grade','next_date'].map(k=>[k,l[k]])),country:l.country,method:'',source_note:'',company:'',contacts:[],profile:{}};};
+const {canEditCustomerProfile}=await import(moduleURL('lib/customer-profile.ts'));
+assert(canEditCustomerProfile(winnie,installationRow()));assert(!canEditCustomerProfile({...winnie,personal_business:true},installationRow()));assert(!canEditCustomerProfile(ownManager,installationRow()));
+await post({...installationPayload(),owner_id:'sales',profile:{city:'武汉',contractNumber:'YF-LOCAL-TEST'}},winnie);
+assert.equal(customerProfile(installationRow()).city,'武汉');assert.equal(installationRow().owner_id,null);assert.equal(installationRow().phone,'');assert.equal(installationRow().email,'');assert.equal(installationRow().source,'订单安装计划表');assert.deepEqual(JSON.parse(installationRow().detail)._installation_source,importedDetail._installation_source);assert.equal(JSON.parse(installationRow().detail).原始资料,'保留');
+await assert.rejects(()=>post(installationPayload(),ownManager),e=>e.status===403);await assert.rejects(()=>post(installationPayload(),{...winnie,personal_business:true}),e=>e.status===403);await assert.rejects(()=>post(installationPayload(),sales),e=>e.status===404);
+await post({...installationPayload(),phone:'123456789'},winnie);const staleInstallation=installationPayload();await post({...installationPayload(),profile:{city:'已核实城市'}},winnie);await assert.rejects(()=>post(staleInstallation,winnie),e=>e.status===409);await assert.rejects(()=>post({...installationPayload(),phone:'',profile:{wechat:''}},winnie),/至少填写一项/);
+sql.exec("INSERT INTO crm_leads(id,name,source,country,detail,fingerprint,created) VALUES('ordinary-no-contact','普通客户','Meta','中国','{}','ordinary-no-contact','2026-11-07')");
+await assert.rejects(()=>post({id:'ordinary-no-contact',revision:0,country:'中国',method:'',source_note:'',company:'',contacts:[]},admin),/至少填写一项/);
+assert.equal(notes(),notesBefore);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_deals').get().n,0);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_receipts').get().n,0);
+console.log('PASS: company maintainer can edit unassigned installation dossiers with incomplete contacts; unrelated/read-only roles remain denied, known contacts cannot be removed, and ownership, source evidence, stale-write guards and financial records are preserved.');
