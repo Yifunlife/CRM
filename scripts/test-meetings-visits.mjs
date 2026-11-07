@@ -7,8 +7,8 @@ const {personalWorkEndpoint}=await import(moduleURL('lib/personal-work-server.ts
 const {customerRecords}=await import(moduleURL('lib/api/customers.ts'));
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
 for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
-const db=database(sql),admin={id:'admin',role:'admin'},sales={id:'a',role:'sales'},other={id:'b',role:'sales'},readonly={id:'reader',role:'management'},follow={id:'f',role:'followup'};
-for(const u of [admin,sales,other,readonly,follow])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
+const db=database(sql),admin={id:'admin',role:'admin'},sales={id:'a',role:'sales'},other={id:'b',role:'sales'},readonly={id:'reader',role:'management'},follow={id:'f',role:'followup'},ceo={id:'ceo',role:'ceo'};
+for(const u of [admin,sales,other,readonly,follow,ceo])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'unused','2026-01-01');
 for(const [id,name,owner] of [['mine','客户甲','a'],['other','客户乙','b'],['same1','同名客户','a'],['same2','同名客户','a']])sql.prepare("INSERT INTO crm_leads(id,name,source,owner_id,status,detail,fingerprint,created) VALUES(?,?,'Meta',?,'正在沟通','{}',?,'2026-01-01')").run(id,name,owner,id);
 const snapshot=()=>JSON.stringify(['crm_leads','crm_notes','crm_assignments','crm_deals','crm_files','crm_followup_files'].map(t=>[t,sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()]));
 const call=(path,body={},u=admin,method='POST')=>handle(db,u,u,'sales-management/'+path.split('?')[0],method,body,new URL('https://test/'+path));
@@ -34,11 +34,19 @@ let report=await get();assert.equal(report.meetings.length,1);assert.equal(repor
 assert.equal((await get(other)).meetings.length,0);
 assert.equal((await get(admin,'?owner=b')).meetings.length,0);
 assert.equal((await get(admin,'?q=不存在')).meetings.length,0);
+// CEO uses the same authorized entry/import flow as other editors.
+await call('meeting',{lead_id:'other',type:'拜访客户',date:'2026-11-04',participants:'CEO、客户乙',result:'确认现场条件',next_action:'安排方案'},ceo);
+assert.ok((await get(ceo)).meetings.some(m=>m.participants==='CEO、客户乙'&&m.type==='拜访客户'));
+assert.equal((await call('visits/import',{...body,rows:[{...row,customer_name:'客户乙',date:'2026-11-05'}]},ceo)).summary.ready,1);
+assert.equal((await call('visits/import',{...body,mode:'import',rows:[{...row,customer_name:'客户乙',date:'2026-11-05'}]},ceo)).inserted,1);
+await assert.rejects(call('meeting',{lead_id:'mine',type:'到访公司',date:'2026-11-04',participants:'只读',result:'不应保存',next_action:'无'},readonly),e=>e.status===403);
+await assert.rejects(call('meeting',{lead_id:'other',type:'到访公司',date:'2026-11-04',participants:'无权客户',result:'不应保存',next_action:'无'},sales),e=>e.status===404);
+assert.equal(snapshot(),before,'manual entry and import preserve customer data, notes, ownership and files');
 // Legacy online follow-up notes appear without backfill; missing details stay empty.
 sql.prepare("INSERT INTO crm_notes(id,lead_id,user_id,content,method,next_step,created) VALUES('old-online','mine','a','旧会议结论','线上会议','旧下一步','2026-10-31T17:30:00Z')").run();
 report=await get();assert.equal(report.meetings.find(r=>r.id==='note:old-online').date,'2026-11-01');assert.equal(report.meetings.find(r=>r.id==='note:old-online').participants,'');
-const at='2026-11-02T17:30:00.000Z';
-const contact={id:'mine',type:'后续跟进',result:'客户已回复',note:'会议确认尺寸',next_action:'跟进客户回复',next_date:'2026-11-04',status:'正在沟通',method:'线上会议',participants:'甲、销售',at};
+const at='2026-11-02T17:30:00.000Z',nextDate=new Date(Date.now()+2*86400000).toISOString().slice(0,10);
+const contact={id:'mine',type:'后续跟进',result:'客户已回复',note:'会议确认尺寸',next_action:'跟进客户回复',next_date:nextDate,status:'正在沟通',method:'线上会议',participants:'甲、销售',at};
 const record=body=>personalWorkEndpoint(db,sales,sales,'personal-work/record','POST',body,new URL('https://test'));
 const count=sql.prepare('SELECT COUNT(*) n FROM crm_notes').get().n;
 await assert.rejects(record({...contact,participants:''}),/参与人/);
@@ -46,10 +54,10 @@ assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_notes').get().n,count);
 await record(contact);
 report=await get();const meeting=report.meetings.find(r=>r.participants===contact.participants);
 assert.equal(meeting.date,'2026-11-03');assert.equal(meeting.source,'客户推进');assert.ok(meeting.result.includes(contact.note));assert.equal(report.rows.find(r=>r.id==='mine').meeting_date,'2026-11-03');
-assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_sales_events WHERE kind='客户会议与到访'").get().n,1,'follow-up is read from its own source');
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM crm_sales_events WHERE kind='客户会议与到访'").get().n,3,'follow-up is read from its own source');
 const legacyRecord=body=>customerRecords({db,req:new Request('https://test/api/followup',{method:'POST'}),path:'followup',write:true,body,user:admin,actor:admin});
-await assert.rejects(legacyRecord({id:'mine',status:'正在沟通',method:'线上会议',content:'invalid',next_date:'2026-11-04'}),/会议日期/);
-await legacyRecord({id:'mine',status:'正在沟通',method:'线上会议',meeting_date:'2026-11-02',participants:'管理者与客户',content:'管理会议',next_step:'核对方案',next_date:'2026-11-04'});
+await assert.rejects(legacyRecord({id:'mine',status:'正在沟通',method:'线上会议',content:'invalid',next_date:nextDate}),/会议日期/);
+await legacyRecord({id:'mine',status:'正在沟通',method:'线上会议',meeting_date:'2026-11-02',participants:'管理者与客户',content:'管理会议',next_step:'核对方案',next_date:nextDate});
 assert.ok((await get()).meetings.some(m=>m.participants==='管理者与客户'&&m.date==='2026-11-02'));
 const allBefore=snapshot(),eventsBefore=sql.prepare('SELECT COUNT(*) n FROM crm_sales_events').get().n;
 await get();await get();assert.equal(snapshot(),allBefore);assert.equal(sql.prepare('SELECT COUNT(*) n FROM crm_sales_events').get().n,eventsBefore,'refresh never duplicates meetings');

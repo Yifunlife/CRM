@@ -58,7 +58,7 @@
  .office-app .workspace .mw-meetings>.page-heading{flex-direction:row;gap:8px;padding:10px}
  .office-app .workspace .mw-meetings>.page-heading>div:first-child{width:100%}
  .office-app .workspace .mw-meetings>.page-heading h1{font-size:20px}
- .office-app .workspace .mw-meetings .confirmed-employee{margin:0;flex:1;min-width:0}
+ .office-app .workspace .mw-meetings .confirmed-employee{margin:0;flex:1 0 100%;min-width:0}
  .office-app .workspace .mw-meetings .confirmed-employee select{width:100%;min-width:0}
  .office-app .workspace .mw-meetings :is(button,input:not([type=file]),select){min-height:44px;height:auto}
  .office-app .workspace .mw-meetings .role-form-grid{grid-template-columns:1fr}
