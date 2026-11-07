@@ -5,6 +5,7 @@ import InstallationTimeline from './installation-timeline';
 import InstallationPlanTable from './installation-plan-table';
 import InstallationFollowupTable from './installation-followup-table';
 import InstallationArrivals from './installation-arrivals';
+import {installationChanged,installationSaveError,useInstallationSync} from './installation-live-sync';
 import {InstallationArchiveView} from './installation-project-archive';
 import InstallationCalendarEditor from './installation-calendar-editor';
 import {calendarProjectNumbers,calendarToday} from '../lib/installation-calendar';
@@ -20,15 +21,23 @@ export function ProjectInstallationSummary({row,api,demo,open,onEditingChange}:{
  const [data,DATA]=useState<RecordValue|null>(null),[error,ERROR]=useState(''),[editing,EDITING]=useState(false),[revision,REVISION]=useState(0);
  useEffect(()=>{let live=true;ERROR('');if(demo){DATA({entity:row.id,revision:'',plan:blankInstallation()});return;}api('project-installation/plan?entity='+encodeURIComponent(row.id)).then(d=>{if(live)DATA(d);}).catch(e=>{if(live)ERROR(e.message);});return()=>{live=false;};},[api,row.id,demo,revision]);
  useEffect(()=>{onEditingChange?.(editing);return()=>onEditingChange?.(false);},[editing,onEditingChange]);
+ useInstallationSync(demo?'':row.id,editing,async current=>{try{const d=await api('project-installation/plan?entity='+encodeURIComponent(row.id));if(current()){DATA(d);ERROR('');}}catch(e:any){if(current())ERROR(e.message);}});
  return <>{error?<section className="panel"><p role="alert">安装档案读取失败：{error}</p><button onClick={()=>REVISION(n=>n+1)}>重新读取</button></section>:data?<InstallationArchiveView record={data} edit={()=>EDITING(true)} open={open}/>:<p role="status">正在读取安装档案…</p>}{editing&&<InstallationCalendarEditor initialProject={row.id} rows={[row]} api={api} close={()=>EDITING(false)} saved={()=>REVISION(n=>n+1)}/>}</>;
 }
 export default function OrderInstallationPlan({rows,projects,user,api,demo,initialKey='',onSelection,openProgress,market,markets,onMarketChange,onEditingChange,embedded=false,followupOnly=false,openFollowup}:Props){
- const [dirty,DIRTY]=useState(false),[tableDirty,TABLE_DIRTY]=useState(false),[draft,DRAFT]=useState<Record<string,string|boolean>|null>(null),[arrivalDraft,ARRIVAL_DRAFT]=useState<InstallationArrivalBatch[]|null>(null),formRef=useRef<HTMLFormElement>(null);
- const unsaved=dirty||tableDirty;
+ const [dirty,DIRTY]=useState(false),[tableDirty,TABLE_DIRTY]=useState(false),[calendarEditing,CALENDAR_EDITING]=useState(false),[draft,DRAFT]=useState<Record<string,string|boolean>|null>(null),[arrivalDraft,ARRIVAL_DRAFT]=useState<InstallationArrivalBatch[]|null>(null),formRef=useRef<HTMLFormElement>(null);
+ const unsaved=dirty||tableDirty||calendarEditing;
  useEffect(()=>{onEditingChange?.(unsaved);return()=>onEditingChange?.(false);},[unsaved,onEditingChange]);
  function leave(action:()=>void){if(unsaved){ERROR('请先保存或放弃当前修改');return;}action();}
  const [items,ITEMS]=useState<RecordValue[]>([]),[selected,SELECT]=useState(initialKey),[detail,DETAIL]=useState<RecordValue|null>(null),[step,STEP]=useState(0),[calendarMonth,CALENDAR_MONTH]=useState(()=>calendarToday().slice(0,7)),[filter,FILTER]=useState('全部'),[query,QUERY]=useState(''),[error,ERROR]=useState(''),[message,MESSAGE]=useState(''),[loading,LOADING]=useState(false),[busy,BUSY]=useState(false),[revision,REVISION]=useState(0),[examples,EXAMPLES]=useState<Record<string,RecordValue>>({});
  const manager=['admin','ceo','management'].includes(user.role),current=rows.find(r=>installationEntities(r,projects).includes(selected)),recordFor=(row:any)=>items.find(v=>installationEntities(row,projects).includes(v.entity)),planFor=(row:any)=>demo?examples[row.id]?.plan||blankInstallation():recordFor(row)?.plan||blankInstallation();
+ useInstallationSync(demo?'':user.id+':'+selected,unsaved||busy||loading||!!current&&!detail,async canApply=>{
+  try{
+   const [plans,latest]=await Promise.all([api('project-installation/plans'),current?api('project-installation/plan?entity='+encodeURIComponent(selected)):Promise.resolve(null)]);
+   if(!canApply())return;
+   ITEMS(plans.items);if(latest)DETAIL(previous=>previous?.revision===latest.revision?previous:latest);ERROR('');
+  }catch(e:any){if(canApply())ERROR('自动同步暂未完成，将自动重试：'+e.message);}
+ });
  useEffect(()=>{if(unsaved)MESSAGE('');else ERROR(value=>value==='请先保存或放弃当前修改'?'':value);},[unsaved]);
  useEffect(()=>{SELECT(initialKey);DRAFT(null);ARRIVAL_DRAFT(null);},[initialKey]);
  useEffect(()=>{if(demo){ITEMS([]);return;}let live=true;LOADING(true);ERROR('');api('project-installation/plans').then(d=>{if(live)ITEMS(d.items);}).catch(e=>{if(live)ERROR(e.message);}).finally(()=>{if(live)LOADING(false);});return()=>{live=false;};},[api,demo,revision]);
@@ -47,9 +56,9 @@ export default function OrderInstallationPlan({rows,projects,user,api,demo,initi
     else if(section==='acceptance'){if(values.accepted&&!values.installed)throw new Error('请先确认安装完成');plan.acceptance=values;}
     else{plan.profile=values;plan.client.confirmed=false;plan.travel.reconfirmation=plan.travel.issued;}
     const record={...detail,plan,revision:String(Date.now()),history:[{id:String(Date.now()),author:user.name,created:new Date().toISOString(),action:'示例更新：'+steps[step]},...(detail.history||[])]};EXAMPLES({...examples,[current.id]:record});DETAIL(record);
-   }else{await api('project-installation/plan',{entity:selected,revision:detail.revision,action,values,...(arrivals===undefined?{}:{arrivals})});REVISION(v=>v+1);}
+   }else{await api('project-installation/plan',{entity:selected,revision:detail.revision,action,values,...(arrivals===undefined?{}:{arrivals})});installationChanged();REVISION(v=>v+1);}
    DIRTY(false);DRAFT(null);ARRIVAL_DRAFT(null);if(action==='factory-confirm'&&!followupOnly)STEP(2);MESSAGE(demo?'示例已更新，不会写入真实项目。':'安装安排已保存，相关项目共用同一份记录。');
-  }catch(e:any){ERROR(e.message);}finally{BUSY(false);}
+  }catch(e:any){ERROR(installationSaveError(e));}finally{BUSY(false);}
  }
  const value=(v:any,empty='待确认')=>v==null||v===''?empty:String(v);
  const renderFields=(fields:readonly (readonly [string,string])[],section:Record<string,any>,editable:boolean)=>fields.map(([key,label])=>{
@@ -60,7 +69,7 @@ export default function OrderInstallationPlan({rows,projects,user,api,demo,initi
  const arrivalBatches=arrivalDraft??detail?.plan.arrivals??[],projectNumbers=calendarProjectNumbers(rows),progress=detail?installationStageStatus({...detail.plan,arrivals:arrivalBatches},step,current,draft):null,confirmation=detail?.confirmations?.[INSTALLATION_STAGES[step].section];
 
  return <div className={'installation-workspace'+(followupOnly?' installation-followup-page':'')}>
- {error&&<p className="notice error" role="alert">{error} <button disabled={busy} onClick={()=>REVISION(v=>v+1)}>刷新重试</button></p>}{message&&<p className="notice success" role="status">{message}</p>}{loading&&<p role="status">正在读取安装安排…</p>}
+ {error&&<p className="notice error" role="alert">{error} <button disabled={busy||unsaved} onClick={()=>REVISION(v=>v+1)}>刷新重试</button></p>}{message&&<p className="notice success" role="status">{message}</p>}{loading&&<p role="status">正在读取安装安排…</p>}
  {selected&&!current?<section className="panel"><p>当前项目不在可见范围内，请返回总表重新选择。</p><button onClick={()=>choose('')}>返回安装计划</button></section>:current?<>
  <div className="installation-detail-heading"><button className="text back" disabled={busy} onClick={()=>choose('')}>← {followupOnly?'返回填写状态总表':embedded?'返回项目资料':'返回安装工期计划'}</button>{!followupOnly&&<button disabled={busy} onClick={()=>leave(()=>openProgress(current.id))}>查看项目进度与计划总表</button>}</div>
  <div className={followupOnly?'installation-followup-project-heading':'panel'}><h2>{followupOnly?projectNumbers[current.id]+'. ':''}{current.name}</h2>{current.contractNumber&&<p className="small muted">{current.contractNumber}</p>}</div>
@@ -81,7 +90,7 @@ export default function OrderInstallationPlan({rows,projects,user,api,demo,initi
  </>:<>
  <div className="installation-compact-filters">{markets&&<label><span className="sr-only">业务范围</span><select aria-label="安装计划业务范围" value={market} onChange={e=>leave(()=>onMarketChange?.(e.target.value))}>{markets.map(m=><option key={m} value={m}>{m==='全部'?'全部业务':m}</option>)}</select></label>}<label><span className="sr-only">安装交接状态</span><select aria-label="安装交接状态" value={filter} onChange={e=>leave(()=>FILTER(e.target.value))}>{filters.map(f=><option key={f} value={f}>{f==='全部'?'全部进度':f}</option>)}</select></label><input type="search" placeholder="搜索项目、合同号、国家或安装师傅" aria-label="搜索安装项目" value={query} onChange={e=>leave(()=>QUERY(e.target.value))}/></div>
  {followupOnly?<InstallationFollowupTable rows={filtered} numbers={projectNumbers} planFor={planFor} open={choose} disabled={busy||loading}/>:<><details className="panel installation-info"><summary><strong>师傅、工期与备注</strong><span className="small muted">{filtered.length} 个项目 · 展开编辑</span></summary><div className="installation-info-body"><InstallationPlanTable rows={filtered} allRows={rows} planFor={planFor} recordFor={recordFor} onEditingChange={TABLE_DIRTY} editable={manager&&!user.personal_business} demo={demo} api={api} saved={()=>{REVISION(v=>v+1);MESSAGE('安装安排已保存到项目档案');}} open={choose}/></div></details>
- <section className="panel"><InstallationTimeline canOpen={()=>{if(unsaved){ERROR('请先保存或放弃当前修改');return false;}return true;}} rows={filtered} allRows={rows} planFor={planFor} month={calendarMonth} onMonthChange={CALENDAR_MONTH} api={api} demo={demo} onSaved={()=>{REVISION(v=>v+1);MESSAGE('安装安排已保存到项目档案');}} open={choose}/></section></>}
+ <section className="panel"><InstallationTimeline onEditingChange={CALENDAR_EDITING} canOpen={()=>{if(unsaved){ERROR('请先保存或放弃当前修改');return false;}return true;}} rows={filtered} allRows={rows} planFor={planFor} month={calendarMonth} onMonthChange={CALENDAR_MONTH} api={api} demo={demo} onSaved={()=>{REVISION(v=>v+1);MESSAGE('安装安排已保存到项目档案');}} open={choose}/></section></>}
 
  </>}
  </div>;

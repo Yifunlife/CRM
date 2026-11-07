@@ -1,14 +1,15 @@
 'use client';
-import {useRef,useState,type CSSProperties} from 'react';
+import {useEffect,useRef,useState,type CSSProperties} from 'react';
 import {ChevronLeft,ChevronRight} from 'lucide-react';
 import {calendarProjectColor,calendarProjectNumbers,calendarToday,shiftCalendarMonth} from '../lib/installation-calendar';
 import {installationDayDifference,installationInMonth,installationProgress,installationRemaining,installationSchedule,installationStaffLabel} from '../lib/installation-schedule';
 import type {InstallationPlan} from '../lib/project-installation';
 import InstallationCalendarEditor from './installation-calendar-editor';
 import './installation-timeline.css';
-type Props={canOpen?:()=>boolean;rows:any[];allRows:any[];planFor:(row:any)=>InstallationPlan;month:string;onMonthChange:(month:string)=>void;api:(path:string,body?:any)=>Promise<any>;onSaved:()=>void;open:(id:string)=>void;demo?:boolean};
-export default function InstallationTimeline({rows,allRows,planFor,month,onMonthChange,api,onSaved,open,demo,canOpen}:Props){
+type Props={canOpen?:()=>boolean;onEditingChange?:(editing:boolean)=>void;rows:any[];allRows:any[];planFor:(row:any)=>InstallationPlan;month:string;onMonthChange:(month:string)=>void;api:(path:string,body?:any)=>Promise<any>;onSaved:()=>void;open:(id:string)=>void;demo?:boolean};
+export default function InstallationTimeline({rows,allRows,planFor,month,onMonthChange,api,onSaved,open,demo,canOpen,onEditingChange}:Props){
  const [edit,EDIT]=useState<{project:string;date?:string}|null>(null),wheel=useRef(0),pointer=useRef<{x:number;y:number}|null>(null),suppress=useRef(false);
+ useEffect(()=>{onEditingChange?.(!!edit);return()=>onEditingChange?.(false);},[edit,onEditingChange]);
  const today=calendarToday(),days=new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate(),first=month+'-01',last=month+'-'+days,numbers=calendarProjectNumbers(allRows),shown=rows.filter(r=>installationInMonth(planFor(r),month)).sort((a,b)=>numbers[a.id]-numbers[b.id]);
  const todayDay=today.startsWith(month)?Number(today.slice(8)):0,dates=Array.from({length:days},(_,i)=>{const day=i+1,date=month+'-'+String(day).padStart(2,'0'),weekday=new Date(date+'T00:00:00Z').getUTCDay();return {date,day,weekend:weekday===0||weekday===6,weekStart:weekday===1,mobileTick:day%7===0&&days-day>=3&&(!todayDay||day===todayDay||Math.abs(day-todayDay)>=3),edgeToday:day===todayDay&&day>1&&day<days&&(day<4||days-day<3)};}),pending=shown.filter(r=>!installationSchedule(planFor(r)).start&&!installationSchedule(planFor(r)).end).length;
  function choose(project:string,date?:string){if(canOpen&&!canOpen())return;if(demo){open(project);return;}EDIT({project,date});}

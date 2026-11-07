@@ -1,4 +1,5 @@
 'use client';
+import {installationChanged,installationSaveError} from './installation-live-sync';
 import {useCallback,useEffect,useState} from 'react';
 import {calendarProjectNumbers} from '../lib/installation-calendar';
 import {installationSchedule,installationStaffCounts} from '../lib/installation-schedule';
@@ -11,7 +12,7 @@ function PlanRow({row,number,planFor,recordFor,editable,demo,api,saved,open,edit
  const plan=planFor(row),record=recordFor(row),schedule=installationSchedule(plan),[draft,DRAFT]=useState<Record<string,string>|null>(null),[revision,REVISION]=useState(''),[error,ERROR]=useState(''),[busy,BUSY]=useState(false),allowed=editable&&!demo&&!row.original?.archived;
  const changed=!!draft;useEffect(()=>{editingChanged(row.id,changed);return()=>editingChanged(row.id,false);},[row.id,changed,editingChanged]);
  function change(key:string,value:string){if(!draft)REVISION(record?.revision||'');DRAFT(v=>{const next={...v,[key]:value};if(['company_people','external_people'].includes(key)){const counts=installationStaffCounts({...plan,factory:{...plan.factory,...next}});if(counts.company!==null&&counts.external!==null)next.people=String(counts.company+counts.external);}return next;});ERROR('');}
- async function save(){if(!draft)return;BUSY(true);ERROR('');try{const {remarks,...factory}=draft;await api('project-installation/plan',{entity:row.id,revision,action:Object.keys(factory).length?'factory-draft':'remarks',values:Object.keys(factory).length?{...plan.factory,...factory}:{remarks},...(Object.keys(factory).length&&remarks!==undefined?{remarks}:{})});DRAFT(null);saved();}catch(e:any){ERROR(e.message);if(/更新|刷新/.test(e.message))saved();}finally{BUSY(false);}}
+ async function save(){if(!draft)return;BUSY(true);ERROR('');try{const {remarks,...factory}=draft;await api('project-installation/plan',{entity:row.id,revision,action:Object.keys(factory).length?'factory-draft':'remarks',values:Object.keys(factory).length?{...plan.factory,...factory}:{remarks},...(Object.keys(factory).length&&remarks!==undefined?{remarks}:{})});installationChanged();DRAFT(null);saved();}catch(e:any){ERROR(installationSaveError(e));}finally{BUSY(false);}}
  const effective={...plan,factory:{...plan.factory,...draft}},counts=installationStaffCounts(effective);
  const field=(key:string,label:string,type='text')=><input aria-label={row.name+' · '+label} type={type} min={type==='number'?['transfer_days','company_people','external_people'].includes(key)?'0':'1':key==='end_date'?(draft?.departure_date??schedule.start):undefined} max={type==='number'?key==='transfer_days'?'365':'1000':undefined} maxLength={500} disabled={!allowed||busy} value={draft?.[key]??(plan.factory[key]||(key==='days'?schedule.days:key==='company_people'?counts.company??'':key==='external_people'?counts.external??'':''))} placeholder="待安排" onChange={e=>change(key,e.target.value)}/>;
  const val=(v:any)=>v==null||v===''?'待确认':String(v);

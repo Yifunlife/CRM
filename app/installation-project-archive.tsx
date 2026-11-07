@@ -5,6 +5,7 @@ import {installationProgress,installationRemaining,installationSchedule,installa
 import type {InstallationPlan} from '../lib/project-installation';
 import InstallationCalendarEditor from './installation-calendar-editor';
 import {InstallationArrivalsSummary} from './installation-arrivals';
+import {useInstallationSync} from './installation-live-sync';
 import './installation-timeline.css';
 type API=(path:string,body?:any)=>Promise<any>;
 type Archive={entity:string;name?:string;revision:string;plan:InstallationPlan;can_factory?:boolean;history?:{id:string;created:string;author:string;action:string;plan?:InstallationPlan}[]};
@@ -15,6 +16,7 @@ export function InstallationArchiveView({record,edit,open}:{record:Archive;edit?
 export default function LeadInstallationDossier({leadId,user,api}:{leadId:string;user:any;api:API}){
  const [records,RECORDS]=useState<Archive[]>([]),[error,ERROR]=useState(''),[revision,REVISION]=useState(0),[editing,EDITING]=useState(''),allowed=['sales','admin','ceo','management'].includes(user.role);
  useEffect(()=>{if(!allowed||!leadId)return;let live=true;RECORDS([]);ERROR('');api('project-installation/dossier?lead='+encodeURIComponent(leadId)).then(d=>{if(live)RECORDS(d.items);}).catch(e=>{if(live)ERROR(e.message);});return()=>{live=false;};},[leadId,api,allowed,revision]);
+ useInstallationSync(allowed&&leadId?user.id+':'+leadId:'',!!editing,async current=>{try{const d=await api('project-installation/dossier?lead='+encodeURIComponent(leadId));if(current()){RECORDS(d.items);ERROR('');}}catch(e:any){if(current())ERROR(e.message);}});
  if(!allowed)return null;
  return <>{error&&<section className="panel"><p role="alert">安装档案读取失败：{error}</p><button type="button" onClick={()=>REVISION(n=>n+1)}>重新读取</button></section>}{records.map(record=><InstallationArchiveView key={record.entity} record={record} edit={()=>EDITING(record.entity)}/>)}{editing&&<InstallationCalendarEditor initialProject={editing} rows={records.map(r=>({id:r.entity,name:r.name||'当前项目'}))} api={api} close={()=>EDITING('')} saved={()=>REVISION(n=>n+1)}/>}</>;
 }
