@@ -12,7 +12,7 @@ export default function GuidedFollowup({profile,nextDate,editing}:{profile:any;n
   <div className="dossier-date-choice"><label>什么时候跟进（北京时间）<input type="date" name="next_date" value={date} readOnly={!editing} onChange={e=>D(e.target.value)}/></label>{editing&&<div className="dossier-date-buttons" role="group" aria-label="快速选择跟进日期">{[[0,'今天'],[1,'明天'],[3,'3天后'],[7,'7天后']].map(([n,label])=><button type="button" key={n} aria-pressed={date===addDays(day(),Number(n))} onClick={()=>D(addDays(day(),Number(n)))}>{label}</button>)}<button type="button" onClick={()=>D('')}>暂不安排</button></div>}</div>
   {choice('profile_blocker','手动标注卡点',profile.blocker,BLOCKERS,'未标注卡点')}
   {choice('profile_reviewStatus','资料核查情况',profile.reviewStatus,['待核实','已核实','需要协助'],'待确认')}
-  <p className="small muted dossier-choice-help">选择下一步和日期即可安排跟进。首次、最近联系时间来自实际记录；核查情况不替代系统核验。</p>
+
   <label className="dossier-full">额外备注（选填）<textarea name="profile_followNote" defaultValue={profile.followNote} readOnly={!editing} maxLength={6000} rows={2} placeholder="有特殊情况或其他卡点时再补充"/></label>
  </div>;
 }

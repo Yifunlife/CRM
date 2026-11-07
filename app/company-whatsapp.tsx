@@ -33,9 +33,9 @@ export default function CompanyWhatsApp({request,readOnly}:Props){
  return <section className="panel service-company-cloud" aria-label="公司 WhatsApp 官方接入">
   <div className="section-heading"><h2>公司 WhatsApp 官方接入</h2><button disabled={busy} onClick={()=>run(async()=>{await load();})}>刷新接入状态</button></div>
   <p role="status">{!status?'正在读取接入状态…':connected?'已授权 · '+status.connection.display_phone:status.metaReady?'待授权公司号码':'待配置公司 Meta 应用'}</p>
-  <p>新询盘自动查重、建档并按现有参与名单分配。已有客户追加来信并通知原负责人。</p>
-  <p className="small muted">仅处理接入后收到的新消息。资料缺失时标为待补充；没有可分配人员时保留待分配，每五分钟重试。此流程不发送自动回复。</p>
-  <p className="small muted">文字和图片、文件的说明会同步；附件原件仍在公司 WhatsApp 中查看。</p>
+
+
+  <p className="small muted">附件原件请在公司 WhatsApp 查看。</p>
   {connected&&<p>{status.connection.last_received?'最近收到消息：'+new Date(status.connection.last_received).toLocaleString('zh-CN',{timeZone:'Australia/Sydney'})+'（悉尼）':'尚未收到真实消息，请完成测试询盘验证。'}</p>}
   {!readOnly&&status&&!status.metaReady&&<p>请在本页下方的“公司平台设置”中配置 Meta 应用，并在 Meta 后台订阅消息通知。</p>}
   {!readOnly&&status?.linkedConflict&&<p>请先在下方断开本账号的扫码客服连接，再授权官方接口。</p>}

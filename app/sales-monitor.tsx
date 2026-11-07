@@ -15,7 +15,7 @@ export default function SalesMonitor({api,openItem}:{api:(p:string)=>Promise<Rep
  const groups=useMemo(()=>groupMonitorItems(rows),[rows]),activeGroup=groups.find(g=>g.id===selectedGroup),detailRows=activeGroup?.items||[];
  const pages=Math.max(1,Math.ceil(detailRows.length/30)),current=Math.min(page,pages);
  return <section className="sales-monitor" aria-busy={busy}>
-  <div className="page-heading"><div><h1>智能监控</h1><p>查看流程卡点、记录依据与责任人，进入原业务页面处理。</p></div><button disabled={busy} onClick={()=>void load()}>{busy?'正在读取…':'刷新监控'}</button></div>
+  <div className="page-heading"><div><h1>智能监控</h1></div><button disabled={busy} onClick={()=>void load()}>{busy?'正在读取…':'刷新监控'}</button></div>
   {error&&<p className="notice error" role="alert">{error} <button disabled={busy} onClick={()=>void load()}>重新读取</button></p>}
   {!data&&!error&&<p role="status">正在读取客户、项目、报价和订单记录…</p>}
   {data&&<><p className="monitor-updated">{data.scope} · 数据读取于北京时间 {stamp(data.at)}{error?' · 当前显示上一次成功读取的结果':''}</p>
@@ -33,7 +33,7 @@ export default function SalesMonitor({api,openItem}:{api:(p:string)=>Promise<Rep
     </div>}
    </section>
    {data.team.length>0&&<section className="panel"><h2>团队处理分布</h2><div className="monitor-team">{data.team.map(p=><button key={p.id} aria-pressed={owner===p.id} onClick={()=>O(owner===p.id?'全部':p.id)}><span>{p.name}</span><span>{p.items} 项待核查 · {p.exceptions} 项异常</span></button>)}</div></section>}
-   <details className="monitor-rules"><summary>监控依据与处理规则</summary><ul><li>以已保存的业务记录识别事项；异常标记表示需要核查，不代表已证实业务失误。</li><li>业务保存或确认后立即同步；刷新监控只读取结果，不重新生成到期通知。</li><li>到期提醒来自已生成的站内通知，每天北京时间 08:00 检查；8点后到期的事项在下次检查处理。</li><li>历史客资归属待对齐单独列示，不计新增分配、待首次联系或首次联系逾期。</li><li>报价接收、合同和跟单负责人确认、付款及 CEO 特殊放行在原页面办理。</li></ul></details>
+
   </>}
  </section>;
 }
