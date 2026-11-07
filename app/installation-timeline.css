@@ -11,3 +11,24 @@
 .office-app .workspace .it-bar{display:block}
 .it-days span:last-child{position:relative;height:20px}
 .it-days span:last-child time{position:absolute;right:0;top:50%;transform:translateY(-50%);white-space:nowrap}
+/* Staffing comes first; original reference fields remain to the right. */
+.office-app .workspace .installation-edit-table .installation-fulltable{table-layout:fixed;width:2180px;min-width:2180px}
+.office-app .workspace .installation-edit-table .installation-fulltable th,.office-app .workspace .installation-edit-table .installation-fulltable td{min-width:0;max-width:none;padding:5px 6px;vertical-align:middle;white-space:nowrap;line-height:1.25;font-size:12px}
+.office-app .workspace .installation-edit-table .installation-fulltable th{height:32px}
+.office-app .workspace .installation-edit-table .installation-fulltable td{height:40px}
+.office-app .workspace .installation-edit-table .installation-fulltable td:first-child{min-width:0;max-width:200px}
+.installation-project-label{display:flex;align-items:center;gap:5px;min-width:0}
+.installation-project-label .installation-row-number{margin:0;flex:0 0 20px;text-align:center}
+.office-app .workspace .installation-edit-table .installation-project-label .customer{display:block;flex:1;min-width:0;max-width:100%;padding:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:12px;line-height:1.3}
+.office-app .workspace .installation-edit-table input,.office-app .workspace .installation-edit-table input[type=number]{width:100%;min-width:0;max-width:100%;height:28px;min-height:28px;margin:0;padding:3px 5px;font-size:12px}
+.installation-secondary-value{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.office-app .workspace .installation-edit-table .installation-inline-save{gap:4px;margin-top:4px;justify-content:flex-start}
+.office-app .workspace .installation-edit-table .installation-inline-save button{min-height:25px;padding:2px 6px;font-size:11px}
+.office-app .workspace .installation-edit-table td>small{overflow-wrap:normal;white-space:normal;font-size:11px}
+@media(max-width:600px){.office-app .workspace .installation-edit-table .installation-fulltable col:first-child{width:140px!important}.office-app .workspace .installation-edit-table .installation-fulltable{width:2120px;min-width:2120px}.office-app .workspace .installation-edit-table input,.office-app .workspace .installation-edit-table input[type=number]{min-height:44px;height:44px;font-size:16px}.office-app .workspace .installation-edit-table .installation-inline-save button{min-height:44px;font-size:12px}}
+.office-app .workspace .installation-compact-filters{align-items:center;gap:8px}
+.office-app .workspace .installation-compact-filters>label{display:flex;align-items:center;flex:0 0 150px;min-width:0;height:36px;margin:0;padding:0}
+.office-app .workspace .installation-compact-filters>label>select,.office-app .workspace .installation-compact-filters>input{box-sizing:border-box;height:36px;min-height:36px;margin:0;padding:6px 10px;line-height:22px;font-size:13px;font-weight:400;border-radius:4px}
+.office-app .workspace .installation-compact-filters>label>select{width:100%}
+@media(max-width:720px){.office-app .workspace .installation-compact-filters>label{height:44px;flex:1 1 140px}.office-app .workspace .installation-compact-filters>label>select,.office-app .workspace .installation-compact-filters>input{height:44px;min-height:44px;padding:8px 10px;line-height:26px;font-size:16px}}
+:root .office-app .workspace .installation-page .installation-compact-filters>label{margin:0}
