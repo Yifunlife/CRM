@@ -111,14 +111,13 @@
 @media(max-width:600px){.mw-communication-dialog .mw-manual-fields{grid-template-columns:1fr}.mw-communication-dialog .mw-manual-fields textarea{font-size:16px}}
 
 /* Project facts stay in distinct columns; wide lists scroll inside the panel. */
-.management-workspace .mw-project-overview{--project-contract-width:140px;--project-name-width:180px;isolation:isolate}
-.management-workspace .mw-project-overview table{min-width:1360px;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}
-.management-workspace .mw-project-overview :is(th,td){white-space:normal;overflow-wrap:anywhere}
+.management-workspace .mw-project-overview{--project-name-width:180px;isolation:isolate}
+.management-workspace .mw-project-overview table{min-width:1220px;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;border-collapse:separate;border-spacing:0}
+.office-app .management-workspace .mw-project-overview :is(th,td){white-space:normal;overflow-wrap:anywhere;text-align:center;vertical-align:middle}
 .management-workspace .mw-project-overview th{white-space:nowrap}
-.management-workspace .mw-project-overview :is(th,td):nth-child(-n+2){position:sticky;z-index:2;background:var(--white,#fff)}
-.management-workspace .mw-project-overview :is(th,td):first-child{left:0;width:var(--project-contract-width);min-width:var(--project-contract-width);max-width:var(--project-contract-width)}
-.management-workspace .mw-project-overview :is(th,td):nth-child(2){left:var(--project-contract-width);width:var(--project-name-width);min-width:var(--project-name-width);max-width:var(--project-name-width);box-shadow:1px 0 var(--line)}
-.office-app .workspace .mw-project-overview thead th:nth-child(-n+2){z-index:3;background:var(--canvas,#f4f7fb)}
-.management-workspace .mw-project-overview .mw-project-dimension{text-align:right;white-space:nowrap}
+.management-workspace .mw-project-overview :is(th,td):first-child{position:sticky;left:0;z-index:2;background:var(--white,#fff);width:var(--project-name-width);min-width:var(--project-name-width);max-width:var(--project-name-width);box-shadow:1px 0 var(--line)}
+.office-app .workspace .mw-project-overview thead th:first-child{z-index:3;background:var(--canvas,#f4f7fb)}
+.management-workspace .mw-project-overview .customer{text-align:center;justify-content:center}
+.management-workspace .mw-project-overview .mw-project-dimension{white-space:nowrap}
 .management-workspace .mw-project-overview:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-@media(max-width:720px){.management-workspace .mw-project-overview{--project-contract-width:104px;--project-name-width:140px}.management-workspace .mw-project-overview th:nth-child(-n+2){white-space:normal}}
+@media(max-width:720px){.management-workspace .mw-project-overview{--project-name-width:140px}.management-workspace .mw-project-overview th:first-child{white-space:normal}}
