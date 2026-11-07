@@ -2,7 +2,7 @@
 import CustomerCommunication from './customer-communication';
 import VisitImport from './visit-import';
 import EmployeeSelect from './employee-select';
-import {useCallback,useEffect,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {can} from '../lib/crm';
 import {PROJECT_STAGES,suiteStamp} from '../lib/sales-suite';
 import {InquiryTime,InquiryContent} from './customer-inquiry';
@@ -15,12 +15,10 @@ type Props={initialLeadId?:string;section?:string;onSection?:(section:string)=>v
 export default function CustomerWorkspace({user,api,openLead,section='总况',onSection,initialLeadId,onEditingChange}:Props){
  const contextKey=workspaceContextKey(user)+':customer-workspace';
  const [saved]=useState(()=>readWorkspaceContext(contextKey));
- const [scopeRevision,SR]=useState(0),[workspaceEditing,WE]=useState(false);
- const editingChanged=useCallback((value:boolean)=>{WE(value);onEditingChange?.(value);},[onEditingChange]);
- const tab=section==='总况'?'档案':section;const [data,D]=useState<any>(null),[page,P]=useState(saved.page||1),[query,Q]=useState(saved.query||''),[revision,R]=useState(0),[error,E]=useState(''),[busy,B]=useState(false),[adding,A]=useState(false),[importing,I]=useState(false),[message,M]=useState(''),[selected,S]=useState<any>(null),[owner,O]=useState(saved.owner??(user.role==='operations'?'':user.id)),[state,STATE]=useState(saved.state||''),[market,MK]=useState(saved.market||'全部');
+ const tab=section;const [data,D]=useState<any>(null),[page,P]=useState(saved.page||1),[query,Q]=useState(saved.query||''),[revision,R]=useState(0),[error,E]=useState(''),[busy,B]=useState(false),[adding,A]=useState(false),[importing,I]=useState(false),[message,M]=useState(''),[selected,S]=useState<any>(null),[owner,O]=useState(saved.owner??(user.role==='operations'?'':user.id)),[state,STATE]=useState(saved.state||''),[market,MK]=useState(saved.market||'全部');
  useEffect(()=>{writeWorkspaceContext(contextKey,{page,query,owner,state,market});},[contextKey,page,query,owner,state,market]);
- useEffect(()=>{let live=true;E('');const timer=setTimeout(()=>api('sales-management/customers?'+new URLSearchParams({page:String(page),q:query,owner,state})).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}),query?200:0);return()=>{live=false;clearTimeout(timer);};},[api,page,query,owner,state,revision,user.id,tab]);
- if(tab==='档案')return <div className="management-workspace"><CustomerManagement key={scopeRevision} onUpdated={()=>R(n=>n+1)} onEditingChange={editingChanged} summary={data&&<details className="panel customer-list-summary"><summary>客户汇总 · 当前范围 {data.counts.reduce((n:number,r:any)=>n+r.count,0)} 位客户</summary><CustomerSummary data={data} open={(_section,nextOwner,nextState='',nextMarket='全部')=>{if(workspaceEditing){E('请先保存或取消当前修改');return;}if(nextOwner!==undefined)O(nextOwner);STATE(nextState);MK(nextMarket);SR(n=>n+1);}}/></details>} initialLeadId={initialLeadId} initialMarket={market} initialOwner={owner} initialStatus={state} onOwnerChange={O} title="客户档案" user={user} api={api} openLead={openLead}/></div>;
+ useEffect(()=>{if(tab==='档案')return;let live=true;E('');const timer=setTimeout(()=>api('sales-management/customers?'+new URLSearchParams({page:String(page),q:query,owner,state})).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);}),query?200:0);return()=>{live=false;clearTimeout(timer);};},[api,page,query,owner,state,revision,user.id,tab]);
+ if(tab==='档案')return <div className="management-workspace"><CustomerManagement onEditingChange={onEditingChange} initialLeadId={initialLeadId} initialMarket={market} initialOwner={owner} initialStatus={state} onOwnerChange={O} title="客户档案" user={user} api={api} openLead={openLead}/></div>;
  const stages=Object.fromEntries(PROJECT_STAGES);
  return <div className={'management-workspace'+(tab==='会议到访'?' mw-meetings':tab==='推进'?' mw-progress':'')}><div className="page-heading"><div><h1>{tab==='会议到访'?'会议与到访记录':'客户'+tab}</h1></div><EmployeeSelect user={user} api={api} value={owner} onChange={value=>{O(value);P(1);}}/><button onClick={()=>R(r=>r+1)}>刷新</button></div>
  {error&&<p className="notice error" role="alert">{error}</p>}{message&&<p role="status" className="notice">{message}</p>}{tab==='档案'?<CustomerManagement user={user} api={api} openLead={openLead}/>:<>{!data&&!error&&<p role="status">正在读取客户记录…</p>}{data&&<>
