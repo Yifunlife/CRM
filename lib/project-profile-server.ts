@@ -3,6 +3,7 @@ import {boardLeadVisible} from './market-access';
 import {followupOrder} from './order-followup-server';
 import {projectOverviewFacts} from './project-overview';
 import {AllocationError} from './allocation-server';
+import {projectResponsibilityEndpoint} from './project-responsibility-server';
 
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const text=(value:unknown,max:number)=>typeof value==='string'&&value.trim().length<=max?value.trim():fail('填写内容无效或过长');
@@ -25,26 +26,34 @@ export async function projectProfileEndpoint(db:D1Database,user:any,actor:any,me
  const canonical=order?'order:'+order.id:'sales:'+project.project_id;
  // Existing order numbers and confirmed contract sources stay with their original workflow.
  const contractLocked=!!order||!!row.details.contract_source;
- if(method==='GET')return {entity:canonical,version:row.version,values,can_edit:editable,contract_locked:contractLocked};
+ if(method==='GET')return {entity:canonical,version:row.version,values,can_edit:editable,contract_locked:contractLocked,team:project&&!order?await projectResponsibilityEndpoint(db,user,actor,'GET',{},new URL('https://project.local/?id='+encodeURIComponent(project.project_id))):null};
  if(!editable)fail('没有项目资料维护权限',403);
  if(body.version!==row.version)fail('项目资料已被更新，请刷新后重试',409);
  if(!body.values||typeof body.values!=='object'||Array.isArray(body.values))fail('项目资料格式无效');
  const next={contractNumber:text(body.values.contractNumber,200),projectAddress:text(body.values.projectAddress,1500),area:text(body.values.area,100),height:text(body.values.height,100)};
  for(const name of ['area','height'] as const)if(next[name]&&(!Number.isFinite(Number(next[name]))||Number(next[name])<=0))fail(name==='area'?'面积须填写大于0的平方米数':'层高须填写大于0的米数');
  if(contractLocked&&next.contractNumber!==values.contractNumber)fail('合同号来自已确认合同或订单，请在原合同资料中维护');
- if(JSON.stringify(next)===JSON.stringify(values))return {ok:true};
- const details={...row.details,qualification:{...row.details.qualification}};
- if(!order)details.contract_no=next.contractNumber;
- if(order)details.project_address=next.projectAddress;
- else if(Object.hasOwn(details,'project_address'))details.project_address=next.projectAddress;
+ const profileChanged=JSON.stringify(next)!==JSON.stringify(values);
+ if(!profileChanged&&!body.team)return {ok:true};
+ const details={...row.details};
+ if(!order&&next.contractNumber!==values.contractNumber)details.contract_no=next.contractNumber;
+ if(next.projectAddress!==values.projectAddress&&(order||Object.hasOwn(details,'project_address')))details.project_address=next.projectAddress;
  const fields=order?[['area_m2','area'],['height_m','height']]:[['project_address','projectAddress'],['area_m2','area'],['height_m','height']];
- for(const [field,name] of fields){const value=next[name as keyof typeof next],previous=details.qualification[field];if(previous?.value!==value)details.qualification[field]={...previous,value,state:'pending',evidence:''};}
+ for(const [field,name] of fields){const value=next[name as keyof typeof next];if(value!==values[name as keyof typeof values])details.qualification={...details.qualification,[field]:{...details.qualification?.[field],value,state:'pending',evidence:''}};}
  const table=order?'crm_followup_orders':'crm_sales_projects',column=order?'id':'project_id',tokenColumn=order?'change_token':'token',token=id(),at=now();
  const update=db.prepare(`UPDATE ${table} SET details=?,version=version+1,${tokenColumn}=?,updated=?,updated_by=? WHERE ${column}=? AND version=? AND ${tokenColumn}=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?)`)
   .bind(JSON.stringify(details),token,at,actor.id,order?order.id:project.project_id,row.version,row[tokenColumn],lead.id,lead.owner_id);
  const payload=JSON.stringify({entity:canonical,before:values,after:next});
  const audit=order?db.prepare("INSERT INTO crm_followup_events(id,order_id,kind,payload,created,created_by) SELECT ?,?,'项目资料更新',?,?,? WHERE EXISTS(SELECT 1 FROM crm_followup_orders WHERE id=? AND change_token=?)").bind(id(),order.id,payload,at,actor.id,order.id,token)
   :db.prepare("INSERT INTO crm_sales_events(id,project_id,lead_id,kind,payload,occurred_at,created,created_by) SELECT ?,?,?,'项目资料更新',?,?,?,? WHERE EXISTS(SELECT 1 FROM crm_sales_projects WHERE project_id=? AND token=?)").bind(id(),project.project_id,lead.id,payload,at,at,actor.id,project.project_id,token);
- const result=await db.batch([update,audit]);if(!result[0].meta.changes)fail('项目资料或归属已变化，请刷新后重试',409);
+ let statements=[update];
+ if(body.team){
+  if(order||!project)fail('请在订单跟单中维护已建单项目的人员',403);
+  const prepared=await projectResponsibilityEndpoint(db,user,actor,'POST',{...body.team,id:project.project_id,version:row.version},url,{details,token,at});
+  if(!prepared||!('statements' in prepared)||!prepared.statements)fail('项目人员资料无效');
+  if(!profileChanged&&!prepared.changed)return {ok:true};
+  statements=prepared.statements!;
+ }
+ const result=await db.batch([...statements,...(profileChanged?[audit]:[])]);if(!result[0].meta.changes)fail('项目资料或归属已变化，请刷新后重试',409);
  return {ok:true};
 }
