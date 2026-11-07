@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {moduleURL} from './test-form-intake.mjs';
 const {blankInstallation}=await import(moduleURL('lib/project-installation.ts'));
-const {installationSchedule:schedule,installationInMonth:inMonth,installationRemaining:remaining,installationCrewSchedule:crew,installationAddDays:add}=await import(moduleURL('lib/installation-schedule.ts'));
+const {installationSchedule:schedule,installationInMonth:inMonth,installationRemaining:remaining,installationCrewSchedule:crew,installationAddDays:add,installationStaffLabel:staff,installationStaffCounts:counts}=await import(moduleURL('lib/installation-schedule.ts'));
 const plan=(start='',end='',technicians='')=>{const p=blankInstallation();p.factory={...p.factory,departure_date:start,end_date:end,technicians};return p;};
 const a=plan('2026-09-25','2026-11-10','甲、乙');
 assert.equal(schedule(a).days,'47');assert.equal(remaining(a,'2026-11-07'),'计划剩余 3 天');assert(inMonth(a,'2026-09'));assert(inMonth(a,'2026-10'));assert(inMonth(a,'2026-11'));assert(!inMonth(a,'2026-12'));assert(!inMonth(a,'2026-08'));
@@ -11,4 +11,5 @@ const b=plan('2026-11-12','2026-11-20','甲');b.factory.transfer_days='2';assert
 b.factory.departure_date='2026-11-11';assert(crew('甲',[a,b],'2026-11-07').conflict);assert.equal(crew('甲',[a,b],'2026-11-07').available,'');
 open.factory.technicians='甲';assert(crew('甲',[a,open],'2026-11-07').incomplete);assert.equal(crew('甲',[a,open],'2026-11-07').available,'');
 a.acceptance.installed=true;assert.equal(remaining(a,'2026-11-07'),'已完成安装');assert.equal(crew('乙',[a],'2026-11-15').available,'2026-11-15');assert.equal(add('2028-02-28',2),'2028-03-01');
+const staffPlan=plan();staffPlan.factory.people='4';assert.equal(staff(staffPlan),'师傅4位+外请0位');staffPlan.factory.external_technicians='客户找人';assert.equal(staff(staffPlan),'师傅待定+外请待定');staffPlan.factory.company_people='2';assert.equal(staff(staffPlan),'师傅2位+外请待定');staffPlan.factory.external_people='2';assert.equal(staff(staffPlan),'师傅2位+外请2位');staffPlan.factory.company_people='0';assert.deepEqual(counts(staffPlan),{company:0,external:2});
 console.log('PASS: cross-month visibility, unscheduled and open-ended projects, inclusive duration, remaining days, crew turnaround, real conflicts and unknown availability.');

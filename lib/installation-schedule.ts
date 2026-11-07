@@ -30,3 +30,10 @@ export function installationCrewSchedule(name:string,plans:InstallationPlan[],to
  }
  return {jobs,incomplete,conflict,available:incomplete||conflict?'':available};
 }
+
+export function installationStaffCounts(plan:InstallationPlan){
+ const number=(v:unknown)=>typeof v==='string'&&/^\d+$/.test(v)?Number(v):null;
+ const external=number(plan.factory.external_people)??(plan.factory.external_technicians?null:0),total=number(plan.factory.people),company=number(plan.factory.company_people)??(external!==null&&total!==null&&total>=external?total-external:null);
+ return {company,external};
+}
+export function installationStaffLabel(plan:InstallationPlan){const c=installationStaffCounts(plan),label=(name:string,value:number|null)=>name+(value===null?'待定':value+'位');return label('师傅',c.company)+'+'+label('外请',c.external);}

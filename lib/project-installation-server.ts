@@ -58,7 +58,7 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  if(!body.values||typeof body.values!=='object'||Array.isArray(body.values))fail('安装安排资料格式无效');
  const definitions={profile:INSTALLATION_PROFILE_FIELDS,factory:INSTALLATION_FACTORY_FIELDS,client:INSTALLATION_CLIENT_FIELDS,travel:INSTALLATION_TRAVEL_FIELDS,acceptance:INSTALLATION_ACCEPTANCE_FIELDS};
  const values:Record<string,any>={};
- for(const [key] of definitions[section]){const value=text(body.values[key]??'',key==='notes'||key==='remarks'||key==='evidence'?5000:500);values[key]=key.endsWith('_date')||['planned_arrival','customer_start','customer_end','actual_arrival','actual_departure','actual_end'].includes(key)?date(value):value;}
+ for(const [key] of definitions[section]){const value=text(body.values[key]??(section==='factory'&&['company_people','external_technicians','external_people'].includes(key)?previous.factory[key]||'':''),key==='notes'||key==='remarks'||key==='evidence'?5000:500);values[key]=key.endsWith('_date')||['planned_arrival','customer_start','customer_end','actual_arrival','actual_departure','actual_end'].includes(key)?date(value):value;}
  for(const key of section==='client'?['site_ready','documents_ready','cost_confirmed']:section==='acceptance'?['installed','accepted']:[]){if(typeof body.values[key]!=='boolean')fail('请完整确认本环节核对项');values[key]=body.values[key];}
  const plan=structuredClone(previous);
  const requireFields=(keys:string[])=>{for(const key of keys)if(!values[key])fail('请完整填写本环节资料与确认依据');};
@@ -71,6 +71,8 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  }
  if(section==='factory'){
   for(const key of ['people','days'])if(values[key]&&(!/^\d+$/.test(values[key])||Number(values[key])<1||Number(values[key])>1000))fail('安装人数和天数需为有效正整数');
+  for(const key of ['company_people','external_people'])if(values[key]&&(!/^\d+$/.test(values[key])||Number(values[key])>1000))fail('公司师傅和外请人数需为 0 至 1000 的整数');
+  if(values.people&&values.company_people!==''&&values.external_people!==''&&Number(values.company_people)+Number(values.external_people)!==Number(values.people))fail('公司师傅人数加外请人数需等于安装总人数');
   if(values.transfer_days&&(!/^\d+$/.test(values.transfer_days)||Number(values.transfer_days)>365))fail('转场天数需为 0 至 365 的整数');
   if(values.departure_date&&values.available_date&&values.departure_date<values.available_date||values.end_date&&values.departure_date&&values.end_date<values.departure_date)fail('请核对工厂可出发、安装出发与结束日期');
   if(action==='factory-confirm')requireFields(['factory','technicians','people','project_lead','days','available_date','departure_date','end_date','internal_owner','evidence']);

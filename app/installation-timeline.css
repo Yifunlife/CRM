@@ -32,3 +32,11 @@
 .office-app .workspace .installation-compact-filters>label>select{width:100%}
 @media(max-width:720px){.office-app .workspace .installation-compact-filters>label{height:44px;flex:1 1 140px}.office-app .workspace .installation-compact-filters>label>select,.office-app .workspace .installation-compact-filters>input{height:44px;min-height:44px;padding:8px 10px;line-height:26px;font-size:16px}}
 :root .office-app .workspace .installation-page .installation-compact-filters>label{margin:0}
+.office-app .workspace .installation-edit-table .installation-fulltable{width:2300px;min-width:2300px}
+.installation-staff-line{display:flex;align-items:center;gap:4px;min-width:0}
+.installation-staff-line+.installation-staff-line{margin-top:4px}
+.installation-staff-line>span{flex-shrink:0;font-size:12px}
+.office-app .workspace .installation-edit-table .installation-staff-line input[type=text]{flex:1 1 0;min-width:0;width:0}
+.office-app .workspace .installation-edit-table .installation-staff-line input[type=number]{flex:0 0 46px;width:46px;min-width:0}
+@media(max-width:600px){.office-app .workspace .installation-edit-table .installation-fulltable{width:2240px;min-width:2240px}}
+.installation-form-grid .installation-staff-start{grid-column:1}
