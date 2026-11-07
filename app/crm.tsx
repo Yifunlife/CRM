@@ -31,8 +31,8 @@ import RolePreview from './role-preview';
 const CustomerManagement=lazy(()=>import('./customer-workspace'));
 const AllocationManagement=lazy(()=>import('./allocation-management'));
 const RoleDashboard=lazy(()=>import('./sales-overview'));
-const PersonalWork=lazy(()=>import('./personal-workspace').then(m=>({default:m.PersonalWork})));
-const PersonalDashboard=lazy(()=>import('./personal-workspace').then(m=>({default:m.PersonalDashboard})));
+// Load this workspace with the shell so navigation does not depend on a late module download.
+import {PersonalWork,PersonalDashboard} from './personal-workspace';
 const PersonalContact=lazy(()=>import('./personal-customer').then(m=>({default:m.PersonalContact})));
 const PersonalHistory=lazy(()=>import('./personal-customer').then(m=>({default:m.PersonalHistory})));
 const CustomerOpeningPlans=lazy(()=>import('./personal-customer').then(m=>({default:m.CustomerOpeningPlans})));

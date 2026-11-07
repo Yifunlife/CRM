@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {join} from 'node:path';
+import {retainStaticAssets} from './retain-static-assets.mjs';
 
 const configPath='dist/server/wrangler.json';
 const config=JSON.parse(readFileSync(configPath,'utf8'));
@@ -20,6 +22,8 @@ assert.ok(!config.vars?.CRM_BACKEND_ORIGIN,'The primary Worker must not forward 
 assert.deepEqual(config.triggers.crons,['0 0 * * *','0 21,22 * * *','*/5 * * * *'],'Retain daily reminders and intake; retry only pending company WhatsApp leads every five minutes');
 console.log('Verified existing CRM database and R2 bindings. Publishing code only.');
 if(process.argv.includes('--check'))process.exit(0);
+const repository=execFileSync('git',['rev-parse','--path-format=absolute','--git-common-dir'],{encoding:'utf8'}).trim();
+console.log('Static assets for current and recent open pages:',retainStaticAssets('dist/client',join(repository,'crm-static-history')));
 const result=spawnSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','deploy','--config',configPath],{stdio:'inherit'});
 if(result.error)throw result.error;
 process.exit(result.status??1);
