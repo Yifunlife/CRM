@@ -2,7 +2,7 @@
 version: 1
 slug: "project-responsibility"
 primary_target: "app/project-responsibility.tsx"
-related_targets: ["app/project-detail.tsx", "app/project-management.tsx", "lib/project-responsibility-server.ts", "lib/role-workspace-server.ts"]
+related_targets: ["app/project-detail.tsx", "app/project-information.tsx", "app/project-management.tsx", "lib/project-responsibility-server.ts", "lib/role-workspace-server.ts"]
 ---
 
 # 单项目人员分配
@@ -13,7 +13,7 @@ related_targets: ["app/project-detail.tsx", "app/project-management.tsx", "lib/p
 
 ## Interaction
 
-默认逐项标明「主业务：」「辅业务：」「跟单：」；主业务或跟单缺失显示「待明确」，辅业务缺失显示「未分配」。项目列表沿用同一合并单元格，表头为「主业务 / 辅业务 / 跟单」，不靠姓名顺序暗示角色。
+项目列表与详情人员摘要仅在对应姓名存在时显示「主业务：姓名」「辅业务：姓名」「跟单：姓名」，未分配角色连同标签一起隐藏，不显示「待明确」「未分配」等占位文字；三项均为空时列表人员单元格留空。项目列表沿用同一合并单元格，表头为「主业务 / 辅业务 / 跟单」，不靠姓名顺序暗示角色。此显示规则不移除有权限人员的编辑入口，编辑下拉框继续保留「待分配」「不安排」选项；数据及后端规则不变。
 
 具备实际编辑权限时，行内提供「分配人员」；主业务和跟单均已分配时显示「调整人员」，辅业务仍为选填。展开后分别以「主业务」「辅业务（选填）」「跟单员」标注选择器，可访问名称为「项目主业务」「项目辅业务」「项目跟单员」。桌面按三项并排，窄屏随可用宽度换行堆叠，保持字段与操作可读。使用明确的「保存人员」「取消」，保存期间禁用表单并显示「正在保存…」；取消恢复三项已保存值。
 
