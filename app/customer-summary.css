@@ -1,0 +1,14 @@
+.office-app .management-workspace .customer-summary-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.office-app .management-workspace .customer-summary-card { min-width:0; padding:10px 12px; background:var(--paper,#fff); border:1px solid var(--line); border-radius:8px; font-variant-numeric:tabular-nums; }
+.office-app .management-workspace .customer-summary-card[data-market=内贸] { border-color:#17634b; }
+.office-app .management-workspace .customer-summary-card[data-market=外贸] { border-color:#0f6cbd; }
+.office-app .management-workspace .customer-summary-total { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; }
+.office-app .management-workspace .customer-summary-total h2 { margin:0; font-size:14px; }
+.office-app .management-workspace .customer-summary-total h2 button { font:inherit; font-weight:600; padding:0; }
+.office-app .management-workspace .customer-summary-total>strong { font-size:24px; line-height:1.2; font-weight:600; }
+.office-app .management-workspace .customer-summary-statuses { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; border-top:1px solid var(--line); padding-top:4px; }
+.office-app .management-workspace .customer-summary-statuses button { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; padding:3px 0; text-align:left; font-size:13px; }
+.office-app .management-workspace .customer-summary-statuses span { color:var(--ink); }
+.office-app .management-workspace .customer-summary-statuses strong { font-weight:600; }
+@media(max-width:1050px) { .office-app .management-workspace .customer-summary-cards { grid-template-columns:1fr; } }
+@media(pointer:coarse) { .office-app .management-workspace .customer-summary-statuses button { min-height:44px; } }

@@ -5,7 +5,7 @@ import {customerMarket} from './operations-dashboard';
 import {followupAssignee} from './order-followup-server';
 import {AllocationError} from './allocation-server';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
-export async function projectResponsibilityEndpoint(db:D1Database,user:any,actor:any,method:string,body:any,url:URL,prepare?:{details:Record<string,any>;token:string;at:string}){
+export async function projectResponsibilityEndpoint(db:D1Database,user:any,actor:any,method:string,body:any,url:URL,prepare?:{details:Record<string,any>;projectName:string;token:string;at:string}){
  const key=method==='GET'?url.searchParams.get('id'):body?.id;
  const project:any=typeof key==='string'?await db.prepare('SELECT * FROM crm_sales_projects WHERE project_id=?').bind(key).first():null;
  const lead:any=project?await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(project.lead_id).first():null;
@@ -38,7 +38,7 @@ export async function projectResponsibilityEndpoint(db:D1Database,user:any,actor
  if(followupId&&!followup.some(p=>p.id===followupId))fail('请选择有跟单维护权限的在职人员');
  const changed=ownerId!==(lead.owner_id||'')||assistantId!==(details.assistant_id||'')||followupId!==(details.followup_id||'');
  if(!changed&&!prepare)return {ok:true};
- const token=prepare?.token||id(),at=prepare?.at||now(),next={...(prepare?.details||details),assistant_id:assistantId,followup_id:followupId},statements=[db.prepare("UPDATE crm_sales_projects SET details=?,version=version+1,token=?,updated=?,updated_by=? WHERE project_id=? AND version=? AND token=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?) AND NOT EXISTS(SELECT 1 FROM crm_followup_orders WHERE deal_id=?) AND (?=0 OR (EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND cohort='historical') AND NOT EXISTS(SELECT 1 FROM crm_deals WHERE lead_id=?)))").bind(JSON.stringify(next),token,at,actor.id,project.project_id,project.version,project.token,lead.id,lead.owner_id,details.deal_id||'',!lead.owner_id&&ownerId?1:0,lead.id,lead.id)];
+ const token=prepare?.token||id(),at=prepare?.at||now(),next={...(prepare?.details||details),assistant_id:assistantId,followup_id:followupId},statements=[db.prepare("UPDATE crm_sales_projects SET name=?,details=?,version=version+1,token=?,updated=?,updated_by=? WHERE project_id=? AND version=? AND token=? AND EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND owner_id IS ?) AND NOT EXISTS(SELECT 1 FROM crm_followup_orders WHERE deal_id=?) AND (?=0 OR (EXISTS(SELECT 1 FROM crm_leads WHERE id=? AND cohort='historical') AND NOT EXISTS(SELECT 1 FROM crm_deals WHERE lead_id=?)))").bind(prepare?.projectName||project.name,JSON.stringify(next),token,at,actor.id,project.project_id,project.version,project.token,lead.id,lead.owner_id,details.deal_id||'',!lead.owner_id&&ownerId?1:0,lead.id,lead.id)];
  if(!lead.owner_id&&ownerId){
   statements.push(db.prepare('UPDATE crm_leads SET owner_id=? WHERE id=? AND owner_id IS NULL AND EXISTS(SELECT 1 FROM crm_sales_projects WHERE project_id=? AND token=?)').bind(ownerId,lead.id,project.project_id,token));
   statements.push(db.prepare("INSERT INTO crm_assignments(id,lead_id,user_id,owner_id,created,business_scope,allocation_month,policy) SELECT ?,?,?,?,?,?,?,'historical-alignment' WHERE EXISTS(SELECT 1 FROM crm_sales_projects WHERE project_id=? AND token=?)").bind(id(),lead.id,actor.id,ownerId,at,lead.business_scope,at.slice(0,7),project.project_id,token));

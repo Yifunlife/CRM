@@ -2,13 +2,13 @@
 import {useEffect,useState} from 'react';
 import StatusBadge from './status-badge';
 
-type Values={contractNumber:string;projectAddress:string;area:string;height:string};
+type Values={projectName:string;contractNumber:string;projectAddress:string;area:string;height:string};
 type Person={id:string;name:string};
 type Team={owner_id:string;owner_name:string;assistant_id:string;assistant_name:string;followup_id:string;followup_name:string;can_edit:boolean;can_assign_owner:boolean;sales:Person[];followup:Person[]};
 type Profile={entity:string;version:number;values:Values;can_edit:boolean;contract_locked:boolean;team?:Team|null};
 export default function ProjectInformation({row,api,onSaved,demo=false}:{row:any;api:(path:string,body?:any)=>Promise<any>;onSaved?:()=>Promise<void>;demo?:boolean}){
  const [data,D]=useState<Profile|null>(null),[editing,EDIT]=useState(false),[draft,F]=useState<Profile|null>(null),[busy,B]=useState(false),[error,E]=useState(''),[message,M]=useState(''),[retry,R]=useState(0);
- const initial:Values={contractNumber:row.contractNumber||'',projectAddress:row.projectAddress||'',area:row.area||'',height:row.height||''};
+ const initial:Values={projectName:row.name||'',contractNumber:row.contractNumber||'',projectAddress:row.projectAddress||'',area:row.area||'',height:row.height||''};
  const path='sales-suite/project/profile?entity='+encodeURIComponent(row.id);
  useEffect(()=>{let live=true;E('');if(demo){D({entity:row.id,version:0,values:initial,can_edit:true,contract_locked:false});return()=>{live=false;};}api(path).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);});return()=>{live=false;};},[api,path,demo,retry,row.original?.version]);
  const values=editing&&draft?draft.values:data?.values||initial,team=editing&&draft?draft.team:data?.team,ownerName=team?team.owner_name:row.ownerName,assistantName=team?team.assistant_name:row.assistantName,followupName=team?team.followup_name:row.followup;
@@ -16,10 +16,11 @@ export default function ProjectInformation({row,api,onSaved,demo=false}:{row:any
   if(!editing||!draft)return values[key]||missing;
   const props={name:key,'aria-label':label,value:values[key],onChange:(e:{target:{value:string}})=>F({...draft,values:{...draft.values,[key]:e.target.value}})};
   if(key==='projectAddress')return <textarea {...props} rows={2} maxLength={1500} autoComplete="off"/>;
-  return <><input {...props} type={key==='area'||key==='height'?'number':'text'} step="any" min={key==='area'||key==='height'?'0':undefined} maxLength={key==='contractNumber'?200:100} readOnly={key==='contractNumber'&&data?.contract_locked}/>{key==='contractNumber'&&data?.contract_locked&&<small>此编号沿用合同资料。</small>}</>;
+  return <><input {...props} type={key==='area'||key==='height'?'number':'text'} step="any" min={key==='area'||key==='height'?'0':undefined} maxLength={key==='contractNumber'||key==='projectName'?200:100} required={key==='projectName'} readOnly={key==='contractNumber'&&data?.contract_locked}/>{key==='contractNumber'&&data?.contract_locked&&<small>此编号沿用合同资料。</small>}</>;
  }
  function changeTeam(key:'owner_id'|'assistant_id'|'followup_id',value:string){if(!draft?.team)return;const next={...draft.team,[key]:value};if(key==='owner_id'&&value===next.assistant_id)next.assistant_id='';F({...draft,team:next});}
  const summary=<dl className="mw-summary-list">
+  <div><dt>项目名</dt><dd>{field('projectName','项目名')}</dd></div>
   <div><dt>合同号 / 项目编号</dt><dd>{field('contractNumber','合同号 / 项目编号','待登记')}</dd></div><div><dt>国家/地区</dt><dd>{row.country||'待补充'}</dd></div>
   <div><dt>项目地址</dt><dd>{field('projectAddress','项目地址')}</dd></div><div><dt>面积（㎡）</dt><dd>{field('area','面积（㎡）')}</dd></div><div><dt>层高（米）</dt><dd>{field('height','层高（米）')}</dd></div>
   {row.legacyDimensions&&<div><dt>原面积与净高说明</dt><dd>{row.legacyDimensions}</dd></div>}<div><dt>客户</dt><dd>{row.customer}</dd></div>

@@ -4,8 +4,8 @@ import {can} from './crm';
 import {assignmentFields} from './assignment-reminders';
 import {suiteDay} from './sales-suite';
 
-export async function customerAllocationSummary(db:D1Database,user:any,today=suiteDay(),market=''){
- const all=can(user,'customers_all');
+export async function customerAllocationSummary(db:D1Database,user:any,today=suiteDay(),market='',globalSummary=false){
+ const all=globalSummary||can(user,'customers_all');
  const leadIds=market?(await db.prepare(`SELECT l.id FROM crm_leads l WHERE ${customerLeadSQL()} AND (${allocationMarketSQL()})=?`).bind(market).all<any>()).results.map(l=>l.id):[];
  const rows=(await db.prepare(`WITH events AS (
   SELECT a.owner_id,a.lead_id,${assignmentFields}

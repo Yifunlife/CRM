@@ -60,3 +60,5 @@
 **Reviewer disposition: ship — 本地虚拟数据截图范围。** 证据为 `.impeccable/review/project-desktop.jpg`、`project-mobile.jpg`、`project-desktop-right.jpg`、`project-mobile-right.jpg`、`project-mobile-dimensions.jpg`；结论仅覆盖这些本地画面，不代表生产发布、真实账号权限或保存验收。发布由主任务单独记录。本次无新系统视觉决策，根 `DESIGN.md`、`PRODUCT.md` 及设计 sidecar 保持不变。
 
 同日补充：项目列表的合同号、项目名固定在左侧，使用不透明底色与高于滚动内容的层级；手机缩窄两列宽度，仍可在表格内滑动查看其余信息。桌面及393px手机横向滚动后位置与遮挡检查通过，证据为 `.impeccable/review/project-sticky-desktop.jpg`、`project-sticky-mobile.jpg`。
+
+2026-11-07 客户总况固定读取全部正式客资的汇总，不受业务员、状态或搜索残留筛选影响；总况不显示业务员选择器。三张紧凑卡片分别列总数、内贸及外贸，并直接展示各状态数量与对应推进入口，取代重复的独立状态表。推进／档案明细继续使用原客户权限；内外贸状态入口携带市场筛选，可在推进筛选栏查看及修改。全局汇总不返回未授权客户的明细或沟通记录。
