@@ -24,9 +24,11 @@ export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,
  if(row.archived)fail('已归档订单不可修改',409);
  const before=row.details.business_process||{},after={...before},at=now();
  if(match[2]==='schedule'){
-  if(!Array.isArray(body.nodes)||body.nodes.length!==FOLLOWUP_NODES.length||new Set(body.nodes.map((n:any)=>n?.page)).size!==FOLLOWUP_NODES.length)fail('请提交完整的七个环节排期');
+  const inputs=body.node!==undefined?[body.node]:body.nodes;
+  if(body.node!==undefined&&(!body.node||typeof body.node!=='object'||Array.isArray(body.node)||body.nodes!==undefined))fail('请提交一个有效环节排期');
+  if(body.node===undefined&&(!Array.isArray(inputs)||inputs.length!==FOLLOWUP_NODES.length||new Set(inputs.map((n:any)=>n?.page)).size!==FOLLOWUP_NODES.length))fail('请提交完整的七个环节排期');
   const all=await followupManager(db,user),eligible=new Set((await owners(db,user,row)).map(p=>p.id));
-  for(const input of body.nodes){
+  for(const input of inputs){
    const node=FOLLOWUP_NODES.find(n=>n.page===input?.page);if(!node)fail('环节无效');
    const start=date(input.start),due=date(input.due);
    if(!!start!==!!due)fail(node.label+'：请同时填写开始与完成日期，或都留空');

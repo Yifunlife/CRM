@@ -41,5 +41,17 @@ const write=(body)=>roleWorkspaceEndpoint(db,follow,follow,'followup/orders/orde
 await assert.rejects(()=>write({completed:''}),/实际完成/);await assert.rejects(()=>write({completed:'2026-11-01',values:{}}),/全部核对项/);
 await assert.rejects(()=>post('progress',{page:'跟进收款',action:'complete'}),/正常推进或发生异常/);
 assert.ok(sqlite.prepare("SELECT count(*) n FROM crm_followup_events WHERE order_id='order'").get().n>=4);assert.equal(original(),originalBusiness,'all original customers, files and finance remain unchanged');
+const beforeSingle=row(),single={page:'生产跟进',start:'2026-10-01',due:'2026-12-02',owner_id:'follow'};
+await post('schedule',{node:single});
+assert.equal(row().details.business_process['生产跟进'].due,single.due);
+assert.equal(row().details.business_process['生产跟进'].status,beforeSingle.details.business_process['生产跟进'].status,'rescheduling preserves progress');
+assert.equal(row().details.business_process['生产跟进'].original_due,'2026-10-30');
+for(const node of FOLLOWUP_NODES.filter(n=>n.page!=='生产跟进'))assert.deepEqual(row().details.business_process[node.page],beforeSingle.details.business_process[node.page],'single-phase edit preserves '+node.page);
+await assert.rejects(()=>post('schedule',{node:{...single,page:'无效环节'}}),/环节无效/);
+await assert.rejects(()=>post('schedule',{node:single,nodes}),/一个有效/);
+await assert.rejects(()=>post('schedule',{node:{...single,start:''}}),/同时填写/);
+await assert.rejects(()=>post('schedule',{node:{...single,owner_id:'outsider'}},admin),e=>e.status===403);
+await assert.rejects(()=>post('schedule',{node:single,version:beforeSingle.version}),e=>e.status===409);
+assert.equal(original(),originalBusiness,'single-phase edit preserves customers, files and finance');
 sqlite.exec("UPDATE crm_followup_orders SET archived=1 WHERE id='order'");await assert.rejects(()=>post('schedule',{nodes}),e=>e.status===409);assert.deepEqual(orderReminders(row(),[]),[]);
 console.log('PASS: seven-node schedules, permissions, original plan/history/data, stale versions, 3-day deadlines, 7-day inactivity, deduplicated and resolved inbox alerts, quick progress/anomaly, and completion/archive gates.');
