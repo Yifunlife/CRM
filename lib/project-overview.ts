@@ -8,8 +8,10 @@ export function projectOverviewFacts(record:any,linkedProject?:any){
   return Number.isFinite(number)&&number>0?String(number):'';
  };
  const deliveryDate=details.dates?.eta_site?.date||'';
+ const contractNumber=details.contract_source?.contract_no||details.contract_no||record.order_number||linked.contract_no||'';
  return {
-  contractNumber:details.contract_source?.contract_no||details.contract_no||record.order_number||linked.contract_no||'',
+  contractNumber,number:contractNumber,
+  projectAddress:details.project_address||qualification.project_address?.value||linked.project_address||linkedQualification.project_address?.value||'',
   country:record.country||linkedProject?.country||'',
   area:dimension('area_m2'),height:dimension('height_m'),
   legacyDimensions:qualification.area?.value||linkedQualification.area?.value||'',

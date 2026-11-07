@@ -1,7 +1,7 @@
 export const PROJECT_STAGES=[['qualification','需求确认'],['design','方案设计'],['quoted','已报价'],['negotiation','价格交涉'],['contract','合同确认'],['won','已成交'],['lost','未成交'],['paused','暂停推进']] as const;
 export const FORECASTS=[['early','早期项目'],['best','争取成交'],['commit','承诺成交']] as const;
 export const TASK_KINDS=[['collaboration','成交前协作'],['followup','销售跟进'],['revival','客户唤醒'],['callback','交付回访'],['service','售后事项'],['expansion','扩店增购'],['referral','转介绍与案例']] as const;
-export const QUALIFICATION_FIELDS=[['site','场地状态与租赁情况'],['drawing','平面图与确认版本'],['area_m2','面积（平方米）'],['height_m','层高（米）'],['area','原面积与净高说明'],['budget','预算金额、币种及范围'],['decision','决策人及采购流程'],['purchase','采购决定时间'],['opening','目标开业时间'],['scope','供货范围与当地要求']] as const;
+export const QUALIFICATION_FIELDS=[['project_address','项目地址'],['site','场地状态与租赁情况'],['drawing','平面图与确认版本'],['area_m2','面积（平方米）'],['height_m','层高（米）'],['area','原面积与净高说明'],['budget','预算金额、币种及范围'],['decision','决策人及采购流程'],['purchase','采购决定时间'],['opening','目标开业时间'],['scope','供货范围与当地要求']] as const;
 export const CLOSED_STAGES=['won','lost','paused'];
 export function dormantReason(l:any,at=new Date().toISOString()){
  const today=suiteDay(at),task=l.revival?JSON.parse(l.revival):null;

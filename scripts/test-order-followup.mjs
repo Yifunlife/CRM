@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');source=source.replaceAll("'./contact-kind'",JSON.stringify(contactModuleURL('lib/contact-kind.ts')));for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');source=source.replaceAll("'./contact-kind'",JSON.stringify(contactModuleURL('lib/contact-kind.ts')));for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);source=source.replace(/from (['\"])(\.\/[^'\"]+)\1/g,(_,q,p)=>'from '+JSON.stringify(contactModuleURL('lib/'+p.slice(2)+'.ts')));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
 const workflow=moduleUrl('lib/order-followup.ts');
 const importRules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)});
@@ -39,13 +39,14 @@ await assert.rejects(call(endpoint+'/steps','POST',{version:1,step:0,status:'已
 await assert.rejects(call('followup','POST',{project:'重复',order_number:'TEST-01',lead_id:'lead1',logistics_id:'staff'}),/已经/);
 await assert.rejects(call(endpoint+'/archive','POST',{version:1,note:'测试',checks:[0,1,2,3]}),/先完成/);
 let order=await get();
-const details={dates:{planned_ship:{date:'2026-11-01',kind:'预计',source:'工厂确认',confirmed_at:'2026-10-22T00:00:00.000Z'},actual_ship:{date:'2026-11-02',kind:'实际',source:'出库记录',confirmed_at:'2026-11-02T00:00:00.000Z'},eta_port:{date:'2026-11-20',kind:'预计',source:'船公司',confirmed_at:'2026-11-02T00:00:00.000Z'}},forwarder_mode:'客户安排',forwarder_contact:'测试货代',release_confirmation:'商务及财务确认记录',bill_no:'TEST-BILL',acceptance:'验收记录'};
+const details={project_address:'测试项目现场地址',delivery_address:'另一个仓库收货地址',dates:{planned_ship:{date:'2026-11-01',kind:'预计',source:'工厂确认',confirmed_at:'2026-10-22T00:00:00.000Z'},actual_ship:{date:'2026-11-02',kind:'实际',source:'出库记录',confirmed_at:'2026-11-02T00:00:00.000Z'},eta_port:{date:'2026-11-20',kind:'预计',source:'船公司',confirmed_at:'2026-11-02T00:00:00.000Z'}},forwarder_mode:'客户安排',forwarder_contact:'测试货代',release_confirmation:'商务及财务确认记录',bill_no:'TEST-BILL',acceptance:'验收记录'};
 await assert.rejects(call(endpoint+'/details','POST',{version:order.version,details},staff),/管理员.*发货/);
 // Explicitly seed an approved contract for the existing shipping-stage regression.
 sqlite.exec("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES('shipping-deal','TEST-01','lead1','sales','meta-full','2026-10-22','2026-10-22','admin'); UPDATE crm_followup_orders SET deal_id='shipping-deal' WHERE order_number='TEST-01'; INSERT INTO crm_workflow_contracts(deal_id,currency,total_minor,schedule,updated,updated_by) VALUES('shipping-deal','CNY',100,'[]','2026-10-22','admin');");
 sqlite.prepare('INSERT INTO crm_workflow_releases(order_id,deal_id,contract_version,special,reason,created,created_by) VALUES(?,?,?,?,?,?,?)').run(one.id,'shipping-deal',1,1,'测试管理员放行','2026-10-22','admin');
 before=untouched();
 await call(endpoint+'/details','POST',{version:order.version,details},staff);
+assert.equal((await get()).details.project_address,'测试项目现场地址');assert.equal((await get()).details.delivery_address,'另一个仓库收货地址');
 await assert.rejects(call(endpoint+'/details','POST',{version:order.version,details}),e=>e.status===409);
 order=await get();
 const changed=structuredClone(details);changed.dates.eta_port.date='2026-11-21';
