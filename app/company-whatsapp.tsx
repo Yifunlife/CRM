@@ -37,7 +37,7 @@ export default function CompanyWhatsApp({request,readOnly}:Props){
   <p className="small muted">仅处理接入后收到的新消息。资料缺失时标为待补充；没有可分配人员时保留待分配，每五分钟重试。此流程不发送自动回复。</p>
   <p className="small muted">文字和图片、文件的说明会同步；附件原件仍在公司 WhatsApp 中查看。</p>
   {connected&&<p>{status.connection.last_received?'最近收到消息：'+new Date(status.connection.last_received).toLocaleString('zh-CN',{timeZone:'Australia/Sydney'})+'（悉尼）':'尚未收到真实消息，请完成测试询盘验证。'}</p>}
-  {!readOnly&&status&&!status.metaReady&&<p>请在本页下方的“公司平台设置与 AI 额度”中配置 Meta 应用，并在 Meta 后台订阅消息通知。</p>}
+  {!readOnly&&status&&!status.metaReady&&<p>请在本页下方的“公司平台设置”中配置 Meta 应用，并在 Meta 后台订阅消息通知。</p>}
   {!readOnly&&status?.linkedConflict&&<p>请先在下方断开本账号的扫码客服连接，再授权官方接口。</p>}
   {error&&<p className="notice error" role="alert">{error}</p>}{notice&&<p className="notice success" role="status">{notice}</p>}
   {!readOnly&&<div className="service-actions"><button className="primary" disabled={busy||!status?.metaReady||status?.linkedConflict||connected} onClick={()=>run(connect)}>{busy?'正在处理…':start?'继续 Meta 授权':'授权公司接待号码'}</button>{connected&&<button disabled={busy} onClick={()=>run(async()=>{await request('cloud/disconnect',{});START(null);await load();N('已停止此号码的新消息接入，现有客户和记录保留');})}>停止官方接入</button>}</div>}

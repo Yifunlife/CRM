@@ -54,7 +54,7 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
   if(values.area_m2&&(!Number.isFinite(Number(values.area_m2))||Number(values.area_m2)<=0))fail('面积需为大于零的数值');
   if(values.labyrinth&&!['是','否','待确认'].includes(values.labyrinth))fail('请选择是否有迷宫');
   if(values.customer_start&&values.customer_end&&values.customer_start>values.customer_end)fail('安装结束日期不能早于开始日期');
-  const changed=['planned_arrival','customer_start','customer_end','site_contact'].some(k=>values[k]!==previous.profile[k]);plan.profile=values;
+  const changed=['planned_arrival','planned_arrival_note','customer_start','customer_end','site_contact'].some(k=>values[k]!==previous.profile[k]);plan.profile=values;
   if(changed&&previous.client.confirmed){plan.client.confirmed=false;plan.travel.reconfirmation=previous.travel.issued;plan.acceptance.installed=false;plan.acceptance.accepted=false;}
  }
  if(section==='factory'){
