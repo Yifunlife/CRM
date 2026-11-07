@@ -19,8 +19,16 @@ export function installationFieldValues(plan:InstallationPlan,row:any,stage:numb
 export function installationFieldFilled(value:unknown){return value!==null&&value!==undefined&&String(value).trim()!==''&&!['待确认','待安排','待补充','待明确','未分配','待登记'].includes(String(value).trim());}
 
 export function installationStageStatus(plan:InstallationPlan,stage:number,row?:any,draft?:Record<string,string|boolean>|null){
- const definition=INSTALLATION_STAGES[stage],values=draft||installationFieldValues(plan,row,stage);
- const empty=definition.fields.filter(([key])=>!installationFieldFilled(values[key])),total=definition.fields.length,filled=total-empty.length;
+ const definition=INSTALLATION_STAGES[stage],values={...(draft||installationFieldValues(plan,row,stage))};
+ let fields:readonly (readonly [string,string])[]=definition.fields;
+ if(stage===2){
+  const batches=plan.arrivals||[];
+  if(batches.length)fields=fields.filter(([key])=>!['actual_arrival','actual_arrival_note'].includes(key));
+  fields=[...fields,['arrival_batches','总到货批数'],...batches.flatMap((batch,i)=>[[`arrival-${batch.id}-expected`,`第${i+1}批预计到货日期`],[`arrival-${batch.id}-actual`,`第${i+1}批实际到货日期`]] as [string,string][])];
+  values.arrival_batches=batches.length?String(batches.length):'';
+  for(const batch of batches){values[`arrival-${batch.id}-expected`]=batch.expected;values[`arrival-${batch.id}-actual`]=batch.actual;}
+ }
+ const empty=fields.filter(([key])=>!installationFieldFilled(values[key])),total=fields.length,filled=total-empty.length;
  let label=filled===0?'未填写':filled===total?'已填齐':'部分已填',tone='empty';
  if(filled)tone=filled===total?'filled':'partial';
  if(stage===1&&plan.factory.confirmed){label='已确认';tone='confirmed';}

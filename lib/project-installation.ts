@@ -1,4 +1,7 @@
+export type InstallationArrivalBatch={id:string;description:string;expected:string;actual:string};
+export const INSTALLATION_VISA_TYPES=['落地签','旅游签','商务签','工作签'] as const;
 export type InstallationPlan={
+ arrivals?:InstallationArrivalBatch[];
  profile:Record<string,string>;
  factory:Record<string,string>&{confirmed:boolean};
  client:Record<string,string|boolean>&{confirmed:boolean;site_ready:boolean;documents_ready:boolean;cost_confirmed:boolean};

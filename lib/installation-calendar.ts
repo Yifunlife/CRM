@@ -37,8 +37,8 @@ export function installationCalendarEvents(row:any,plan:InstallationPlan){
  const result:InstallationCalendarEvent[]=[],source=row.original?.details?.installation_source,sourceYear=String(source?.title||'').match(/\d{4}/)?.[0]||'';
  const add=(start:unknown,label:string,tone:InstallationCalendarEvent['tone'],end?:string,range=false)=>{const date=calendarDate(start);if(date)result.push({id:row.id+':'+result.length,projectId:row.id,name:row.name,start:date,end:end||date,label,tone,range,people:plan.factory.people||'',owner:plan.factory.project_lead||''});};
  const arrivals=(date:unknown,note:string,label:string,tone:InstallationCalendarEvent['tone'])=>{const parsed=noteDates(note,calendarDate(date).slice(0,4)||sourceYear);for(const item of parsed)add(item.date,[label,item.label].filter(Boolean).join(' · '),tone);if(!parsed.some(item=>item.date===date))add(date,label,tone);};
- arrivals(plan.profile.planned_arrival||row.deliveryDate,plan.profile.planned_arrival_note||'','计划到货','arrival');
- arrivals(plan.client.actual_arrival,String(plan.client.actual_arrival_note||''),'实际到货','actual');
+ if(plan.arrivals?.length)plan.arrivals.forEach((batch,i)=>{add(batch.expected,'第'+(i+1)+'批预计到货'+(batch.description?' · '+batch.description:''),'arrival');add(batch.actual,'第'+(i+1)+'批实际到货','actual');});
+ else{arrivals(plan.profile.planned_arrival||row.deliveryDate,plan.profile.planned_arrival_note||'','计划到货','arrival');arrivals(plan.client.actual_arrival,String(plan.client.actual_arrival_note||''),'实际到货','actual');}
  const departure=calendarDate(plan.travel.departure_date)||calendarDate(plan.factory.departure_date),end=calendarDate(plan.factory.end_date),confirmed=plan.travel.issued&&!plan.travel.reconfirmation;
  if(departure&&end&&end>=departure)add(departure,confirmed?'已定行程':'行程计划',confirmed?'confirmed':'planned',end,true);
  else{add(departure,confirmed?'行程出发':'计划出发',confirmed?'confirmed':'planned');add(end,'计划结束','planned');}

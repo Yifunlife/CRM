@@ -1,7 +1,7 @@
 import {AllocationError} from './allocation-server';
 import {authorizedLead,can,id,now} from './crm';
 import {boardLeadVisible} from './market-access';
-import {blankInstallation,installationReady,INSTALLATION_PROFILE_FIELDS,INSTALLATION_FACTORY_FIELDS,INSTALLATION_CLIENT_FIELDS,INSTALLATION_TRAVEL_FIELDS,INSTALLATION_ACCEPTANCE_FIELDS,type InstallationPlan} from './project-installation';
+import {blankInstallation,installationReady,INSTALLATION_PROFILE_FIELDS,INSTALLATION_FACTORY_FIELDS,INSTALLATION_CLIENT_FIELDS,INSTALLATION_TRAVEL_FIELDS,INSTALLATION_ACCEPTANCE_FIELDS,type InstallationPlan,type InstallationArrivalBatch} from './project-installation';
 const kind='安装安排更新';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const text=(value:any,max=2000)=>typeof value==='string'&&value.trim().length<=max?value.trim():fail('填写内容无效或过长');
@@ -61,6 +61,7 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  if(p.archived)fail('项目订单已归档，不能修改安装安排',409);
  const action=text(body.action,50),section=['profile','remarks'].includes(action)?'profile':['factory-draft','factory-confirm'].includes(action)?'factory':['client-save','client-confirm'].includes(action)?'client':action==='travel-confirm'?'travel':action==='acceptance-save'?'acceptance':'';
  if(!section)return fail('安装安排操作无效');
+ if(Object.hasOwn(body,'arrivals')&&section!=='client')fail('到货批次请在到货与签证环节维护');
  if(!(section==='profile'||section==='factory'?canFactory:canCommercial))fail(section==='profile'||section==='factory'?'工厂人员与排期仅限销售管理层及以上维护':'仅本项目商务或管理人员可维护此项',403);
  if(text(body.revision||'',100)!==(current?.revision||''))fail('安装安排已被其他人更新，请刷新后重新填写',409);
  if(!body.values||typeof body.values!=='object'||Array.isArray(body.values))fail('安装安排资料格式无效');
@@ -91,12 +92,22 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
   if(changed||!plan.factory.confirmed){plan.client.confirmed=false;plan.travel.reconfirmation=previous.travel.issued;plan.acceptance.installed=false;plan.acceptance.accepted=false;}
  }
  if(section==='client'){
+  if(Object.hasOwn(body,'arrivals')){
+   if(!Array.isArray(body.arrivals)||body.arrivals.length>50)fail('请登记有效到货批次，最多50批');
+   const ids=new Set<string>();
+   plan.arrivals=body.arrivals.map((batch:any):InstallationArrivalBatch=>{
+    if(!batch||typeof batch!=='object'||Array.isArray(batch))fail('到货批次格式无效');
+    const batchId=text(batch.id,100);if(!batchId||ids.has(batchId))fail('到货批次编号无效或重复');ids.add(batchId);
+    return {id:batchId,description:text(batch.description??'',500),expected:date(text(batch.expected??'',10)),actual:date(text(batch.actual??'',10))};
+   });
+  }
   if(action==='client-confirm'){
    if(!previous.factory.confirmed)fail('请先由销售管理层确认工厂人员与排期');
    requireFields(['site_contact','airport','buyer','cost']);
    if(values.documents_ready&&(!values.visa_type||values.visa_type.includes('待')||!values.visa_duration||values.visa_duration.includes('待')))fail('请登记已核实的签证类型及时长；国内订单可注明不适用');
+   if(plan.arrivals?.some(batch=>!batch.expected))fail('请补齐每批货的预计到货日期后再确认；日期未定可先保存准备进度');
   }
-  const changed=INSTALLATION_CLIENT_FIELDS.some(([k])=>values[k]!==previous.client[k]);
+  const changed=INSTALLATION_CLIENT_FIELDS.some(([k])=>values[k]!==previous.client[k])||JSON.stringify(plan.arrivals||[])!==JSON.stringify(previous.arrivals||[]);
   plan.client={...values,confirmed:action==='client-confirm'} as InstallationPlan['client'];
   if(previous.travel.issued&&(changed||!plan.client.confirmed||!installationReady(plan))){plan.travel.reconfirmation=true;plan.acceptance.installed=false;plan.acceptance.accepted=false;}
  }
