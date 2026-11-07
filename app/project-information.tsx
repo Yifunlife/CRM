@@ -21,7 +21,7 @@ export default function ProjectInformation({row,api,onSaved,demo=false}:{row:any
   <div><dt>合同号 / 项目编号</dt><dd>{field('contractNumber','合同号 / 项目编号','待登记')}</dd></div><div><dt>国家/地区</dt><dd>{row.country||'待补充'}</dd></div>
   <div><dt>项目地址</dt><dd>{field('projectAddress','项目地址')}</dd></div><div><dt>面积（㎡）</dt><dd>{field('area','面积（㎡）')}</dd></div><div><dt>层高（米）</dt><dd>{field('height','层高（米）')}</dd></div>
   {row.legacyDimensions&&<div><dt>原面积与净高说明</dt><dd>{row.legacyDimensions}</dd></div>}<div><dt>客户</dt><dd>{row.customer}</dd></div>
-  <div><dt>项目协作人员</dt><dd>{row.projectId&&!demo&&!editing?<ProjectResponsibility row={row} api={api} onSaved={onSaved}/>:<div className="mw-team-members"><span>主业务：{row.ownerName||'待明确'}</span><span>辅业务：{row.assistantName||'未分配'}</span><span>跟单：{row.followup||'待明确'}</span></div>}</dd></div>
+  <div><dt>项目协作人员</dt><dd>{row.projectId&&!demo&&!editing?<ProjectResponsibility row={row} api={api} onSaved={onSaved}/>:<div className="mw-team-members">{row.ownerName&&<span>主业务：{row.ownerName}</span>}{row.assistantName&&<span>辅业务：{row.assistantName}</span>}{row.followup&&<span>跟单：{row.followup}</span>}</div>}</dd></div>
   <div><dt>当前阶段</dt><dd><StatusBadge value={row.stage}/></dd></div><div><dt>当前节点 / 下一步</dt><dd>{row.node||'待安排'}{row.next&&row.next!==row.node&&<small>下一步：{row.next}</small>}<small>{row.date||'日期待明确'}</small></dd></div>
   <div><dt>计划交付时间</dt><dd>{row.deliveryDate||'待补充'}{row.deliveryLabel&&<small>{row.deliveryLabel}</small>}</dd></div>
  </dl>;
