@@ -2,7 +2,7 @@ import {AllocationError} from './allocation-server';
 import {authorizedLead,can,hasAdminPermissions} from './crm';
 const fail=(message:string,status=400):never=>{throw new AllocationError(message,status);};
 const parse=(s:string)=>{try{return JSON.parse(s);}catch{return {};}};
-async function access(db:D1Database,user:any,id:string){const lead:any=await db.prepare('SELECT id,name,owner_id FROM crm_leads WHERE id=?').bind(id).first();if(!lead||!authorizedLead(user,lead))fail('客户不存在或无权查看',404);return lead;}
+async function access(db:D1Database,user:any,id:string){const lead:any=await db.prepare('SELECT id,name,owner_id,detail FROM crm_leads WHERE id=?').bind(id).first();if(!lead||!authorizedLead(user,lead))fail('客户不存在或无权查看',404);return lead;}
 const editable=(user:any,lead:any)=>can(user,'customers_edit')&&(hasAdminPermissions(user)||user.role==='sales'&&lead.owner_id===user.id);
 export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|undefined,user:any,actor:any){
  if(!['admin','sales','ceo','management'].includes(user.role))fail('没有合同文件访问权限',403);
@@ -25,7 +25,7 @@ export async function contractFiles(req:Request,db:D1Database,bucket:R2Bucket|un
   const projects=await db.prepare('SELECT project_id,name,details FROM crm_sales_projects WHERE lead_id=? ORDER BY updated DESC').bind(leadId).all();
   const deals=attachment?[]:(await db.prepare('SELECT order_number FROM crm_deals WHERE lead_id=? AND cancelled=0 ORDER BY deal_date DESC,created DESC').bind(leadId).all()).results;
   const projectRows=projects.results.map((p:any)=>({project_id:p.project_id,name:p.name,contract_no:parse(p.details).contract_no||''}));
-  const contractNumbers=[...new Set([...deals.map((d:any)=>d.order_number),...projectRows.map(p=>p.contract_no),...rows.results.map((r:any)=>parse(r.payload).contract_no)].filter(Boolean))];
+  const contractNumbers=[...new Set([parse(lead.detail)._customer_profile?.contractNumber,...deals.map((d:any)=>d.order_number),...projectRows.map(p=>p.contract_no),...rows.results.map((r:any)=>parse(r.payload).contract_no)].filter(Boolean))];
   return json({lead:{id:lead.id,name:lead.name},can_upload:editable(user,lead),projects:projectRows,contract_numbers:contractNumbers,items:rows.results.map((r:any)=>{const f=parse(r.payload);return {id:r.id,name:f.name,size:f.size,status:f.status,contract_no:f.contract_no||'',project_id:r.project_id,project_name:r.project_name,created:r.created,uploaded_by:r.uploaded_by,url:'/api/contract-files/'+r.id};})});
  }
  if(req.method!=='PUT')fail('不支持此合同操作',405);if(!editable(user,lead))fail('只有客户所属业务员或管理员可以上传合同',403);if(!bucket)return fail('文件存储尚未连接',503);

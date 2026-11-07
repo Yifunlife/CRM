@@ -58,3 +58,10 @@ assert.equal(await (await call(users.sales,'contract-files/'+first.id)).text(),'
 assert.deepEqual({leads:sql.prepare('SELECT * FROM crm_leads').all(),projects:sql.prepare('SELECT * FROM crm_sales_projects').all(),deals:sql.prepare('SELECT * FROM crm_deals').all()},businessBefore);
 assert.equal((sql.prepare('SELECT count(*) n FROM crm_receipts').get()as any).n,0);
 console.log('PASS: reuse customer deal/project/archive numbers; exclude other customers and cancelled deals; validate and persist contract numbers; Word/PDF bytes preserved; legacy files readable; no source business records rewritten.');
+// A customer can register a contract number before any project or contract file exists.
+sql.prepare("INSERT INTO crm_leads(id,name,phone,source,owner_id,detail,fingerprint,created) VALUES('number-only','number-only','13800000001','Meta','sales',?,'number-only','2026-11-07')").run(JSON.stringify({_customer_profile:{contractNumber:'CUSTOMER-ONLY-001'},private:'not returned'}));
+const registered=await (await call(users.sales,'contract-files?lead_id=number-only')).json()as any;
+assert.deepEqual(registered.contract_numbers,['CUSTOMER-ONLY-001']);assert.deepEqual(registered.projects,[]);assert.deepEqual(registered.items,[]);assert(!JSON.stringify(registered).includes('not returned'));
+await assert.rejects(()=>call(users.other,'contract-files?lead_id=number-only'),/无权/);
+assert.equal((sql.prepare("SELECT count(*) n FROM crm_sales_projects WHERE lead_id='number-only'").get()as any).n,0);assert.equal((sql.prepare("SELECT count(*) n FROM crm_deals WHERE lead_id='number-only'").get()as any).n,0);
+console.log('PASS: customer-only contract numbers are reusable without creating projects, deals or files; private metadata stays server-side.');
