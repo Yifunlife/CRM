@@ -7,6 +7,12 @@ export function calendarMonthDays(month:string){
  return Array.from({length:Math.ceil((offset+last)/7)*7},(_,i)=>new Date(first.getTime()+(i-offset)*86400000).toISOString().slice(0,10));
 }
 export function shiftCalendarMonth(month:string,by:number){const d=new Date(month+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()+by);return d.toISOString().slice(0,7);}
+export function calendarProjectColor(projectId:string){
+ const suffix=projectId.match(/-(\d+)$/);let hash=2166136261;
+ for(const char of suffix?projectId.slice(0,-suffix[0].length):projectId)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+ const hue=((hash>>>0)%360+(suffix?Number(suffix[1])*137.508:0))%360;
+ return {backgroundColor:`hsl(${hue.toFixed(2)} 65% 91%)`,color:`hsl(${hue.toFixed(2)} 65% 24%)`};
+}
 // Month/day notes use the documented source year, never the displayed calendar year.
 function noteDates(note:string,year:string){
  const result:{date:string;label:string}[]=[];let previous=0;
