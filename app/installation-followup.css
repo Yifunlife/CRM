@@ -1,0 +1,58 @@
+.installation-followup-meta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px}
+.installation-followup-meta h2{display:flex;align-items:center;gap:8px;margin:0}
+.installation-followup-meta h2>span{padding:1px 7px;border-radius:4px;background:#edf2f8;color:#355778;font-size:12px;font-weight:400;font-variant-numeric:tabular-nums}
+.installation-followup-meta>span{font-size:12px;color:#4c6075}
+.installation-entry .installation-followup-meta{margin:0}
+.installation-followup-overview .installation-followup-meta{margin-bottom:10px}
+.installation-followup-scroll{overflow-x:auto;max-height:none}
+.office-app .workspace .installation-followup-matrix{width:100%;min-width:820px;table-layout:fixed;white-space:normal;border-collapse:separate;border-spacing:0}
+.office-app .workspace .installation-followup-matrix th,.office-app .workspace .installation-followup-matrix td{padding:6px 8px;text-align:left;vertical-align:middle;border-bottom:1px solid #e2e8ef;font-size:13px;line-height:1.4}
+.office-app .workspace .installation-followup-matrix thead th{padding-block:10px;background:#f4f7fb;color:#355777;font-weight:600;white-space:nowrap}
+.installation-followup-matrix thead small{display:block;margin-top:4px;color:#4c6075;font-size:12px;font-weight:400}
+.office-app .workspace .installation-followup-matrix tr>:first-child{position:sticky;left:0;z-index:2;width:240px;border-right:1px solid #e2e8ef}
+.office-app .workspace .installation-followup-matrix tbody th{background:#fff;font-weight:400}
+.office-app .workspace .installation-followup-matrix tbody tr:hover th,.office-app .workspace .installation-followup-matrix tbody tr:hover td{background:#f6faff}
+.installation-followup-project{display:flex;align-items:center;gap:9px;min-width:0}
+.installation-followup-project>div{min-width:0;overflow-wrap:anywhere}
+.installation-followup-project small{display:block;color:#4c6075;margin-top:3px;font-size:12px}
+.installation-followup-number{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;height:24px;border-radius:4px;background:#edf2f8;color:#355778;font-size:12px;font-variant-numeric:tabular-nums}
+.office-app .workspace .installation-followup-cell{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:5px;width:100%;min-height:52px;padding:6px 4px;border:0;background:transparent;box-shadow:none;text-align:left;border-radius:4px;color:#4c6075;white-space:normal}
+.office-app .workspace .installation-followup-cell:hover{background:#eaf3fc}
+.installation-followup-cell strong{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500}
+.installation-followup-cell strong:before,.installation-followup-legend>span:before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 6px}
+.installation-followup-cell small{padding-left:12px;font-size:12px;color:#4c6075;white-space:nowrap;font-variant-numeric:tabular-nums}
+.office-app .workspace .installation-followup-cell.is-partial,.installation-followup-legend>[data-tone=partial]{color:#8b5c10}
+.office-app .workspace .installation-followup-cell.is-filled,.installation-followup-legend>[data-tone=filled]{color:#0f6cbd}
+.office-app .workspace .installation-followup-cell.is-confirmed,.installation-followup-legend>[data-tone=confirmed]{color:#21683c}
+.office-app .workspace .installation-followup-cell.is-again{color:#a12e27}
+.installation-followup-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:10px;font-size:12px;color:#4c6075}
+.installation-followup-legend>span{display:inline-flex;align-items:center;gap:5px}
+.installation-followup-legend>strong{margin-left:auto;font-size:12px;font-weight:400;color:#355777}
+.installation-followup-project-heading{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin:0 0 10px}
+.installation-followup-project-heading h2,.installation-followup-project-heading p{margin:0}
+.installation-followup-form-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.installation-followup-form-heading h2{margin:0}
+.installation-followup-form-heading p{margin:4px 0 0;color:#4c6075;font-variant-numeric:tabular-nums}
+.installation-followup-status{padding:3px 8px;background:#edf4fb;color:#174f7a;border-radius:4px;font-size:12px}
+.installation-confirmation{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:8px 10px;margin-top:10px;background:#f4f7fb;border-radius:4px;color:#355777;font-size:12px}
+.installation-confirmation strong{font-weight:600}
+.installation-followup-empty{margin-top:12px;padding-bottom:12px;border-bottom:1px solid #e2e8ef;font-size:12px;color:#78551a}
+.installation-followup-empty>strong{display:block;font-weight:500;margin-bottom:6px}
+.installation-followup-empty>div{display:flex;flex-wrap:wrap;gap:6px}
+.office-app .workspace .installation-followup-empty button{border:0;box-shadow:none;background:#fff5e2;color:#78551a;padding:4px 7px;min-height:28px;font-size:12px;white-space:normal}
+.office-app .workspace .installation-followup-empty button:hover{background:#ffedc4}
+.installation-followup-page .installation-detail-heading{margin-bottom:8px}
+.installation-followup-page .installation-followup-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin-bottom:0;background:#fff;border:1px solid #dbe5ef;border-bottom:0;border-radius:6px 6px 0 0;overflow:hidden}
+.office-app .workspace .installation-followup-steps button{min-width:0;min-height:58px;display:block;text-align:left;border:0;border-bottom:2px solid transparent;border-radius:0;padding:8px 10px;background:#fff;box-shadow:none;font-size:13px;color:#355777;white-space:normal}
+.installation-followup-steps small{display:block;font-size:12px;margin-top:4px;font-weight:400;color:#4c6075}
+.office-app .workspace .installation-followup-steps button.active{background:#edf5fc;border-bottom-color:#0f6cbd;color:#0f548c}
+.office-app .workspace .installation-followup-steps button:hover{background:#f0f6fc}
+.office-app .management-workspace.installation-page .installation-followup-page .installation-stage-panel{border-radius:0 0 6px 6px}
+.installation-followup-page .installation-form-grid{margin-top:12px;gap:0 16px}
+.installation-followup-page .installation-form-grid .installation-staff-start{grid-column:auto}
+.office-app .workspace .installation-followup-page .installation-form-grid label{margin-bottom:10px;font-size:13px}
+.office-app .workspace .installation-followup-page .installation-form-grid input,.office-app .workspace .installation-followup-page .installation-form-grid select,.office-app .workspace .installation-followup-page .installation-form-grid textarea{margin-top:4px;font-size:13px}
+.installation-followup-page .installation-form-actions{padding-top:10px;margin-top:10px;gap:8px}
+.installation-followup-history summary{font-size:13px;color:#355777}
+@media(max-width:1100px){.office-app .workspace .installation-followup-matrix tr>:first-child{width:205px}}
+@media(max-width:720px){.installation-followup-page .installation-followup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.office-app .workspace .installation-followup-steps button{min-height:58px}.office-app .workspace .installation-followup-empty button{min-height:44px}.office-app .workspace .installation-followup-page .installation-form-grid input,.office-app .workspace .installation-followup-page .installation-form-grid select,.office-app .workspace .installation-followup-page .installation-form-grid textarea{font-size:16px}.installation-followup-legend>strong{margin-left:0}.installation-followup-page .installation-form-actions{flex-direction:row}.installation-followup-page .installation-form-actions button{width:auto;flex:1 1 auto;min-height:44px}}

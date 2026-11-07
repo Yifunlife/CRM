@@ -2,7 +2,7 @@
 version: 1
 slug: "installation-timeline"
 primary_target: "app/installation-timeline.tsx"
-related_targets: ["app/installation-timeline.css", "app/installation-plan-table.tsx", "app/installation-project-archive.tsx", "app/order-installation-plan.tsx", "app/order-installation-plan.css", "app/installation-calendar-editor.tsx", "lib/installation-schedule.ts", "lib/installation-calendar.ts", "lib/project-installation.ts", "lib/project-installation-server.ts"]
+related_targets: ["app/installation-timeline.css", "app/installation-plan-table.tsx", "app/installation-project-archive.tsx", "app/order-installation-plan.tsx", "app/order-installation-plan.css", "app/installation-followup-table.tsx", "app/installation-followup.css", "app/project-management.tsx", "app/crm.tsx", "app/installation-calendar-editor.tsx", "lib/installation-followup.ts", "lib/installation-schedule.ts", "lib/installation-calendar.ts", "lib/project-installation.ts", "lib/project-installation-server.ts"]
 ---
 
 # 项目安装时间表与档案同步
@@ -13,7 +13,7 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 
 ## Compact overview and editing
 
-业务范围、安装交接状态及项目／合同号／国家／师傅搜索共用可换行工具栏，默认筛选文字为「全部业务」「全部进度」。主安装页常驻「安装填写与跟进」入口，先选项目，再直接使用「填写安装要求」「安排师傅与工期」「登记到货与签证」「登记机票行程」「登记安装验收」五个按钮进入原表单及对应阶段；选中阶段有可见状态及 aria-pressed。主页面不重复显示旧阶段页签，嵌入项目档案的界面保留原页签。
+业务范围、安装交接状态及项目／合同号／国家／师傅搜索共用可换行工具栏，默认筛选文字为「全部业务」「全部进度」。主安装页在「安装填写与跟进」区域提供单一「进入填写总表」按钮，打开同一 CRM 内独立的「安装填写与跟进」页面，取代先选项目及五个直接填写按钮。项目管理导航仍只有「项目进度」「订单安装计划」，内部跟进页保持「订单安装计划」选中，不新增导航项；页面提供「返回安装时间表」。嵌入项目档案的界面继续保留原页签。
 
 「师傅、工期与备注」资料区默认折叠，以项目数量及「展开编辑」说明入口；月度时间表为常驻主体，避免宽资料表挤占工期视图。主入口不依赖展开宽表或寻找深层档案才能填写和跟进。
 
@@ -26,6 +26,20 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 宽表在自身区域滚动（桌面总宽2300px、高度上限400px），只固定合并后的首列及表头。第二列保持普通数据列，不能恢复为叠加的固定列。日期、人数、天数和错误均保留文字；未知值使用“待确认／待安排”，原日期说明继续显示，不把说明推定为精确日期。
 
 表格汇总所有行的未保存状态，与原阶段表单共用离开保护；有修改时，切换项目、阶段或筛选须先保存或取消，时间表编辑器也不能绕过保护。提示明确为「请先保存或放弃当前修改」，全部恢复干净状态后清除此提示，避免旧提示继续阻断操作。
+
+## Installation filling and follow-up matrix
+
+填写总表以一项目一行、五环节一列显示「安装要求」「师傅与工期」「到货与签证」「机票行程」「安装验收」。项目身份保留编号、项目名及已有合同号；列头分别说明「销售管理层维护」「销售管理层确认」「本项目商务确认」「本项目商务登记」「客户验收 · 商务登记」。每个状态单元格都是进入原真实表单对应环节的按钮，根据已保存计划及表单现有回填值显示「已填 X / Y 项」，不是完成率，也不把本地未保存草稿写入总表。
+
+文字状态区分「未填写」「部分已填」「已填齐／待确认」与「已确认／已出票／已验收」，需要重新核实行程时显示「需重新确认」，已安装但未取得客户验收时显示「待客户验收」。灰、琥珀、蓝、绿及需重新确认的红色只辅助文字；图例明确「已填写 ≠ 已确认」。字段计数按各环节资料项计算，含按需填写项；字段齐全不代替原确认条件。
+
+表单保留五环节页签、现有字段、保存动作、责任分工与业务门禁。标题旁实时显示当前草稿「已填 N 项 · 空白 N 项」及未保存提示；「空白资料项（含按需填写项）」逐项提供按钮，点击聚焦对应字段，空白项并不全部代表必填错误。当前确认操作人及时间从同一规范项目的既有安装事件单独读取，不受下方最近20条变更历史的截断影响；环节确认失效时不继续显示旧的已确认署名。
+
+「取消修改」丢弃当前表单草稿，不提交保存请求，并返回填写状态总表。进入矩阵表单、取消或返回总表时将页面滚动回顶部，避免手机长表单返回后停在底部项目行。未保存状态继续交给原整页离开保护，切换环节、项目、筛选、导航及刷新前须保存或取消；浏览器刷新／离开触发原未保存保护。确认和出票继续使用服务端原有权限、版本检查及门禁，不因进入总表而扩大权限。
+
+填写页沿用浅色 Fluent 白色工作面、蓝色操作与细边界，减少重复标题和容器留白。表单在1100px及以上为三列，中间宽度两列，720px及以下一列；手机字段文字为16px、操作及空白项按钮至少44px高。矩阵在自身区域横向滚动（最小宽820px），项目首列固定并保持不透明底色；不让整页横向溢出。五环节页签在手机改为两列，状态及责任说明保留文字。
+
+总表与表单使用现有项目、安装计划及事件；不导入演示资料，不删除或重建实际业务数据。
 
 ## Monthly timeline and project identity
 
@@ -53,7 +67,7 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 
 ## Shared archive, authority and confirmation gates
 
-时间表、资料表、项目档案和客户档案读取同一安装计划。订单及关联商务项目别名归一到同一规范项目记录；客户档案按规范记录去重，避免形成第二份工期。档案展示师傅、工期、剩余工期、计划／实际日期、转场、人数、负责人及进度，变更记录展开显示操作、师傅／工期快照、原操作人和时间；当前接口最多返回最近20条安装事件，不将其描述为无限完整历史。
+时间表、资料表、项目档案和客户档案读取同一安装计划。订单及关联商务项目别名归一到同一规范项目记录；客户档案按规范记录去重，避免形成第二份工期。档案展示师傅、工期、剩余工期、计划／实际日期、转场、人数、负责人及进度，变更记录展开显示操作、师傅／工期快照、原操作人和时间；当前变更历史最多返回最近20条安装事件，不将其描述为无限完整历史。
 
 保存沿用原安装安排事件及版本校验，追加计划快照并拒绝并发覆盖；成功后重新读取相应视图。读取、保存及失败均保留文字反馈，档案读取失败提供“重新读取”。页面内各视图共用持久记录，不承诺跨标签页实时推送。
 
@@ -67,7 +81,9 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 
 本次界面整理由主任务记录桌面、平板及手机的原项目和密集项目样例检查通过，包括短范围、日期刻度及滚动固定表头；文字与编号徽章对比度均至少4.5:1。编辑保存、档案持久记录、月份操作、TypeScript检查及构建通过；最新评审为 **ship**，无实质修正项。本文固化界面事实与约束，不提供生产发布或已登录真实业务验收的证明。原始资料、月份相交规则、未知排期项目、所有资料字段、权限和确认门禁继续保留。
 
-主入口与备注扩展已由主任务记录后端、界面、TypeScript及构建检查通过，覆盖备注清空、超长拒绝、权限与版本冲突、人员及备注合并保存原子性、五个直接入口和未保存保护。阶段选中状态在既有120ms过渡结束后完成复核，最终评审为 **ship**，无剩余实质问题。
+备注扩展已由主任务记录后端、界面、TypeScript及构建检查通过，覆盖备注清空、超长拒绝、权限与版本冲突、人员及备注合并保存原子性和未保存保护。
+
+独立安装填写总表扩展的完成评审为 **ship**，无实质修正项。主任务以测试数据核对矩阵与原表单衔接、填写／确认区分、实时草稿计数及空白项定位、取消不保存、未保存保护、独立确认署名读取及失效确认不显示旧署名；桌面及手机浏览器断言同时覆盖进入表单和返回总表的顶部位置。这些检查不代表生产业务验收。桌面、手机及确认表单截图分别保存在 `.impeccable/review/installation-followup/desktop.png`、`mobile.png`、`confirmed-form.png`、`mobile-form.png`。本文仅记录本地构建事实，部署及真实登录验收由主任务另行记录。
 
 ## 公司师傅与外请分行录入
 

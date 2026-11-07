@@ -5,7 +5,7 @@ export const MODULES={
  allocation:{name:'客资分配',entry:'lib/allocation-server.ts',tests:['confirmed-allocation','global-allocation','assignment-reminders','assignment-sync']},
  customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['colleague-contact','sales-access','customer-progress','customer-identity','customer-page']},
  communication:{name:'客户沟通',entry:'lib/communication-progress.ts',tests:['communication-progress','linked-whatsapp','cloud-communication','auto-followup','historical-first-contact','contact-quota','won-auto-contact','daily-intake-first']},
- projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite','project-markets','project-installation']},
+ projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite','project-markets','project-installation','installation-followup']},
  quotes:{name:'报价确认接收',entry:'lib/confirmation/quotes.ts',tests:['workflow-confirmations']},
  contracts:{name:'合同确认建单',entry:'lib/confirmation/contract.ts',tests:['workflow-confirmations']},
  documents:{name:'合同档案与附件',entry:'lib/confirmation/documents.ts',tests:['workflow-confirmations','order-followup']},

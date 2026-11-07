@@ -23,6 +23,14 @@ async function entity(db:D1Database,u:any,key:string){
  return {source,lead,order,aliases,key:order?'order:'+order.id:key,archived:!!order?.archived||!!source.archived,projectId:type==='sales'?keyId:projects[0]?.project_id||null};
 }
 async function records(db:D1Database,aliases:string[]){return list(db,`SELECT e.id AS revision,e.payload,e.created,u.name AS author FROM crm_sales_events e LEFT JOIN crm_users u ON u.id=e.created_by WHERE e.kind=? AND json_extract(e.payload,'$.entity') IN (${aliases.map(()=>'?').join(',')}) ORDER BY e.rowid DESC LIMIT 20`,[kind,...aliases]);}
+async function confirmations(db:D1Database,aliases:string[],plan:InstallationPlan){
+ const stages:[string,boolean,string[]][]=[['factory',plan.factory.confirmed,['确认工厂人员并交接商务']],['client',plan.client.confirmed,['确认客户及出行准备']],['travel',!!plan.travel.issued&&!plan.travel.reconfirmation,['更新出票及行程确认','登记出票及最终行程']],['acceptance',!!plan.acceptance.installed||!!plan.acceptance.accepted,['更新安装与客户验收']]];
+ const entries=await Promise.all(stages.filter(([,active])=>active).map(async([section,,actions])=>{
+  const record=await db.prepare(`SELECT u.name AS author,e.created,json_extract(e.payload,'$.action') AS action FROM crm_sales_events e LEFT JOIN crm_users u ON u.id=e.created_by WHERE e.kind=? AND json_extract(e.payload,'$.entity') IN (${aliases.map(()=>'?').join(',')}) AND json_extract(e.payload,'$.action') IN (${actions.map(()=>'?').join(',')}) ORDER BY e.rowid DESC LIMIT 1`).bind(kind,...aliases,...actions).first();
+  return [section,record] as const;
+ }));
+ return Object.fromEntries(entries.filter(([,record])=>record));
+}
 export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL):Promise<any>{
  if(!['project-installation/plans','project-installation/plan','project-installation/dossier'].includes(path))return undefined;
  if(!['sales','admin','ceo','management'].includes(u.role)||u.role!=='sales'&&!can(u,'customers_all'))fail('没有项目安装计划查看权限',403);
@@ -49,7 +57,7 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  const p=await entity(db,u,method==='GET'?url.searchParams.get('entity')||'':text(body.entity,150)),history=await records(db,p.aliases),current=history[0];
  const previous:InstallationPlan=current?JSON.parse(current.payload).plan:blankInstallation();
  const canFactory=factoryEditor(u,actor),canCommercial=u.id===actor.id&&(canFactory||u.role==='sales'&&can(u,'customers_edit'));
- if(method==='GET')return {entity:p.key,revision:current?.revision||'',plan:previous,can_factory:canFactory&&!p.archived,can_commercial:canCommercial&&!p.archived,history:history.map(r=>({id:r.revision,created:r.created,author:r.author,action:JSON.parse(r.payload).action,plan:JSON.parse(r.payload).plan})),archived:p.archived};
+ if(method==='GET')return {entity:p.key,revision:current?.revision||'',plan:previous,can_factory:canFactory&&!p.archived,can_commercial:canCommercial&&!p.archived,confirmations:await confirmations(db,p.aliases,previous),history:history.map(r=>({id:r.revision,created:r.created,author:r.author,action:JSON.parse(r.payload).action,plan:JSON.parse(r.payload).plan})),archived:p.archived};
  if(p.archived)fail('项目订单已归档，不能修改安装安排',409);
  const action=text(body.action,50),section=['profile','remarks'].includes(action)?'profile':['factory-draft','factory-confirm'].includes(action)?'factory':['client-save','client-confirm'].includes(action)?'client':action==='travel-confirm'?'travel':action==='acceptance-save'?'acceptance':'';
  if(!section)return fail('安装安排操作无效');
