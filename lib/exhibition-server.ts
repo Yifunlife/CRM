@@ -32,6 +32,7 @@ async function validateDocument(db:any,d:ExhibitionData){
  const sources=new Set(['booth',...['tasks','suppliers','equipment','items'].flatMap(k=>d[k].map((r:any)=>r.id))]);
  for(const r of d.items)if(r.equipment_id&&!d.equipment.some((e:any)=>e.id===r.equipment_id))throw new Problem('关联设备不属于当前展会');
  for(const r of d.expenses){if(r.source_id&&!sources.has(r.source_id))throw new Problem('费用关联事项不属于当前展会');if(d.items.some((i:any)=>i.id===r.source_id&&i.equipment_id))throw new Problem('互动设备费用请关联自制设备，避免重复计费');}
+ if(Object.values(exhibitionTotals(d)).some(n=>!Number.isSafeInteger(n)))throw new Problem('金额或汇率过大，请核实原币金额与汇率');
  for(const e of d.equipment){const qty=d.income.filter((r:any)=>r.equipment_id===e.id).reduce((n:number,r:any)=>n+r.quantity,0);if(qty&&(e.quantity===null||e.quantity===undefined||qty>e.quantity))throw new Problem('出售数量超过设备数量，请先核实自制设备资料');}
  for(const r of d.income)if(!d.equipment.some((e:any)=>e.id===r.equipment_id))throw new Problem('请选择本展会出售的设备');
  for(const r of d.customers)if(!r.lead_id||!await db.prepare('SELECT id FROM crm_leads WHERE id=?').bind(r.lead_id).first())throw new Problem('关联客户不存在');

@@ -38,6 +38,11 @@ await save('income',income);show=await get();assert.equal(show.totals.received,3
 await assert.rejects(save('income',{...income,id:'sale-2',quantity:2}),/超过设备数量/);await assert.rejects(save('equipment',{...show.data.equipment[0],quantity:0}),/超过设备数量/);
 await assert.rejects(save('income',{...income,equipment_id:'not-current-show'}),/请选择本展会/);
 let stale=(await get()).version;await save('expenses',{...expense,amount_minor:13000});await assert.rejects(call('/save','POST',{id:showId,version:stale,kind:'equipment',record:{id:'stale',name:'丢失更新'}}),e=>e.status===409);assert(!(await get()).data.equipment.some(e=>e.id==='stale'));
+// Concurrent editors read the same document revision; only one may commit.
+const raceVersion=(await get()).version,race=await Promise.allSettled(['race-a','race-b'].map(id=>call('/save','POST',{id:showId,version:raceVersion,kind:'tasks',record:{id,name:id}})));
+assert.equal(race.filter(r=>r.status==='fulfilled').length,1);assert.equal(race.find(r=>r.status==='rejected').reason.status,409);
+assert.equal((await get()).data.tasks.filter(t=>t.id.startsWith('race-')).length,1);
+const deadlines=exhibitionReminders({...((await get()).data),design_due:'2026-11-09',logistics_due:'2026-11-07'},'2026-11-08');assert.equal(deadlines.filter(r=>r.kind==='show').length,2);
 const before={users:sql.prepare('SELECT * FROM crm_users').all(),leads:[],deals:[],receipts:[]};
 for(const id of ['lead','lead-two'])sql.prepare("INSERT INTO crm_leads(id,name,source,detail,fingerprint,created) VALUES(?,?,'展会','{}',?,'2026-11-08')").run(id,'展会客户'+id,id);
 for(const [id,lead]of [['deal','lead'],['wrong','lead-two']])sql.prepare("INSERT INTO crm_deals(id,order_number,lead_id,owner_id,business_scope,deal_date,created,created_by) VALUES(?,?,?,'sales','meta_foreign','2026-11-08','2026-11-08','admin')").run(id,'ORDER-'+id,lead);
