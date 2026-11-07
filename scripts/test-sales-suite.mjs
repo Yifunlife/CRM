@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
-const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');s=s.replaceAll("'./contact-followup-server'",JSON.stringify(moduleURL('lib/contact-followup-server.ts')));s=s.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
+const module=(file,replacements={})=>{let s=readFileSync(file,'utf8');s=s.replaceAll("'./contact-followup-server'",JSON.stringify(moduleURL('lib/contact-followup-server.ts')));s=s.replaceAll("'./contact-kind'",JSON.stringify(moduleURL('lib/contact-kind.ts')));for(const [a,b]of Object.entries(replacements))s=s.replaceAll(a,JSON.stringify(b));s=s.replace(/from (['\"])(\.\/[^'\"]+)\1/g,(_,q,p)=>'from '+JSON.stringify(moduleURL('lib/'+p.slice(2)+'.ts')));return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const crm=module('lib/crm.ts'),pure=module('lib/sales-suite.ts'),err='data:text/javascript,export class AllocationError extends Error{constructor(message,status=400){super(message);this.status=status;}}';
 const source=module('lib/sales-quote-source.ts',{"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err});
 const {salesSuiteEndpoint,refreshSalesSuite}=await import(module('lib/sales-suite-server.ts',{"'./sales-home-server'":moduleURL('lib/sales-home-server.ts'),"'./crm'":crm,"'./sales-suite'":pure,"'./allocation-server'":err,"'./sales-quote-source'":source,"'./assignment-reminders'":module('lib/assignment-reminders.ts',{"'./assignment-categories'":module('lib/assignment-categories.ts')})}));
@@ -34,6 +34,8 @@ let p=(await detail()).project;
 assert.equal(p.stage,'qualification');
 await call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{site:{value:'租赁已签',state:'verified',evidence:'客户邮件确认'}},reason:'核实场地'});
 p=(await detail()).project;assert.equal(p.details.qualification.site.state,'verified');assert.equal(p.next_date,'','qualification can save without inventing a plan');
+await call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{...p.details.qualification,project_address:{value:'悉尼项目现场地址',state:'pending',evidence:''}},reason:'补充项目地址'});
+p=(await detail()).project;assert.equal(p.details.qualification.project_address.value,'悉尼项目现场地址');assert.equal(p.details.qualification.site.state,'verified');assert.equal((await detail(p2)).project.details.qualification.project_address,undefined,'one project address cannot overwrite another project');
 await assert.rejects(call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{site:{value:'场地',state:'verified'}},reason:'测试'}),/依据/);
 // Independent dimensions keep the legacy note and reject values with unknown units.
 await call('project/update',{id:p1,version:p.version,section:'qualification',qualification:{area_m2:{value:'528.5'},height_m:{value:'6.2'},area:{value:'旧资料：约500平米，净高待核实'}},reason:'分开登记面积与层高'});
