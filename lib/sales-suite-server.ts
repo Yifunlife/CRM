@@ -2,6 +2,7 @@ import {visibleNotificationsSQL} from './notification-retention';
 import {customerLeadSQL} from './contact-kind';
 import {salesHomeEndpoint} from './sales-home-server';
 import {projectResponsibilityEndpoint} from './project-responsibility-server';
+import {projectProfileEndpoint} from './project-profile-server';
 import {assignmentReminders,teamAssignmentSummary} from './assignment-reminders';
 import {AllocationError} from './allocation-server';
 import {can,authorizedLead,id,now,hasAdminPermissions} from './crm';
@@ -52,6 +53,7 @@ export async function salesSuiteEndpoint(db:D1Database,source:D1Database|undefin
  if(!path.startsWith('sales-suite/'))return undefined;
  if(u.role==='followup')fail('跟单员继续使用本人订单跟单',403);
  if(path==='sales-suite/project/responsibility')return projectResponsibilityEndpoint(db,u,actor,method,body,url);
+ if(path==='sales-suite/project/profile')return projectProfileEndpoint(db,u,actor,method,body,url);
  if(path==='sales-suite/report'&&method==='GET')return report(db,u);
  if(path==='sales-suite/work'&&method==='GET'){if(u.role!=='sales')fail('此首页仅用于业务员本人工作',403);const assigned=assignmentReminders(db,u);const [data,home]=await Promise.all([report(db,u,assigned),salesHomeEndpoint(db,u,'sales-home','GET',assigned)]);return {data,home};}
  if(path==='sales-suite/quotes'&&method==='GET')return quoteCatalogue(db,source,u,(url.searchParams.get('q')||'').slice(0,200),Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0)));

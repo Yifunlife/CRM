@@ -9,9 +9,10 @@ export function projectOverviewFacts(record:any,linkedProject?:any){
  };
  const deliveryDate=details.dates?.eta_site?.date||'';
  const contractNumber=details.contract_source?.contract_no||details.contract_no||record.order_number||linked.contract_no||'';
+ const projectAddress=record.project_id?qualification.project_address?.value??details.project_address:details.project_address??qualification.project_address?.value;
  return {
   contractNumber,number:contractNumber,
-  projectAddress:details.project_address||qualification.project_address?.value||linked.project_address||linkedQualification.project_address?.value||'',
+  projectAddress:projectAddress??linkedQualification.project_address?.value??linked.project_address??'',
   country:record.country||linkedProject?.country||'',
   area:dimension('area_m2'),height:dimension('height_m'),
   legacyDimensions:qualification.area?.value||linkedQualification.area?.value||'',
