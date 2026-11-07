@@ -51,18 +51,20 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
  const canFactory=factoryEditor(u,actor),canCommercial=u.id===actor.id&&(canFactory||u.role==='sales'&&can(u,'customers_edit'));
  if(method==='GET')return {entity:p.key,revision:current?.revision||'',plan:previous,can_factory:canFactory&&!p.archived,can_commercial:canCommercial&&!p.archived,history:history.map(r=>({id:r.revision,created:r.created,author:r.author,action:JSON.parse(r.payload).action,plan:JSON.parse(r.payload).plan})),archived:p.archived};
  if(p.archived)fail('项目订单已归档，不能修改安装安排',409);
- const action=text(body.action,50),section=action==='profile'?'profile':['factory-draft','factory-confirm'].includes(action)?'factory':['client-save','client-confirm'].includes(action)?'client':action==='travel-confirm'?'travel':action==='acceptance-save'?'acceptance':'';
+ const action=text(body.action,50),section=['profile','remarks'].includes(action)?'profile':['factory-draft','factory-confirm'].includes(action)?'factory':['client-save','client-confirm'].includes(action)?'client':action==='travel-confirm'?'travel':action==='acceptance-save'?'acceptance':'';
  if(!section)return fail('安装安排操作无效');
  if(!(section==='profile'||section==='factory'?canFactory:canCommercial))fail(section==='profile'||section==='factory'?'工厂人员与排期仅限销售管理层及以上维护':'仅本项目商务或管理人员可维护此项',403);
  if(text(body.revision||'',100)!==(current?.revision||''))fail('安装安排已被其他人更新，请刷新后重新填写',409);
  if(!body.values||typeof body.values!=='object'||Array.isArray(body.values))fail('安装安排资料格式无效');
+ if(action==='remarks'&&!Object.hasOwn(body.values,'remarks'))fail('请填写备注，清空备注可留空');
  const definitions={profile:INSTALLATION_PROFILE_FIELDS,factory:INSTALLATION_FACTORY_FIELDS,client:INSTALLATION_CLIENT_FIELDS,travel:INSTALLATION_TRAVEL_FIELDS,acceptance:INSTALLATION_ACCEPTANCE_FIELDS};
  const values:Record<string,any>={};
  for(const [key] of definitions[section]){const value=text(body.values[key]??(section==='factory'&&['company_people','external_technicians','external_people'].includes(key)?previous.factory[key]||'':''),key==='notes'||key==='remarks'||key==='evidence'?5000:500);values[key]=key.endsWith('_date')||['planned_arrival','customer_start','customer_end','actual_arrival','actual_departure','actual_end'].includes(key)?date(value):value;}
  for(const key of section==='client'?['site_ready','documents_ready','cost_confirmed']:section==='acceptance'?['installed','accepted']:[]){if(typeof body.values[key]!=='boolean')fail('请完整确认本环节核对项');values[key]=body.values[key];}
  const plan=structuredClone(previous);
  const requireFields=(keys:string[])=>{for(const key of keys)if(!values[key])fail('请完整填写本环节资料与确认依据');};
- if(section==='profile'){
+ if(action==='remarks')plan.profile={...previous.profile,remarks:values.remarks};
+ else if(section==='profile'){
   if(values.area_m2&&(!Number.isFinite(Number(values.area_m2))||Number(values.area_m2)<=0))fail('面积需为大于零的数值');
   if(values.labyrinth&&!['是','否','待确认'].includes(values.labyrinth))fail('请选择是否有迷宫');
   if(values.customer_start&&values.customer_end&&values.customer_start>values.customer_end)fail('安装结束日期不能早于开始日期');
@@ -103,7 +105,8 @@ export async function projectInstallationEndpoint(db:D1Database,u:any,actor:any,
   if(values.installed||values.accepted)requireFields(['actual_end','evidence']);
   plan.acceptance=values as InstallationPlan['acceptance'];
  }
- const names:Record<string,string>={profile:'更新安装项目资料','factory-draft':'保存工厂安排草稿','factory-confirm':'确认工厂人员并交接商务','client-save':'保存商务准备进度','client-confirm':'确认客户及出行准备','travel-confirm':previous.travel.issued?'更新出票及行程确认':'登记出票及最终行程','acceptance-save':'更新安装与客户验收'};
+ if(section==='factory'&&Object.hasOwn(body,'remarks'))plan.profile.remarks=text(body.remarks,5000);
+ const names:Record<string,string>={profile:'更新安装项目资料',remarks:'更新安装备注','factory-draft':'保存工厂安排草稿','factory-confirm':'确认工厂人员并交接商务','client-save':'保存商务准备进度','client-confirm':'确认客户及出行准备','travel-confirm':previous.travel.issued?'更新出票及行程确认':'登记出票及最终行程','acceptance-save':'更新安装与客户验收'};
  const at=now(),revision=id(),payload={entity:p.key,plan,action:names[action]};
  const result=await db.prepare(`INSERT INTO crm_sales_events(id,kind,payload,lead_id,project_id,occurred_at,created,created_by) SELECT ?,?,?,?,?,?,?,? WHERE COALESCE((SELECT id FROM crm_sales_events WHERE kind=? AND json_extract(payload,'$.entity') IN (${p.aliases.map(()=>'?').join(',')}) ORDER BY rowid DESC LIMIT 1),'')=?`).bind(revision,kind,JSON.stringify(payload),p.lead.id,p.projectId,at,at,actor.id,kind,...p.aliases,current?.revision||'').run();
  if(!result.meta.changes)fail('安装安排已被其他人更新，请刷新后重新填写',409);

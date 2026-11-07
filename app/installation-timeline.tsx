@@ -6,12 +6,12 @@ import {installationDayDifference,installationInMonth,installationProgress,insta
 import type {InstallationPlan} from '../lib/project-installation';
 import InstallationCalendarEditor from './installation-calendar-editor';
 import './installation-timeline.css';
-type Props={rows:any[];allRows:any[];planFor:(row:any)=>InstallationPlan;month:string;onMonthChange:(month:string)=>void;api:(path:string,body?:any)=>Promise<any>;onSaved:()=>void;open:(id:string)=>void;demo?:boolean};
-export default function InstallationTimeline({rows,allRows,planFor,month,onMonthChange,api,onSaved,open,demo}:Props){
+type Props={canOpen?:()=>boolean;rows:any[];allRows:any[];planFor:(row:any)=>InstallationPlan;month:string;onMonthChange:(month:string)=>void;api:(path:string,body?:any)=>Promise<any>;onSaved:()=>void;open:(id:string)=>void;demo?:boolean};
+export default function InstallationTimeline({rows,allRows,planFor,month,onMonthChange,api,onSaved,open,demo,canOpen}:Props){
  const [edit,EDIT]=useState<{project:string;date?:string}|null>(null),wheel=useRef(0),pointer=useRef<{x:number;y:number}|null>(null),suppress=useRef(false);
  const today=calendarToday(),days=new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate(),first=month+'-01',last=month+'-'+days,numbers=calendarProjectNumbers(allRows),shown=rows.filter(r=>installationInMonth(planFor(r),month)).sort((a,b)=>numbers[a.id]-numbers[b.id]);
  const todayDay=today.startsWith(month)?Number(today.slice(8)):0,dates=Array.from({length:days},(_,i)=>{const day=i+1,date=month+'-'+String(day).padStart(2,'0'),weekday=new Date(date+'T00:00:00Z').getUTCDay();return {date,day,weekend:weekday===0||weekday===6,weekStart:weekday===1,mobileTick:day%7===0&&days-day>=3&&(!todayDay||day===todayDay||Math.abs(day-todayDay)>=3),edgeToday:day===todayDay&&day>1&&day<days&&(day<4||days-day<3)};}),pending=shown.filter(r=>!installationSchedule(planFor(r)).start&&!installationSchedule(planFor(r)).end).length;
- function choose(project:string,date?:string){if(demo){open(project);return;}EDIT({project,date});}
+ function choose(project:string,date?:string){if(canOpen&&!canOpen())return;if(demo){open(project);return;}EDIT({project,date});}
  function shift(by:number){onMonthChange(shiftCalendarMonth(month,by));}
  const numbered=(row:any)=><span className="it-number" style={calendarProjectColor(row.id,numbers[row.id])}>{numbers[row.id]||'·'}</span>;
  return <div className="installation-timeline"><div className="it-toolbar"><h2>项目安装时间表</h2><div className="it-month"><button type="button" aria-label="安装时间表上个月" onClick={()=>shift(-1)}><ChevronLeft size={16}/></button><h3 aria-live="polite">{month.slice(0,4)}年{Number(month.slice(5))}月</h3><button type="button" aria-label="安装时间表下个月" onClick={()=>shift(1)}><ChevronRight size={16}/></button><button type="button" onClick={()=>onMonthChange(today.slice(0,7))}>本月</button></div><div className="it-count"><span>{shown.length} 个项目</span>{pending>0&&<span>{pending} 项待排期</span>}</div></div>
