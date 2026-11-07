@@ -2,6 +2,13 @@
 import {useEffect,useRef} from 'react';
 
 const changeKey='crm-installation-change',changeEvent='crm-installation-change';
+let draftSaver:(()=>Promise<boolean>)|null=null;
+export function saveInstallationBeforeLeave(){return draftSaver?.()??null;}
+export function hasInstallationDraftSave(){return draftSaver!==null;}
+export function useInstallationDraftSave(save:()=>Promise<boolean>){
+ const latest=useRef(save);latest.current=save;
+ useEffect(()=>{const handler=()=>latest.current();draftSaver=handler;return()=>{if(draftSaver===handler)draftSaver=null;};},[]);
+}
 export function installationChanged(){
  window.dispatchEvent(new Event(changeEvent));
  try{window.localStorage.setItem(changeKey,Date.now()+':'+Math.random());}catch{}
