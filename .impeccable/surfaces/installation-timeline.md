@@ -2,7 +2,7 @@
 version: 1
 slug: "installation-timeline"
 primary_target: "app/installation-timeline.tsx"
-related_targets: ["app/installation-timeline.css", "app/installation-plan-table.tsx", "app/installation-project-archive.tsx", "app/order-installation-plan.tsx", "app/order-installation-plan.css", "app/installation-followup-table.tsx", "app/installation-followup.css", "app/project-management.tsx", "app/crm.tsx", "app/installation-calendar-editor.tsx", "lib/installation-followup.ts", "lib/installation-schedule.ts", "lib/installation-calendar.ts", "lib/project-installation.ts", "lib/project-installation-server.ts"]
+related_targets: ["app/installation-timeline.css", "app/installation-plan-table.tsx", "app/installation-project-archive.tsx", "app/order-installation-plan.tsx", "app/order-installation-plan.css", "app/installation-followup-table.tsx", "app/installation-followup.css", "app/installation-arrivals.tsx", "app/installation-arrivals.css", "app/project-management.tsx", "app/crm.tsx", "app/installation-calendar-editor.tsx", "lib/installation-followup.ts", "lib/installation-schedule.ts", "lib/installation-calendar.ts", "lib/project-installation.ts", "lib/project-installation-server.ts"]
 ---
 
 # 项目安装时间表与档案同步
@@ -13,7 +13,7 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 
 ## Compact overview and editing
 
-业务范围、安装交接状态及项目／合同号／国家／师傅搜索共用可换行工具栏，默认筛选文字为「全部业务」「全部进度」。主安装页在「安装填写与跟进」区域提供单一「进入填写总表」按钮，打开同一 CRM 内独立的「安装填写与跟进」页面，取代先选项目及五个直接填写按钮。项目管理导航仍只有「项目进度」「订单安装计划」，内部跟进页保持「订单安装计划」选中，不新增导航项；页面提供「返回安装时间表」。嵌入项目档案的界面继续保留原页签。
+业务范围、安装交接状态及项目／合同号／国家／师傅搜索共用可换行工具栏，默认筛选文字为「全部业务」「全部进度」。按最新已批准要求，项目管理导航为三个独立入口，顺序为「项目进度 → 安装前待确认事项 → 安装工期计划」；待确认事项直接打开原填写确认总表，两个安装页面分别选中自己的导航。内部「订单安装计划」「安装填写与跟进」路由键保留以兼容旧收藏，可见名称统一为新标签。主安装页已撤下项目下拉框及五个阶段按钮组成的整块填写区域，页首保留紧凑的「安装前待确认事项」快捷按钮；待确认页提供「返回安装工期计划」。嵌入项目档案的界面继续保留原页签。
 
 「师傅、工期与备注」资料区默认折叠，以项目数量及「展开编辑」说明入口；月度时间表为常驻主体，避免宽资料表挤占工期视图。主入口不依赖展开宽表或寻找深层档案才能填写和跟进。
 
@@ -40,6 +40,18 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 填写页沿用浅色 Fluent 白色工作面、蓝色操作与细边界，减少重复标题和容器留白。表单在1100px及以上为三列，中间宽度两列，720px及以下一列；手机字段文字为16px、操作及空白项按钮至少44px高。矩阵在自身区域横向滚动（最小宽820px），项目首列固定并保持不透明底色；不让整页横向溢出。五环节页签在手机改为两列，状态及责任说明保留文字。
 
 总表与表单使用现有项目、安装计划及事件；不导入演示资料，不删除或重建实际业务数据。
+
+## Arrival batches and visa registration
+
+「到货与签证」使用可重复的到货行，标题显示「共 N 批货」，未登记时显示「总批数待登记」。每行按「第 N 批」编号，提供货物／柜数说明、预计到货日期及可选实际到货日期，并支持「增加一批」「移除此批」；预计日期空白时明确显示「预计到货：待确认」，不补造日期或推定已到货。最多50批；说明最多500字符。正式「确认客户及出行准备」要求已登记的每批预计日期齐全，日期未定可先保存准备进度；实际到货日期仍为按需填写项。
+
+签证类型为「落地签、旅游签、商务签、工作签」四项下拉，空值显示待确认；已有非标准值时追加该值的「原记录」选项，保留如「国内订单」等旧资料，不因打开或保存其他字段自动转换。
+
+批次存于现有规范安装计划的可选 `plan.arrivals` 数组，各行含稳定ID、说明、预计日期及实际日期；沿用现有安装事件快照、商务权限、归档锁、实际操作人及版本检查，检查ID唯一性及有效日期。旧客户端省略该数组时保留已存批次。原整单预计／实际到货及说明继续保存，在「原到货记录与说明」中可查；有批次时表单不再重复呈现原实际到货输入。无数据库迁移，不改变生产／装柜／发货批次及财务记录。批次修改按原商务资料变更处理，已出票的行程需要重新确认。
+
+项目档案、资料列表及日历读取同一组批次。档案逐批展示预计／实际日期，未知值分别为「待确认」「尚未登记」；列表在计划到货列显示总批数及逐批预计日期，实际到货列显示逐批实际日期。日历按有效的逐批预计／实际日期生成节点，缺日期不生成虚构节点；没有批次时继续使用原整单日期及说明。填写计数包含总到货批数；使用批次时将原实际到货两项替换为各批预计／实际日期项。说明和可选实际日期的空白不等于正式确认错误，原「已填写 ≠ 已确认」规则继续适用。
+
+增减批次及逐行编辑参与实时草稿计数、空白项定位及既有未保存保护；取消修改清除批次草稿、返回总表，不发送保存请求。桌面保持紧凑行列及细分隔线，中间宽度折行；720px及以下说明占满一行、两项日期并排，输入文字16px且至少44px高，移除操作至少44px高。继续使用既有浅色 Fluent 工作面，不建立新的视觉体系。
 
 ## Monthly timeline and project identity
 
@@ -84,6 +96,8 @@ related_targets: ["app/installation-timeline.css", "app/installation-plan-table.
 备注扩展已由主任务记录后端、界面、TypeScript及构建检查通过，覆盖备注清空、超长拒绝、权限与版本冲突、人员及备注合并保存原子性和未保存保护。
 
 独立安装填写总表扩展的完成评审为 **ship**，无实质修正项。主任务以测试数据核对矩阵与原表单衔接、填写／确认区分、实时草稿计数及空白项定位、取消不保存、未保存保护、独立确认署名读取及失效确认不显示旧署名；桌面及手机浏览器断言同时覆盖进入表单和返回总表的顶部位置。这些检查不代表生产业务验收。桌面、手机及确认表单截图分别保存在 `.impeccable/review/installation-followup/desktop.png`、`mobile.png`、`confirmed-form.png`、`mobile-form.png`。本文仅记录本地构建事实，部署及真实登录验收由主任务另行记录。
+
+2026-11-08 到货批次及三入口导航扩展已在本地构建，最新独立完成评审为 **ship**，无实质修正项；评审另行重跑到货套件通过。发布说明 `docs/installation-arrivals-navigation-20261108.md` 记录多批及跨月、未知日期、旧值保留、权限与版本、正式确认预计日期、行程重新确认、旧客户端兼容、档案与日历，以及取消、填写计数、手机布局等检查；原安装相关套件、TypeScript及 Cloudflare 构建通过。`.impeccable/review/installation-arrivals/*.png` 为测试数据与内存数据库支持的真实组件／端点截图，不证明生产项目已录入样例批次。正式发布及已登录页面核对见上述发布说明；不把测试批次当作生产业务记录。
 
 ## 公司师傅与外请分行录入
 
