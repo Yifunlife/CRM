@@ -1,3 +1,4 @@
+import {exhibitionEndpoint} from '../exhibition-server';
 import {customerAnalysisEndpoint} from '../customer-analysis';
 import {allocationPerformanceEndpoint} from '../allocation-performance-server';
 import {communicationConnection} from '../communication-connections';
@@ -40,6 +41,7 @@ import {salesBoardEndpoint} from '../sales-board-server';
 import {projectInstallationEndpoint} from '../project-installation-server';
 export async function businessModules(context:ApiContext):Promise<Response|undefined>{
  const {db,env,req,url,path,body,user,actor}=context;
+ const exhibition=await exhibitionEndpoint(db,user,actor,path,req.method,body,url);if(exhibition!==undefined)return json(exhibition);
  const installation=await projectInstallationEndpoint(db,user,actor,path,req.method,body,url);if(installation!==undefined)return json(installation);
  const salesBoard=await salesBoardEndpoint(db,user,path,req.method,url,env.QUOTE_DB);if(salesBoard!==undefined)return json(salesBoard);
  const analysis=await customerAnalysisEndpoint(db,user,actor,path,req.method,body);if(analysis!==undefined)return json(analysis);

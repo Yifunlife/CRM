@@ -1,0 +1,13 @@
+// The exhibition document is saved atomically; every edit checks its revision.
+export const EXHIBITION_PHASES=['立项订展','设计报审','生产与备料','物流发运','现场搭建','参展接待','撤展与设备出售','客户跟进与复盘'];
+export const EXHIBITION_ITEMS=['接线板、国际转换插头','宣传册','个人名片','公司中英文合同','二维码关注牌','LED屏播放视频','互动设备'];
+export const EXHIBITION_CATEGORIES=['展位费','设计费','搭建费','物流费','内部生产','采购用品','宣传物料','视频制作','出行费','其他'];
+export const TRAVEL_TYPES=['机票','住宿','打车','餐旅费'];
+export const EXHIBITION_KINDS=['tasks','suppliers','equipment','items','expenses','income','customers','deals'] as const;
+export type ExhibitionKind=typeof EXHIBITION_KINDS[number];
+export type ExhibitionRecord={id:string;name?:string;[key:string]:any};
+export type ExhibitionData={name:string;start:string;end:string;location:string;area:number|null;year_pending:boolean;owner_id:string;[key:string]:any};
+export function newExhibition(show:any):ExhibitionData{return {...show,tasks:EXHIBITION_PHASES.map((name,i)=>({id:'phase-'+i,name,status:'未开始',reminders:[7,3,1]})),suppliers:[{id:'logistics',name:'物流方',type:'物流方'},{id:'builder',name:'搭建方',type:'搭建方'}],equipment:[],items:EXHIBITION_ITEMS.map((name,i)=>({id:'item-'+i,name,confirmed:false})),expenses:[],income:[],customers:[],deals:[]};}
+export const cnyMinor=(r:any,field='amount_minor')=>Math.round((r[field]||0)*(r.fx||1));
+export function exhibitionTotals(d:ExhibitionData){const expense=d.expenses.reduce((n:number,r:any)=>n+cnyMinor(r),0),paid=d.expenses.reduce((n:number,r:any)=>n+cnyMinor(r,'paid_minor'),0),income=d.income.reduce((n:number,r:any)=>n+cnyMinor(r),0),received=d.income.reduce((n:number,r:any)=>n+cnyMinor(r,'paid_minor'),0);return {expense,paid,unpaid:expense-paid,income,received,receivable:income-received,net:expense-received};}
+export function exhibitionReminders(d:ExhibitionData,today:string){const now=Date.parse(today+'T00:00:00Z');return ['tasks','equipment','items','suppliers','customers','income'].flatMap(kind=>(d[kind]||[]).filter((r:any)=>!['已完成','已结束','已交付'].includes(r.status)&&!(kind==='items'&&r.confirmed)).flatMap((r:any)=>{const dates=[['跟进',r.next_followup],['截止',r.due||r.end]].filter(([,date])=>date);return dates.flatMap(([type,date])=>{const days=Math.round((Date.parse(date+'T00:00:00Z')-now)/86400000),horizon=Math.max(0,...(r.reminders??[7,3,1]));return days<=horizon?[{kind,id:r.id,name:r.name||r.buyer||'客户跟进',date,type,days,owner_id:r.owner_id||d.owner_id||''}]:[];});}));}
