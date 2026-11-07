@@ -6,8 +6,9 @@ type Values={contractNumber:string;projectAddress:string;area:string;height:stri
 type Person={id:string;name:string};
 type Team={owner_id:string;owner_name:string;assistant_id:string;assistant_name:string;followup_id:string;followup_name:string;can_edit:boolean;can_assign_owner:boolean;sales:Person[];followup:Person[]};
 type Profile={entity:string;version:number;values:Values;can_edit:boolean;contract_locked:boolean;team?:Team|null};
-export default function ProjectInformation({row,api,onSaved,demo=false}:{row:any;api:(path:string,body?:any)=>Promise<any>;onSaved?:()=>Promise<void>;demo?:boolean}){
+export default function ProjectInformation({row,api,onSaved,demo=false,onEditingChange}:{onEditingChange?:(editing:boolean)=>void;row:any;api:(path:string,body?:any)=>Promise<any>;onSaved?:()=>Promise<void>;demo?:boolean}){
  const [data,D]=useState<Profile|null>(null),[editing,EDIT]=useState(false),[draft,F]=useState<Profile|null>(null),[busy,B]=useState(false),[error,E]=useState(''),[message,M]=useState(''),[retry,R]=useState(0);
+ useEffect(()=>{onEditingChange?.(editing);return()=>onEditingChange?.(false);},[editing,onEditingChange]);
  const initial:Values={contractNumber:row.contractNumber||'',projectAddress:row.projectAddress||'',area:row.area||'',height:row.height||''};
  const path='sales-suite/project/profile?entity='+encodeURIComponent(row.id);
  useEffect(()=>{let live=true;E('');if(demo){D({entity:row.id,version:0,values:initial,can_edit:true,contract_locked:false});return()=>{live=false;};}api(path).then(d=>{if(live)D(d);}).catch(e=>{if(live)E(e.message);});return()=>{live=false;};},[api,path,demo,retry,row.original?.version]);
@@ -32,7 +33,7 @@ export default function ProjectInformation({row,api,onSaved,demo=false}:{row:any
   <div><dt>计划交付时间</dt><dd>{row.deliveryDate||'待补充'}{row.deliveryLabel&&<small>{row.deliveryLabel}</small>}</dd></div>
  </dl>;
  return <section className="panel mw-project-information"><div className="section-heading"><h2>单项目明细</h2>{data?.can_edit&&!editing&&<button type="button" onClick={()=>{F({...data,values:{...data.values},team:data.team?{...data.team}:data.team});EDIT(true);E('');M('');}}>编辑项目信息</button>}</div>
-  {error&&<p className="notice error" role="alert">{error}{!editing&&<button type="button" onClick={()=>R(n=>n+1)}>重新读取</button>}</p>}{message&&<p className="notice success" role="status">{message}</p>}
+  {error&&<p className="notice error" role="alert">{error}{!editing&&<button type="button" onClick={()=>R(n=>n+1)}>重新读取</button>}</p>}{data&&!data.can_edit&&<p className="small muted">{row.original?.archived?'项目已归档，基础资料只读。':'当前账号可查看，暂无项目基础资料维护权限。'}</p>}{message&&<p className="notice success" role="status">{message}</p>}
   {editing&&draft?<form onSubmit={async e=>{e.preventDefault();B(true);E('');try{if(demo){D(draft);EDIT(false);M('示例项目信息已更新。');return;}const changed=draft.team&&data?.team&&(['owner_id','assistant_id','followup_id'] as const).some(key=>draft.team![key]!==data.team![key]);await api('sales-suite/project/profile',{entity:row.id,version:draft.version,values:draft.values,...(changed?{team:{base_owner_id:data!.team!.owner_id,owner_id:draft.team!.owner_id,assistant_id:draft.team!.assistant_id,followup_id:draft.team!.followup_id}}:{})});D(await api(path));EDIT(false);M('项目信息已保存。');await onSaved?.();}catch(e:any){E(e.message);}finally{B(false);}}}><fieldset disabled={busy}>{summary}<div className="mw-actions"><button className="primary" type="submit">{busy?'正在保存…':'保存项目信息'}</button><button type="button" onClick={()=>{EDIT(false);F(null);E('');}}>取消</button></div></fieldset></form>:summary}
  </section>;
 }

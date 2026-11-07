@@ -17,11 +17,20 @@ import {customerSyncState} from './order-followup';
 import {CUSTOMER_SOURCE_OPTIONS,customerSource} from './customer-source';
 import {canEditCustomerProfile,customerProfile,validateCustomerProfile,installationCustomerWithoutContact} from './customer-profile';
 import {customerGeography} from './sales-board-geography';
+import {boardLeadVisible} from './market-access';
+import {customerProjectArchive} from './customer-project-archive';
 const list=async(db:D1Database,sql:string,args:any[]=[]) => (await db.prepare(sql).bind(...args).all<any>()).results;
 const parse=(s:string)=>JSON.parse(s||'{}');
 const fail=(s:string,status=400):never=>{throw new AllocationError(s,status);};
 const text=(v:any,max=2000)=>typeof v==='string'&&v.trim().length<=max?v.trim():fail('填写内容格式无效或过长');
 export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:string,method:string,body:any,url:URL,source?:D1Database){
+ if(path==='role-workspace/customer-projects'){
+  if(method!=='GET')fail('项目档案仅支持读取',405);
+  const lead:any=await db.prepare('SELECT * FROM crm_leads WHERE id=?').bind(url.searchParams.get('lead_id')||'').first();
+  if(!lead||!authorizedLead(u,lead)||!boardLeadVisible(u,lead))fail('客户不存在或无权查看',404);
+  const [projects,orders]=await Promise.all([list(db,'SELECT * FROM crm_sales_projects WHERE lead_id=?',[lead.id]),list(db,'SELECT * FROM crm_followup_orders WHERE lead_id=?',[lead.id])]);
+  return {projects:customerProjectArchive(projects.map(p=>({...p,country:lead.country,details:parse(p.details)})),orders.map(o=>({...o,country:lead.country,details:parse(o.details),steps:parse(o.steps)})))};
+ }
  if(path==='role-workspace/report'){
   if(method!=='GET')fail('看板仅支持读取',405);
   const personal=u.role==='sales'||['admin','ceo','management'].includes(u.role)&&url.searchParams.get('personal')==='1',all=!personal&&['admin','ceo','management'].includes(u.role)&&can(u,'customers_all');
