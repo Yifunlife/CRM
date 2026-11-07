@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import ts from 'typescript';
 const moduleUrl=(file,replacements={})=>{let source=readFileSync(file,'utf8');for(const [from,to] of Object.entries(replacements))source=source.replaceAll(from,to);return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');};
 const errors='data:text/javascript,export class AllocationError extends Error {constructor(message,status=400){super(message);this.status=status;}}';
-const workflow=moduleUrl('lib/order-followup.ts');
+const workflow=moduleUrl('lib/order-followup.ts',{"'./followup-batches'":JSON.stringify(moduleUrl('lib/followup-batches.ts'))});
 const importRules=moduleUrl('lib/order-import.ts',{"'./order-followup'":JSON.stringify(workflow)});
 const importServer=moduleUrl('lib/order-import-server.ts',{"'./allocation-server'":JSON.stringify(errors),"'./crm'":JSON.stringify(moduleUrl('lib/crm.ts')),"'./order-followup'":JSON.stringify(workflow),"'./order-import'":JSON.stringify(importRules)});
 const {moduleURL}=await import('./test-form-intake.mjs');

@@ -1,3 +1,4 @@
+import {batchesReady} from './followup-batches';
 import {executionQuote} from './execution-quote-source';
 export {executionQuote} from './execution-quote-source';
 import {AllocationError} from './allocation-server';
@@ -14,7 +15,7 @@ function profile(v:any):ExecutionProfile{
  if(v.charge==='free'&&v.type!=='replacement')fail('免费模式仅适用于经批准的售后补货');
  return {type:v.type,shipping:v.shipping,installation:v.installation,charge:v.charge,production:v.production,inspection:v.inspection,parent_contract:text(v.parent_contract||'','原合同编号',v.type!=='equipment',100),reason:text(v.reason,'执行范围确认依据')};
 }
-async function shippingRelease(db:D1Database,row:any){
+export async function shippingRelease(db:D1Database,row:any){
  const confirmed=await db.prepare('SELECT project_id FROM crm_contract_confirmations WHERE order_id=?').bind(row.id).first();
  if(confirmed){const approval:any=await db.prepare("SELECT * FROM crm_release_requests WHERE order_id=? AND commercial_revision=? AND state='approved' ORDER BY created DESC LIMIT 1").bind(row.id,row.commercial_revision).first();if(!approval)fail('请销售上传付款单据并确认，或由CEO批准特殊放行');return approval;}
  const release:any=await db.prepare('SELECT r.*,c.version AS current_version FROM crm_workflow_releases r JOIN crm_workflow_contracts c ON c.deal_id=r.deal_id JOIN crm_deals d ON d.id=r.deal_id WHERE r.order_id=? AND r.deal_id=? AND d.cancelled=0').bind(row.id,row.deal_id).first();
@@ -81,7 +82,8 @@ export async function executionEndpoint(db:D1Database,source:D1Database|undefine
   const flow=row.details.execution;if(!flow)fail('请先确认执行范围');
   const stages=executionStages(flow.profile),stage=stages.find(s=>s.key===body.stage);if(!stage)return fail('本单不适用此阶段');
   if(!['draft','complete'].includes(body.action))fail('请选择保存草稿或完成本步');
-  const complete=body.action==='complete',input=body.values;if(!input||typeof input!=='object'||Array.isArray(input))fail('表单格式无效');
+  const complete=body.action==='complete',input=body.values;
+  if(complete&&['production','shipping'].includes(stage.key)&&!batchesReady(row,stage.key as 'production'|'shipping'))fail('请先完成对应出货批次，不能把整单标记完成');if(!input||typeof input!=='object'||Array.isArray(input))fail('表单格式无效');
   const current=executionCurrent(row)!;
   if(flow.stages?.[stage.key]?.status==='已完成')fail('已完成记录只读，请在跟单记录追加更正依据',409);
   if(complete&&current.key!==stage.key&&stage.key!=='freight')fail('请先完成当前阶段；货代安排可提前并行办理');

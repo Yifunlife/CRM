@@ -1,3 +1,4 @@
+import {shipmentBatches,batchesReady} from './followup-batches';
 export const DELIVERY_STAGES=['设计沟通中','项目下单','玩具下单','生产中','出货','待安装','已完成'] as const;
 export const FOLLOWUP_PAGES=['跟单看板','接单确认','生产跟进','出货交付','单证制作','核对提单','费用对账','跟进收款'] as const;
 export const PROCESS_FIELDS:Record<string,readonly string[]>={
@@ -11,6 +12,7 @@ export const PROCESS_FIELDS:Record<string,readonly string[]>={
 };
 export function deliveryStage(order:any){
  if(order.archived)return '已完成';
+ const batches=shipmentBatches(order);if(batches.some(b=>Object.values(b.phases).some(p=>['进行中','已完成'].includes(p.status)))){if(!batchesReady(order,'production'))return '生产中';if(!batchesReady(order,'shipping'))return '出货';if(order.details.execution?.stages?.acceptance?.status!=='已完成')return order.details.execution?.profile?.installation==='none'?'出货':'待安装';}
  const flow=order.details?.execution;
  if(flow){const s=flow.stages||{};if(s.acceptance?.status==='已完成')return '已完成';if(s.shipping?.status==='已完成')return s.installation?.status==='已完成'?'已完成':'待安装';if(s.production?.status==='已完成'||s.stock?.status==='已完成')return '出货';if(s.handover?.status==='已完成')return '生产中';}
  if(DELIVERY_STAGES.includes(order.details?.business_stage))return order.details.business_stage;

@@ -1,3 +1,4 @@
+import {batchesReady} from './followup-batches';
 import {contactGrades,customerLeadSQL,cancelColleagueFirstContacts} from './contact-kind';
 import {reportAcquiredDay} from './report-acquired-day';
 import {accountTradeScopes,isSalesPerson,accountSalesCompany,salesCompanyName,SALES_COMPANIES} from './account-classification';
@@ -108,6 +109,7 @@ export async function roleWorkspaceEndpoint(db:D1Database,u:any,actor:any,path:s
   const previous=row.details.business_process?.[body.page]||{};
   const archiving=body.archive===true;if(archiving&&body.page!=='跟进收款')fail('请在收款归档环节完成归档');
   const status=archiving?'已完成':body.status??previous.status??'进行中';if(!PROCESS_STATUSES.includes(status))fail('请选择有效环节状态');if(status==='不适用'&&['接单确认','出货交付','跟进收款'].includes(body.page))fail('该关键环节不能设为不适用');
+  if(status==='已完成'&&['生产跟进','出货交付'].includes(body.page)&&!batchesReady(row,body.page==='生产跟进'?'production':'shipping'))fail('请先完成对应出货批次，不能把整单标记完成');
   if(!archiving&&body.page==='跟进收款'&&['已完成','不适用'].includes(status))fail('收款归档须通过原收款确认及订单归档流程完成');
   const ownerId=body.owner_id??previous.owner_id??row.logistics_id;if(typeof ownerId!=='string'||!await db.prepare('SELECT id FROM crm_users WHERE id=? AND active=1').bind(ownerId).first())fail('请选择有效负责人');
   if(u.role==='followup'&&![row.logistics_id,row.commercial_id].includes(ownerId))fail('只能指定本订单的商务或跟单负责人',403);

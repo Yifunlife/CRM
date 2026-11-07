@@ -17,6 +17,8 @@ export function previewOrders(){
 export function previewFollowup(){
  const orders=previewOrders(),ranges=[[[1,2],[3,13],[14,17],[12,15],[18,19],[20,23],[24,25]],[[1,2],[3,5],[8,11],[8,10],[12,13],[14,15],[16,17]],[[5,6],[7,11],[12,14],[10,12],[15,16],[17,18],[19,20]],[[1,1],[1,2],[3,4],[3,4],[5,5],[6,6],[7,7]],[[9,10],[11,20],[21,25],[19,22],[26,27],[28,29],[30,30]]];
  orders.forEach((order,i)=>{order.details.business_process=Object.fromEntries(FOLLOWUP_NODES.map((node,k)=>{const range=ranges[i]?.[k],status=i===3?'已完成':i===5?'待确认':k===0&&i!==4?'已完成':k===1&&i<3?'进行中':'未开始';return [node.page,{status,owner_id:'demo-followup',start:range?'2026-11-'+String(range[0]).padStart(2,'0'):'',due:range?'2026-11-'+String(range[1]).padStart(2,'0'):'',next:status==='已完成'?'已核对并留存资料':'按本环节排期跟进',values:{},at:'2026-11-01T00:00:00Z',by:'demo-followup'}];}));});
+ const batch=(index:number,dates:number[][])=>({id:'demo-batch-'+index,name:'第'+index+'批',goods:'示例第'+index+'批设备及配件',container_no:'',bill_no:'',inspection:'',created:'2026-11-01T00:00:00Z',created_by:'demo-followup',phases:Object.fromEntries(['production','loading','shipping'].map((key,i)=>[key,{start:'2026-11-'+String(dates[i][0]).padStart(2,'0'),due:'2026-11-'+String(dates[i][1]).padStart(2,'0'),owner_id:'demo-followup',status:'未开始',completed:'',next:'按本批实际安排跟进',evidence:''}]))});
+ Object.assign(orders[4].details,{shipment_batches:[batch(1,[[9,15],[16,17],[18,19]]),batch(2,[[12,23],[24,25],[26,27]])]});
  return {orders,tasks:[],people,can_edit:true,can_manage:false,is_admin:false};
 }
 export function previewProjects(market:string){return {orders:previewOrders().filter(o=>market==='内贸'?o.country==='中国':market==='外贸'?o.country!=='中国':false),projects:[],quotes:[],people,summary:{}};}

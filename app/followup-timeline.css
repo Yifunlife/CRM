@@ -30,6 +30,7 @@
 .office-app .workspace .ft-inline-popup :is(input,select){width:100%;min-width:0;height:32px;min-height:32px;padding:4px 6px;font-size:12px;margin:0}
 .ft-popup-picker{display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:8px}
 .ft-popup-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:4px}.ft-popup-actions button:first-child{margin-right:auto}.office-app .workspace .ft-popup-actions button{min-height:30px;padding:4px 9px;font-size:12px}.office-app .workspace .ft-node-record{font-size:11px;min-height:25px;margin-top:8px;padding:2px 0}
+.office-app .workspace .ft-project-progress .ft-batch-add{color:var(--green,#264b82);background:var(--surface-hover,#edf3fb)}.ft-batch-metadata{margin-bottom:8px}.ft-batch-metadata>summary{font-size:11px;padding:3px 0 6px}.ft-inline-popup .ft-batch-metadata input{margin-bottom:3px}
 .ft-inline-popup .notice{padding:8px;margin:6px 0;font-size:12px}.ft-backup{font-size:11px;margin:8px 0}.ft-backup p{margin:3px 0}.ft-message{margin:0 0 8px}
 /* The existing per-phase record forms retain their date and quick-progress layouts. */
 .ft-page>.fb-editor{margin-top:12px}.ft-quick{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}.ft-quick-form{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:12px;padding:12px 0 20px}.ft-quick-form label:first-child{grid-column:1/-1}.ft-date-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.ft-date-fields input{min-width:0;width:100%}

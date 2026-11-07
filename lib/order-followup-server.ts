@@ -1,3 +1,4 @@
+import {batchesReady} from './followup-batches';
 import {followupPerformance} from './role-workspaces';
 import {suiteDay} from './sales-suite';
 import {importOrders} from './order-import-server';
@@ -24,6 +25,7 @@ function event(db:D1Database,orderId:string,token:string,actor:any,kind:string,p
 export async function writeFollowup(db:D1Database,row:any,body:any,actor:any,kind:string,payload:any,extra:(token:string,time:string)=>D1PreparedStatement[],fields?:{details:any;steps:any;stage:number;archived:number;logistics_id:string},invalidateRelease=false){
  if(!Number.isInteger(body.version)||body.version!==row.version)fail('此订单已更新，请刷新后重新填写',409);
  const token=id(),time=now(),f=fields||row;
+ if(f.archived&&!batchesReady({...row,details:f.details},'shipping'))fail('仍有出货批次未完成，不能整单归档');
  const commercialKeys=['contract_source','supply_scope','payment_nodes','delivery_address','customer_contact','delivery_requirements','special_requirements'];
  const commercialChanged=invalidateRelease||commercialKeys.some(k=>JSON.stringify(f.details[k])!==JSON.stringify(row.details[k]));
  const result=await db.batch([db.prepare('UPDATE crm_followup_orders SET logistics_id=?,details=?,steps=?,stage=?,archived=?,commercial_revision=commercial_revision+?,version=version+1,change_token=?,updated=?,updated_by=? WHERE id=? AND version=? AND change_token=?').bind(f.logistics_id,JSON.stringify(f.details),JSON.stringify(f.steps),f.stage,f.archived,commercialChanged?1:0,token,time,actor.id,row.id,body.version,row.change_token),...extra(token,time),event(db,row.id,token,actor,kind,payload,time)]);
@@ -116,6 +118,7 @@ export async function followupEndpoint(db:D1Database,user:any,actor:any,path:str
  }
  if(action==='steps'){
   const index=stage(body.step),status=body.status;
+  if(status==='已完成'&&[3,6].includes(index)&&!batchesReady(row,index===3?'production':'shipping'))fail('请先完成对应出货批次，不能把整单标记完成');
   if(!['待处理','进行中','已完成','不适用'].includes(status))fail('阶段状态无效');
   const note=clean(body.note,2000),checks=body.checks;
   if(!Array.isArray(checks)||new Set(checks).size!==checks.length||checks.some((n:any)=>!Number.isInteger(n)||n<0||n>=ORDER_STEPS[index].checks.length))fail('核对清单无效');

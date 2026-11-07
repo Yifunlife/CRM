@@ -1,3 +1,5 @@
+import {saveShipmentBatch} from './followup-batches-server';
+import {shipmentBatches} from './followup-batches';
 import {AllocationError} from './allocation-server';
 import {now} from './crm';
 import {FOLLOWUP_NODES,processSummary} from './followup-board';
@@ -15,13 +17,14 @@ async function owners(db:D1Database,user:any,row:any){
  return allowed;
 }
 export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,path:string,method:string,body:any){
- const match=/^followup\/orders\/([^/]+)\/(schedule|progress)$/.exec(path);if(!match)return undefined;
+ const match=/^followup\/orders\/([^/]+)\/(schedule|progress|batches)$/.exec(path);if(!match)return undefined;
  const {row,manager}=await followupOrder(db,user,match[1]);
  if(!manager||actor.id!==user.id)fail('没有本订单的跟单维护权限',403);
- if(method==='GET'&&match[2]==='schedule')return {order:row,owners:await owners(db,user,row)};
+ if(method==='GET'&&['schedule','batches'].includes(match[2]))return {order:row,owners:await owners(db,user,row)};
  if(method!=='POST')fail('此操作仅支持保存',405);
  if(!body||typeof body!=='object'||Array.isArray(body))fail('排期请求格式无效');
  if(row.archived)fail('已归档订单不可修改',409);
+ if(match[2]==='batches')return saveShipmentBatch(db,row,actor,body,await owners(db,user,row));
  const before=row.details.business_process||{},after={...before},at=now();
  if(match[2]==='schedule'){
   const inputs=body.node!==undefined?[body.node]:body.nodes;
@@ -31,6 +34,7 @@ export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,
   for(const input of inputs){
    const node=FOLLOWUP_NODES.find(n=>n.page===input?.page);if(!node)fail('环节无效');
    const start=date(input.start),due=date(input.due);
+   if(shipmentBatches(row).length&&['生产跟进','出货交付'].includes(node.page)){const old=before[node.page]||{};if(start!==(old.start||'')||due!==(old.due||'')||input.owner_id!==(old.owner_id||row.logistics_id))fail('请在对应出货批次中更新生产、装柜和发货排期');continue;}
    if(!!start!==!!due)fail(node.label+'：请同时填写开始与完成日期，或都留空');
    if(start&&due<start)fail(node.label+'：完成日期不能早于开始日期');
    const owner=input.owner_id;
@@ -43,6 +47,7 @@ export async function followupScheduleEndpoint(db:D1Database,user:any,actor:any,
   return writeFollowup(db,row,body,actor,'更新项目排期',{before,after},()=>[],{...row,details:{...row.details,business_process:after}});
  }
  const node=FOLLOWUP_NODES.find(n=>n.page===body.page);if(!node)fail('请选择有效环节');
+ if(shipmentBatches(row).length&&['生产跟进','出货交付'].includes(node.page))fail('请在对应出货批次中更新进展');
  const previous=before[node.page]||{},summary=processSummary(row,node);
  if(['已完成','不适用'].includes(summary.status))fail('此环节已经完成，请查看或编辑原核对记录');
  if(!['normal','problem'].includes(body.action))fail('请选择正常推进或发生异常');

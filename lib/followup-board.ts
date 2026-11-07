@@ -1,8 +1,9 @@
+import {batchNodePlan} from './followup-batches';
 import {FOLLOWUP_NODES,processNodeStatus,customerSyncState} from './order-followup';
 export {FOLLOWUP_NODES} from './order-followup';
 export const PROCESS_STATUSES=['未开始','进行中','待确认','已完成','不适用'] as const;
 export function processSummary(order:any,node:typeof FOLLOWUP_NODES[number],tasks:any[]=[]){
- const saved=order.details?.business_process?.[node.page];
+ const batch=batchNodePlan(order,node.page),saved=batch?{...order.details?.business_process?.[node.page],...batch}:order.details?.business_process?.[node.page];
  const pending=tasks.filter(t=>t.order_id===order.id&&t.step===node.step&&t.status==='待处理');
  let status=processNodeStatus(order,node.page);
  if(pending.length&&['已完成','不适用'].includes(status))status='待确认';

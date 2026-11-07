@@ -14,10 +14,12 @@ try{
  try{
   const data=previewFollowup(),html=render(data.orders);
   assert.equal((html.match(/class="ft-row ft-project"/g)||[]).length,6);
-  assert.equal((html.match(/class="ft-bar /g)||[]).length,35,'approved demo shows each scheduled stage as its own named bar');
+  assert.equal((html.match(/class="ft-bar /g)||[]).length,39,'each regular or batch stage has its own named bar');
   assert.ok(!/×\d/.test(html),'never replace stage names with aggregate counts');
   assert.ok(!html.includes('ft-phase'),'never add seven expanded rows');
   assert.match(html,/生产跟进/);assert.match(html,/单证制作/);
+  assert.match(html,/第1批·生产/);assert.match(html,/第1批·装柜/);assert.match(html,/第1批·发货/);assert.match(html,/第2批·生产/);
+  assert.ok(!html.includes('×'),'batch phases never turn into aggregate symbols');
   assert.equal(data.orders[0].details.business_process['生产跟进'].start,'2026-11-03');
   assert.equal(data.orders[0].details.business_process['生产跟进'].due,'2026-11-13');
   const same=structuredClone(data.orders[0]);
