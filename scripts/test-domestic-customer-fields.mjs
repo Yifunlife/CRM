@@ -32,7 +32,7 @@ assert.equal(customerOrigin({source:'抖音',detail:{'来源账号':'乐园号',
 let page=await customerPage(db,ceo,new URL('https://fixture.invalid/?'+new URLSearchParams({market:'内贸',region:'江苏',source_account:'玩具号'})));assert.equal(page.total,1);assert.equal(page.rows[0].name,'Domestic 01');
 page=await customerPage(db,ceo,new URL('https://fixture.invalid/?q=FIXTURE_WECHAT_11'));assert.equal(page.total,1);assert.equal(page.rows[0].grade,'D');
 page=await customerPage(db,ceo,new URL('https://fixture.invalid/?'+new URLSearchParams({q:'Phone required',grade:'D',region:'浙江',market:'内贸'})));assert.equal(page.total,1);assert.equal(!!page.rows[0].intake,false);assert.equal(customerProfile(page.rows[0]).wechat,missing['微信号']);assert.equal(page.rows[0].phone,'');
-assert.equal(contactGradeLabel('A'),'A重点客户');assert.equal(contactGradeLabel('B'),'B有意向');assert.equal(contactGradeLabel('D'),'D好友不通过/找不到账号');assert.equal(contactGradeLabel('F'),'F已流失');assert.equal(importCustomerGrade('待联系'),'');
+assert.equal(contactGradeLabel('A'),'A重点客户');assert.equal(contactGradeLabel('B'),'B有意向');assert.equal(contactGradeLabel('D'),'D找不到账号');assert.equal(contactGradeLabel('F'),'F已流失');assert.equal(importCustomerGrade('待联系'),'');
 // Either WeChat or telephone is enough; email alone is not a usable contact under this rule.
 await pool(db,ceo,ceo,'customer-pool/submit','POST',{id:'domestic-no-phone-fixture',source:'抖音',raw:'Synthetic',fields:{name:'No phone',wechat:'fixture_wechat_only',email:'fixture@example.invalid'}});
 await assert.rejects(pool(db,ceo,ceo,'customer-pool/submit','POST',{id:'domestic-no-contact-fixture',source:'抖音',raw:'Synthetic',fields:{email:'fixture@example.invalid'}}),/微信号或电话号码/);
