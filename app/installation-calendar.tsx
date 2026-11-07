@@ -1,0 +1,17 @@
+'use client';
+import {calendarDate,calendarToday,calendarMonthDays,shiftCalendarMonth,installationCalendarEvents} from '../lib/installation-calendar';
+import type {InstallationPlan} from '../lib/project-installation';
+import './installation-calendar.css';
+type Props={rows:any[];planFor:(row:any)=>InstallationPlan;month:string;onMonthChange:(month:string)=>void;open:(id:string)=>void};
+export default function InstallationCalendar({rows,planFor,month,onMonthChange,open}:Props){
+ const today=calendarToday(),events=rows.flatMap(row=>installationCalendarEvents(row,planFor(row))),days=calendarMonthDays(month),pending=rows.filter(row=>{const p=planFor(row);return !calendarDate(p.travel.departure_date)&&!calendarDate(p.factory.departure_date);}),monthly=new Set(events.filter(e=>e.start<=month+'-31'&&e.end>=month+'-01').map(e=>e.projectId));
+ return <div className="installation-calendar">
+  <div className="installation-calendar-heading"><div className="installation-month-controls"><button type="button" onClick={()=>onMonthChange(shiftCalendarMonth(month,-1))}>上月</button><label><span className="sr-only">安装日历月份</span><input aria-label="安装日历月份" type="month" value={month} onChange={e=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))onMonthChange(e.target.value);}}/></label><button type="button" onClick={()=>onMonthChange(shiftCalendarMonth(month,1))}>下月</button><button type="button" onClick={()=>onMonthChange(today.slice(0,7))}>本月</button></div><span className="small muted" aria-live="polite">本月涉及 {monthly.size} 个项目</span><div className="installation-calendar-legend" aria-label="日历颜色说明"><span className="calendar-arrival">计划到货</span><span className="calendar-planned">行程计划</span><span className="calendar-confirmed">已定行程</span><span className="calendar-actual">实际记录</span></div></div>
+  <div className="installation-calendar-scroll" tabIndex={0} role="region" aria-label={`${month.replace('-','年')}月安装日历`}><div className="installation-month-grid">
+   {['周一','周二','周三','周四','周五','周六','周日'].map(day=><div className="installation-weekday" key={day}>{day}</div>)}
+   {days.map(date=><section key={date} className={'installation-calendar-day'+(date.startsWith(month)?'':' outside-month')+(date===today?' calendar-today':'')} aria-label={date}><div className="installation-day-number"><time dateTime={date}>{Number(date.slice(8))}</time>{date===today&&<span>今天</span>}</div><div className="installation-day-events">{events.filter(e=>e.start<=date&&e.end>=date).map(event=><button type="button" key={event.id} className={'installation-calendar-event calendar-'+event.tone} title={`${event.name}｜${event.label}｜${event.start}${event.end!==event.start?' 至 '+event.end:''}${event.owner?'｜'+event.owner:''}`} aria-label={`${date} ${event.label} ${event.name}`} onClick={()=>open(event.projectId)}><span>{event.range&&date===event.start?'行程出发':event.range&&date===event.end?'计划结束':event.label}{event.people&&` · ${event.people}人`}</span><strong>{event.name}</strong>{event.owner&&<small>{event.owner}</small>}</button>)}</div></section>)}
+  </div></div>
+  {!monthly.size&&<p className="small muted">本月暂无已登记日期的安排。</p>}
+  {pending.length>0&&<div className="installation-calendar-pending"><h3>安装待排期 <span>{pending.length}</span></h3><div>{pending.map(row=><button type="button" key={row.id} onClick={()=>open(row.id)}><strong>{row.name}</strong><small>{planFor(row).factory.departure_note||'出发时间待确认'}</small></button>)}</div></div>}
+ </div>;
+}
