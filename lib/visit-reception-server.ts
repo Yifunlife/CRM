@@ -48,6 +48,7 @@ export async function visitReceptionEndpoint(db:D1Database,u:any,actor:any,path:
  if(path==='visit-receptions'&&method==='GET'){
   const key=url.searchParams.get('id')||'';
   const q=(url.searchParams.get('q')||'').trim().slice(0,100),owner=url.searchParams.get('owner')||'',page=Math.max(1,Math.floor(Number(url.searchParams.get('page'))||1));
+  if(!Number.isSafeInteger(page))fail('页码无效');
   const where=(can(u,'customers_all')?'1=1':'(l.owner_id=? OR r.receptionist_id=?)')+(key?' AND r.id=?':' AND (l.name LIKE ? OR l.country LIKE ?)'+(owner?' AND r.receptionist_id=?':''));
   const args=[...(can(u,'customers_all')?[]:[u.id,u.id]),...(key?[key]:['%'+q+'%','%'+q+'%',...(owner?[owner]:[])])];
   const rows=await list(db,`SELECT r.*,l.name AS customer_name,l.country,l.grade,l.owner_id,u.name AS receptionist_name FROM crm_visit_receptions r JOIN crm_leads l ON l.id=r.lead_id LEFT JOIN crm_users u ON u.id=r.receptionist_id WHERE ${where} ORDER BY json_extract(r.payload,'$.date') DESC,r.updated DESC LIMIT 30 OFFSET ?`,[...args,key?0:(page-1)*30]);

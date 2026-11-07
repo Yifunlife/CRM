@@ -6,6 +6,7 @@ const {visitReceptionEndpoint:handle,receptionReminders}=await import(moduleURL(
 const {personalWorkEndpoint}=await import(moduleURL('lib/personal-work-server.ts'));
 const {emptyVisit,visitCents,expenseSummary,VISIT_TIMES}=await import(moduleURL('lib/visit-reception.ts'));
 const {passwordHash,digest}=await import(moduleURL('lib/crm.ts'));
+const {crmLocation,readCRMLocation}=await import(moduleURL('lib/crm-location.ts'));const visitRoute={page:'会议到访',visit:'saved-visit'};assert.equal(readCRMLocation(crmLocation('sales-a',visitRoute),'sales-a').visit,'saved-visit');assert.equal(readCRMLocation(crmLocation('sales-a',visitRoute),'sales-b'),null);
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
 const db=database(sql),a={id:'visit-a',name:'接待业务员甲',role:'sales'},b={id:'visit-b',name:'接待业务员乙',role:'sales'},admin={id:'visit-admin',name:'接待管理测试',role:'admin'},readonly={id:'visit-reader',role:'operations',permissions:{customers_all:true,customers_edit:false}},photographer={id:'visit-photo',name:'摄影负责人',role:'design'},at=new Date().toISOString();
 for(const u of [a,b,admin,readonly,photographer])sql.prepare("INSERT INTO crm_users(id,username,name,role,password,created) VALUES(?,?,?,?,?,?)").run(u.id,u.id,u.name||u.id,u.role,await passwordHash('VisitTest-2026'),at);
