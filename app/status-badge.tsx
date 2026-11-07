@@ -4,6 +4,7 @@ const tones:Record<string,string>={
  待首次联系:'pending',已结束:'pending',未成交:'pending',暂停跟进:'design',
  已报价:'quote',价格交涉:'quote',合同确认:'design',
  待确认:'wait',待复核:'wait',待审批:'wait',待补充:'wait',已记录:'wait',已联系待回复:'wait',暂停推进:'design',
+ 待工厂安排:'wait',待客户确认:'wait',待出行准备:'wait',待出票:'wait',待验收:'wait',已定行程:'active',待改签确认:'error',
  异常:'error',已逾期:'error',逾期:'error',受阻:'error',失败:'error',错误:'error',需协调:'error'
 };
 export default function StatusBadge({value,tone}:{value:string;tone?:string}){

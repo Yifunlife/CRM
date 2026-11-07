@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+import {moduleURL,database} from './test-form-intake.mjs';
+const {projectInstallationEndpoint:handle}=await import(moduleURL('lib/project-installation-server.ts'));
+const {installationStatus,installationReady}=await import(moduleURL('lib/project-installation.ts'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+f,'utf8'));
+const db=database(sql),users={admin:{id:'admin',role:'admin'},manager:{id:'manager',role:'management',trade_scopes:['domestic','foreign']},domestic:{id:'domestic',role:'management',trade_scopes:['domestic']},sales:{id:'sales',role:'sales',trade_scopes:['domestic','foreign']},other:{id:'other',role:'sales',trade_scopes:['domestic','foreign']},follow:{id:'follow',role:'followup'}};
+for(const u of Object.values(users))sql.prepare('INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES(?,?,?,?,?,?,?)').run(u.id,u.id,u.id,u.role,'fixture',JSON.stringify(u.trade_scopes||[]),'2026-01-01');
+sql.exec(`INSERT INTO crm_leads(id,name,source,market,business_scope,country,owner_id,detail,fingerprint,created) VALUES('lead','安装测试','Meta','外贸','meta-full','澳大利亚','sales','{}','test-install','2026-01-01');INSERT INTO crm_sales_projects(project_id,lead_id,name,stage,stage_at,token,created,created_by,updated,updated_by) VALUES('project','lead','安装项目','won','2026-01-01','token','2026-01-01','sales','2026-01-01','sales');`);
+const request=(path,method,body={},u=users.admin,actor=u)=>handle(db,u,actor,'project-installation/'+path.split('?')[0],method,body,new URL('https://test/'+path));
+const read=(entity='sales:project',u=users.admin)=>request('plan?entity='+encodeURIComponent(entity),'GET',{},u);
+async function write(action,values,u=users.manager,entity='sales:project',extra={}){const current=await read(entity,u);return request('plan','POST',{entity,revision:current.revision,action,values,...extra},u);}
+const pristine=()=>JSON.stringify(['crm_leads','crm_sales_projects','crm_followup_orders','crm_deals','crm_receipts','crm_files','crm_followup_files'].map(t=>[t,sql.prepare('SELECT * FROM '+t+' ORDER BY rowid').all()]));
+let before=pristine();assert.equal((await read()).revision,'');assert.equal((await request('plans','GET')).items.length,0);assert.equal(sql.prepare('SELECT count(*) AS n FROM crm_sales_events').get().n,0);
+await assert.rejects(read('sales:project',users.other),e=>e.status===404);await assert.rejects(read('sales:project',users.domestic),e=>e.status===404);await assert.rejects(read('sales:project',users.follow),e=>e.status===403);
+await assert.rejects(write('factory-draft',{},users.sales),e=>e.status===403);await assert.rejects(request('plan','POST',{entity:'sales:project',revision:'',action:'factory-draft',values:{}},users.manager,users.admin),e=>e.status===403);
+await write('profile',{area_m2:'600',commercial_group:'外贸一组',design_group:'设计一组',engineering_group:'工程一组',labyrinth:'是',planned_arrival:'2026-11-20',customer_start:'2026-11-23',customer_end:'2026-12-02'});
+await assert.rejects(write('profile',{area_m2:'-1'}),e=>e.status===400);await assert.rejects(write('profile',{planned_arrival:'2026-02-30'}),e=>e.status===400);assert.equal(pristine(),before);
+const client={actual_arrival:'',visa_type:'已核实类别（测试）',visa_duration:'30 天（测试）',airport:'SYD',site_contact:'测试联系人',buyer:'客户购买',cost:'客户承担',site_ready:true,documents_ready:true,cost_confirmed:true};
+await assert.rejects(write('client-confirm',client,users.sales),e=>e.status===400);
+const factory={factory:'测试工厂',technicians:'师傅甲、师傅乙',people:'2',project_lead:'师傅甲',days:'10',available_date:'2026-11-21',departure_date:'2026-11-21',end_date:'2026-12-02',internal_owner:'销售经理',due_date:'2026-11-09',evidence:'工厂已确认人员及排期'};
+await assert.rejects(write('factory-confirm',{...factory,people:'1.5'}),e=>e.status===400);await assert.rejects(write('factory-confirm',{...factory,departure_date:'2026-11-20'}),e=>e.status===400);await write('factory-confirm',factory);assert.equal(installationStatus((await read()).plan),'待客户确认');
+const stale=await read();await write('client-save',client,users.sales);await assert.rejects(request('plan','POST',{entity:'sales:project',revision:stale.revision,action:'factory-confirm',values:factory},users.manager),e=>e.status===409);
+await assert.rejects(write('client-confirm',{...client,visa_type:'待核实'},users.sales),e=>e.status===400);
+await assert.rejects(write('travel-confirm',{flight:'测试航班'},users.sales),e=>e.status===400);await write('client-confirm',client,users.sales);assert(installationReady((await read()).plan));
+const travel={flight:'测试航班',departure_date:'2026-11-21',arrival_date:'2026-11-22',actual_departure:'',evidence:'客户确认出票'};
+await assert.rejects(write('travel-confirm',{...travel,departure_date:'2026-11-22'},users.sales),e=>e.status===400);await write('travel-confirm',travel,users.sales);assert.equal(installationStatus((await read()).plan),'已定行程');
+await assert.rejects(write('acceptance-save',{installed:false,accepted:true},users.sales),e=>e.status===400);await write('acceptance-save',{installed:true,accepted:true,actual_end:'2026-12-02',evidence:'客户验收确认'},users.sales);assert.equal(installationStatus((await read()).plan),'已完成');
+await write('factory-confirm',{...factory,departure_date:'2026-11-22'});let changed=await read();assert.equal(installationStatus(changed.plan),'待改签确认');assert.equal(changed.plan.travel.flight,'测试航班');assert.equal(changed.plan.client.confirmed,false);assert.equal(changed.plan.acceptance.accepted,false);assert.equal(changed.plan.acceptance.evidence,'客户验收确认');assert.equal(pristine(),before);
+// A sales project and its subsequently created order must resolve the same plan and revision.
+sql.exec(`INSERT INTO crm_deals(id,lead_id,owner_id,business_scope,order_number,deal_date,created,created_by) VALUES('deal','lead','sales','meta-full','TEST-INSTALL','2026-11-01','2026-11-01','admin');UPDATE crm_sales_projects SET details='{"deal_id":"deal"}' WHERE project_id='project';INSERT INTO crm_followup_orders(id,deal_id,order_number,project,lead_id,commercial_id,logistics_id,details,steps,change_token,created,created_by,updated,updated_by) VALUES('order','deal','TEST-INSTALL','安装项目','lead','sales','follow','{}','[]','token','2026-11-01','admin','2026-11-01','admin');`);
+before=pristine();assert.equal((await read('order:order')).revision,changed.revision);await write('client-confirm',client,users.sales,'order:order');assert.equal((await read()).revision,(await read('order:order')).revision);assert.equal((await read()).entity,'order:order');
+const list=await request('plans','GET',{},users.sales);assert(list.items.length>0);assert.equal((await request('plans','GET',{},users.other)).items.length,0);assert.equal((await request('plans','GET',{},users.domestic)).items.length,0);
+const count=sql.prepare('SELECT count(*) AS n FROM crm_sales_events').get().n;await read();await request('plans','GET',{},users.sales);assert.equal(sql.prepare('SELECT count(*) AS n FROM crm_sales_events').get().n,count);assert.equal(pristine(),before);
+sql.exec("UPDATE crm_followup_orders SET commercial_id='other' WHERE id='order'");await assert.rejects(read('sales:project',users.sales),e=>e.status===404);assert.equal((await request('plans','GET',{},users.sales)).items.length,0);
+sql.exec("UPDATE crm_followup_orders SET commercial_id='sales',archived=1 WHERE id='order'");assert.equal((await read()).can_factory,false);await assert.rejects(write('factory-confirm',factory),e=>e.status===409);
+assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+// Exercise the authenticated HTTP boundary too, including role and origin guards.
+globalThis.__installationTestEnv={DB:db};
+const bundle=await build({entryPoints:['app/api/[...path]/route.ts'],bundle:true,write:false,platform:'node',format:'esm',plugins:[{name:'installation-http',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'fixture',namespace:'installation'}));b.onLoad({filter:/.*/,namespace:'installation'},()=>({contents:'export const env=globalThis.__installationTestEnv;'}));}}]});
+const handlers=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+for(const u of [users.admin,users.sales,users.other,users.follow]){const token='installation-fixture-'+u.id,hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))).toString('hex');sql.prepare('INSERT INTO crm_sessions VALUES(?,?,?)').run(hash,u.id,Date.now()+60000);}
+async function http(u,path,body,expected=200,origin='https://test'){const method=body===undefined?'GET':'POST',res=await handlers[method](new Request('https://test/api/project-installation/'+path,{method,headers:{origin,cookie:u?'crm_session=installation-fixture-'+u.id:'','content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}));assert.equal(res.status,expected,JSON.stringify(await res.json()));}
+await http(null,'plans',undefined,401);await http(users.follow,'plans',undefined,403);await http(users.sales,'plans');await http(users.other,'plan?entity=order%3Aorder',undefined,404);
+sql.exec('UPDATE crm_followup_orders SET archived=0');
+const revision=(await read('order:order')).revision;
+await http(users.sales,'plan',{entity:'order:order',revision,action:'factory-confirm',values:factory},403);
+await http(users.admin,'plan',{entity:'order:order',revision,action:'factory-confirm',values:factory},403,'https://other.test');
+delete globalThis.__installationTestEnv;
+console.log('PASS: installation role/market/ownership boundaries, valid dates and staffing, confirmation gates, concurrent revisions, itinerary reconfirmation, completed-installation invalidation, project/order continuity, archive locks and preservation of existing business records.');

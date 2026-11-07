@@ -5,7 +5,7 @@ export const MODULES={
  allocation:{name:'客资分配',entry:'lib/allocation-server.ts',tests:['confirmed-allocation','global-allocation','assignment-reminders','assignment-sync']},
  customers:{name:'客户档案与跟进',entry:'lib/api/customers.ts',tests:['colleague-contact','sales-access','customer-progress','customer-identity','customer-page']},
  communication:{name:'客户沟通',entry:'lib/communication-progress.ts',tests:['communication-progress','linked-whatsapp','cloud-communication','auto-followup','historical-first-contact','contact-quota','won-auto-contact','daily-intake-first']},
- projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite','project-markets']},
+ projects:{name:'销售项目',entry:'lib/sales-suite-server.ts',tests:['sales-suite','project-markets','project-installation']},
  quotes:{name:'报价确认接收',entry:'lib/confirmation/quotes.ts',tests:['workflow-confirmations']},
  contracts:{name:'合同确认建单',entry:'lib/confirmation/contract.ts',tests:['workflow-confirmations']},
  documents:{name:'合同档案与附件',entry:'lib/confirmation/documents.ts',tests:['workflow-confirmations','order-followup']},
@@ -25,6 +25,7 @@ export const MODULES={
 export type ModuleId=keyof typeof MODULES;
 export type Operation={module:ModuleId;operation:string};
 export function identifyOperation(path:string,method:string,body?:any):Operation{
+ if(path.startsWith('project-installation/'))return {module:'projects',operation:path};
  if(path.startsWith('sales-board/'))return {module:'reports',operation:path};
  const exact:Record<string,ModuleId>={'personal-work/report':'reports','role-workspace/daily-first-contact':'reports','role-workspace/report':'reports','sales-management/report':'reports','sales-management/customers':'customers','sales-management/meeting':'customers','sales-management/visits/import':'customers','sales-management/plan':'projects','sales-management/interventions':'projects','sales-management/my-targets':'reports','sales-monitor':'monitor','sales-monitor/customer-rules':'monitor',login:'accounts',logout:'accounts',me:'accounts',password:'accounts',profile:'accounts',users:'accounts',import:'intake',batches:'intake','business-scope':'intake',review:'intake','import-assignments':'history',assign:'allocation',leads:'customers','leads-page':'customers',grade:'customers',deals:'finance',receipts:'finance',advertising:'reports','admin/backup':'backup','followup/execution/quotes':'execution','confirmations/quotes':'quotes','confirmations/quote':'quotes','confirmations/contract':'contracts','confirmations/followers':'contracts','confirmations/documents':'documents','confirmations/releases':'release','confirmations/release':'release','confirmations/release/decision':'release'};
  if(exact[path])return {module:exact[path],operation:path};
