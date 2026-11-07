@@ -27,6 +27,7 @@ INSERT INTO crm_service_settings VALUES('admin',0,'测试接待内容','2026-11-
 INSERT INTO crm_service_contacts(id,owner_id,peer,first_message,created,lead_id) VALUES('service-contact','admin','test-peer','测试来信','2026-11-02','lead');
 INSERT INTO crm_service_replies(id,owner_id,peer,content,created,updated) VALUES('service-contact','admin','test-peer','测试回复',1,1);`);
 original.exec("INSERT INTO crm_customer_codes(lead_id,code) VALUES('lead','YF-20261103-001')");
+original.exec("INSERT INTO crm_visit_receptions(id,lead_id,receptionist_id,payload,revision,created,updated,updated_by) VALUES('visit','lead','admin','{\"completed\":true,\"expenses\":[{\"category\":\"餐饮\",\"expected\":\"300\",\"actual\":\"288\"}]}','revision','2026-11-08','2026-11-08','admin'); UPDATE crm_exhibitions SET version=2,data=json_set(data,'$.name','展会更名保留') WHERE id='iaapa-us-2026';");
 const before=Object.fromEntries(tables.map(table=>[table,rows(original,table)]));
 const reads=[];
 const response=databaseBackup({prepare(sql){return {bind(...args){return {async all(){reads.push(sql);return {results:original.prepare(sql).all(...args)};}};}};}});
@@ -35,10 +36,13 @@ assert.equal(entries[0].format,'yifun-crm-backup-v1');
 const footer=entries.at(-1);
 assert.equal(footer.complete,true);
 assert.equal(footer.counts.crm_customer_codes,1,'customer codes survive a full backup and restore');
+assert.equal(footer.counts.crm_visit_receptions,1,'reception details and itemized costs survive backup and restore');
 assert.equal(footer.counts.crm_receipts,205,'backup must include every receipt');
 assert.deepEqual(entries.filter(e=>e.table==='crm_receipts').map(e=>e.row),JSON.parse(JSON.stringify(before.crm_receipts)));
 assert.equal(reads.filter(sql=>sql.includes('FROM crm_receipts ')).length,3,'receipts must cross pagination boundaries');
 const restored=database();
+// This isolated restore target includes the migration's exhibition seed records.
+restored.exec('DELETE FROM crm_exhibitions');
 for(const {table,row} of entries.slice(1,-1)){
  const keys=Object.keys(row);
  restored.prepare(`INSERT INTO ${table} (${keys.map(k=>'"'+k+'"').join(',')}) VALUES (${keys.map(()=>'?').join(',')})`).run(...keys.map(k=>row[k]));
