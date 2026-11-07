@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {moduleURL} from './test-form-intake.mjs';
 const {blankInstallation}=await import(moduleURL('lib/project-installation.ts'));
-const {calendarDate,calendarMonthDays,shiftCalendarMonth,installationCalendarEvents}=await import(moduleURL('lib/installation-calendar.ts'));
+const {calendarDate,calendarMonthDays,calendarRangeDays,shiftCalendarMonth,installationCalendarEvents}=await import(moduleURL('lib/installation-calendar.ts'));
 assert.equal(calendarDate('2026-02-30'),'');assert.equal(calendarDate('2028-02-29'),'2028-02-29');assert.equal(calendarDate('暂无确切时间'),'');
 assert.equal(shiftCalendarMonth('2026-12',1),'2027-01');assert.equal(shiftCalendarMonth('2026-01',-1),'2025-12');
 const november=calendarMonthDays('2026-11');assert.equal(november.length,42);assert.equal(november[0],'2026-10-26');assert.equal(november.at(-1),'2026-12-06');assert.equal(new Set(november).size,42);assert(calendarMonthDays('2028-02').includes('2028-02-29'));assert.equal(calendarMonthDays('2027-02').length,28);
+assert.deepEqual(calendarRangeDays('2026-11','2026-11-18','2026-11-18'),['2026-11-16','2026-11-17','2026-11-18','2026-11-19','2026-11-20','2026-11-21','2026-11-22']);assert.equal(calendarRangeDays('2026-11','2026-11-10','2026-11-28').length,21);assert.equal(calendarRangeDays('2026-12','2026-11-10','2026-11-28').length,0);
 const row={id:'sales:test',name:'日历项目',original:{details:{installation_source:{title:'亦玩集团2026年订单安装计划表'}}}},p=blankInstallation();
 p.profile.planned_arrival_note='第一批2个柜\n11月15日\n第二批6个柜\n11月28日';p.client.actual_arrival='2026-11-20';p.factory={...p.factory,people:'4',project_lead:'负责人',departure_date:'2026-10-20',end_date:'2026-11-10'};
 let events=installationCalendarEvents(row,p);assert.deepEqual(events.filter(e=>e.tone==='arrival').map(e=>[e.start,e.label]),[['2026-11-15','计划到货 · 第一批2个柜'],['2026-11-28','计划到货 · 第二批6个柜']]);

@@ -6,12 +6,22 @@ export function calendarMonthDays(month:string){
  const first=new Date(month+'-01T00:00:00Z'),offset=(first.getUTCDay()+6)%7,last=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
  return Array.from({length:Math.ceil((offset+last)/7)*7},(_,i)=>new Date(first.getTime()+(i-offset)*86400000).toISOString().slice(0,10));
 }
+export function calendarRangeDays(month:string,from:string,to:string){
+ const days=calendarMonthDays(month),own=days.filter(date=>date.startsWith(month)),start=from>own[0]?from:own[0],end=to<own[own.length-1]?to:own[own.length-1];
+ return start>end?[]:days.filter((_,i)=>days[Math.floor(i/7)*7]<=end&&days[Math.floor(i/7)*7+6]>=start);
+}
 export function shiftCalendarMonth(month:string,by:number){const d=new Date(month+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()+by);return d.toISOString().slice(0,7);}
 export function calendarProjectColor(projectId:string){
  const suffix=projectId.match(/-(\d+)$/);let hash=2166136261;
  for(const char of suffix?projectId.slice(0,-suffix[0].length):projectId)hash=Math.imul(hash^char.charCodeAt(0),16777619);
  const hue=((hash>>>0)%360+(suffix?Number(suffix[1])*137.508:0))%360;
  return {backgroundColor:`hsl(${hue.toFixed(2)} 65% 91%)`,color:`hsl(${hue.toFixed(2)} 65% 24%)`};
+}
+export function calendarProjectNumbers(rows:any[]){
+ const numbers:Record<string,number>={},used=new Set<number>(),ordered=[...rows].sort((a,b)=>a.id.localeCompare(b.id));
+ for(const row of ordered){const n=Number(row.original?.details?.installation_source?.row);if(Number.isInteger(n)&&n>0&&!used.has(n)){numbers[row.id]=n;used.add(n);}}
+ let next=1;for(const row of ordered)if(!numbers[row.id]){while(used.has(next))next++;numbers[row.id]=next;used.add(next++);}
+ return numbers;
 }
 // Month/day notes use the documented source year, never the displayed calendar year.
 function noteDates(note:string,year:string){
