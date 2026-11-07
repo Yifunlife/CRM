@@ -10,7 +10,7 @@ export default function useCRMLocation(scope:string,route:CRMRoute,restore:(rout
  },[scope]);
  useEffect(()=>{if(!scope||ready!==scope||restoring.current)return;const hash=crmLocation(scope,route);if(hash===last.current)return;
   const previous=last.current;window.history[previous?'pushState':'replaceState']({crmPrevious:previous},'',window.location.pathname+window.location.search+hash);last.current=hash;
- },[scope,ready,revision,route.page,route.lead,route.tab,route.project,route.market,route.demo,route.order,route.suite,route.dossierProject]);
+ },[scope,ready,revision,route.page,route.lead,route.tab,route.project,route.market,route.demo,route.order,route.suite,route.dossierProject,route.visit]);
  useEffect(()=>{if(!scope)return;const pop=async()=>{const saved=readCRMLocation(window.location.hash,scope);if(!saved)return;if(!await current.current.canLeave()){window.history.pushState({},'',window.location.pathname+window.location.search+last.current);current.current.blocked();return;}restoring.current=true;try{await current.current.restore(saved);last.current=window.location.hash;}finally{restoring.current=false;R(n=>n+1);}};window.addEventListener('popstate',pop);return()=>window.removeEventListener('popstate',pop);},[scope]);
  return async(fallback:()=>void)=>{if(!await current.current.canLeave()){current.current.blocked();return;}if(readCRMLocation(window.history.state?.crmPrevious||'',scope))window.history.back();else fallback();};
 }

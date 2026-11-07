@@ -8,7 +8,12 @@ export const meetingRecordsSQL=`
   'result',n.content,'next_action',n.next_step,'source','客户推进'
  ),n.created FROM crm_notes n
  LEFT JOIN crm_sales_events e ON e.id=n.id AND e.kind='业务员跟进记录'
- WHERE n.method IN ('线上会议','到访公司','拜访客户')`;
+ WHERE n.method IN ('线上会议','到访公司','拜访客户')
+ UNION ALL
+ SELECT 'reception:'||r.id,r.lead_id,json_object('type','到访公司','date',json_extract(r.payload,'$.date'),
+  'participants',u.name,'result',COALESCE(json_extract(r.payload,'$.result'),''),'next_action',COALESCE(json_extract(r.payload,'$.next_action'),''),
+  'source','接待登记','visit_id',r.id),r.created FROM crm_visit_receptions r JOIN crm_users u ON u.id=r.receptionist_id
+ WHERE json_extract(r.payload,'$.completed')=1`;
 export const VISIT_IMPORT_LIMIT=200;
 export const VISIT_COLUMNS=[
  {key:'lead_id',label:'CRM客户ID',aliases:['客户ID','lead_id']},

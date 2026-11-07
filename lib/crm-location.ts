@@ -1,5 +1,5 @@
-export type CRMRoute={page:string;lead?:string;tab?:string;project?:string;market?:string;demo?:boolean;order?:string;suite?:string;dossierProject?:string};
-const keys=['page','lead','tab','project','market','order','suite','dossierProject'] as const;
+export type CRMRoute={page:string;lead?:string;tab?:string;project?:string;market?:string;demo?:boolean;order?:string;suite?:string;dossierProject?:string;visit?:string};
+const keys=['page','lead','tab','project','market','order','suite','dossierProject','visit'] as const;
 export function crmLocation(scope:string,route:CRMRoute){const params=new URLSearchParams({scope});for(const key of keys)if(route[key])params.set(key,route[key]!);if(route.demo)params.set('demo','1');return '#crm?'+params;}
 export function readCRMLocation(hash:string,scope:string):CRMRoute|null{
  if(!hash.startsWith('#crm?'))return null;

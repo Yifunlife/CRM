@@ -1,3 +1,4 @@
+import {receptionReminders} from './visit-reception-server';
 import {customerSourceSQL} from './customer-source';
 import {customerLeadSQL} from './contact-kind';
 import {allocationPerformance} from './allocation-performance-server';
@@ -23,7 +24,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
  if(path==='personal-work/customer'&&method==='GET'){
   const lead=await customer(db,u,url.searchParams.get('id')),events=await entries(db,u,lead.id),metadata=new Map(events.filter(e=>e.kind==='业务员跟进记录').map(e=>[e.payload.note_id,e.payload]));
   const notes=(await list(db,'SELECT n.*,u.name AS author FROM crm_notes n JOIN crm_users u ON u.id=n.user_id WHERE n.lead_id=? ORDER BY n.created DESC,n.rowid DESC',[lead.id])).map(n=>({...n,meta:metadata.get(n.id),type:noteType({...n,meta:metadata.get(n.id)})}));
-  const progress=await list(db,"SELECT e.*,u.name AS author FROM crm_sales_events e LEFT JOIN crm_sales_projects p ON p.project_id=e.project_id JOIN crm_users u ON u.id=e.created_by WHERE (e.lead_id=? OR p.lead_id=?) AND e.kind NOT IN ('业务员跟进记录','业务员开业计划','业务员重点项目') ORDER BY e.occurred_at DESC,e.created DESC",[lead.id,lead.id]);
+  const progress=await list(db,"SELECT e.*,u.name AS author FROM crm_sales_events e LEFT JOIN crm_sales_projects p ON p.project_id=e.project_id JOIN crm_users u ON u.id=e.created_by WHERE (e.lead_id=? OR p.lead_id=?) AND e.kind NOT IN ('业务员跟进记录','业务员开业计划','业务员重点项目','客户接待登记') ORDER BY e.occurred_at DESC,e.created DESC",[lead.id,lead.id]);
   for(const e of progress){const p=parse(e.payload);notes.push({id:'event:'+e.id,created:e.occurred_at,author:e.author,method:'项目推进',type:e.kind,content:p.content||p.result||p.reason||e.kind,next_step:p.next_action||'',meta:null});}
   const deals=await list(db,'SELECT d.*,u.name AS author,c.currency,c.total_minor FROM crm_deals d JOIN crm_users u ON u.id=d.owner_id LEFT JOIN crm_workflow_contracts c ON c.deal_id=d.id WHERE d.lead_id=?',[lead.id]);
   for(const d of deals)notes.push({id:'deal:'+d.id,created:d.deal_date+'T00:00:00+08:00',author:d.author,method:'成交记录',type:'成交与合同',content:d.order_number+' · '+(d.cancelled?'已撤销':d.total_minor==null?'合同金额待核实':d.currency+' '+(d.total_minor/100).toFixed(2)),next_step:'',meta:null});
@@ -31,6 +32,8 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   for(const r of receipts)notes.push({id:'receipt:'+r.id,created:r.received_date+'T00:00:00+08:00',author:r.author,method:'实际到账',type:'收款记录',content:r.reference+' · '+r.currency+' '+(r.amount_minor/100).toFixed(2)+(r.cancelled?' · 已撤销':''),next_step:'',meta:null});
   const refunds=await list(db,'SELECT f.*,r.currency,u.name AS author FROM crm_workflow_refunds f JOIN crm_receipts r ON r.id=f.receipt_id JOIN crm_deals d ON d.id=r.deal_id JOIN crm_users u ON u.id=f.created_by WHERE d.lead_id=?',[lead.id]);
   for(const r of refunds)notes.push({id:'refund:'+r.id,created:r.refunded_date+'T00:00:00+08:00',author:r.author,method:'实际退款',type:'退款记录',content:r.currency+' '+(r.amount_minor/100).toFixed(2)+' · '+r.reason,next_step:'',meta:null});
+  const visits=await list(db,'SELECT r.id,r.payload,r.created,u.name AS author FROM crm_visit_receptions r JOIN crm_users u ON u.id=r.receptionist_id WHERE r.lead_id=?',[lead.id]);
+  for(const r of visits){const v=parse(r.payload);notes.push({id:'visit:'+r.id,created:r.created,author:r.author,method:'接待登记',type:'到访登记',content:v.date+' · '+v.purpose+' · '+(v.completed?'接待已完成':'待接待')+(v.result?'；'+v.result:''),next_step:v.next_action,meta:null});}
   notes.sort((a,b)=>Date.parse(b.created)-Date.parse(a.created));
   const type=url.searchParams.get('type')||'',q=(url.searchParams.get('q')||'').toLowerCase(),matched=notes.filter(n=>(!type||n.type===type)&&(!q||[n.content,n.method,n.next_step,n.created,n.author].join(' ').toLowerCase().includes(q))),pages=Math.max(1,Math.ceil(matched.length/5)),page=Math.min(pages,Math.max(1,Number(url.searchParams.get('page'))||1));
   const plans=new Map<string,any>();for(const e of events.filter(e=>e.kind==='业务员开业计划'))if(!plans.has(e.payload.entity))plans.set(e.payload.entity,{...e.payload,revision:e.id});
@@ -97,7 +100,7 @@ export async function personalWorkEndpoint(db:D1Database,u:any,actor:any,path:st
   const projects=await list(db,`SELECT p.project_id,p.lead_id,p.name,p.stage,p.next_action,p.next_date,l.name AS customer_name FROM crm_sales_projects p JOIN crm_leads l ON l.id=p.lead_id WHERE ${customerLeadSQL()} AND l.owner_id=? AND p.stage NOT IN ('won','lost') AND p.next_date<>'' AND p.next_date<=?`,[u.id,today]);
   const orderTasks=await list(db,"SELECT t.status FROM crm_followup_tasks t JOIN crm_followup_orders o ON o.id=t.order_id JOIN crm_leads l ON l.id=o.lead_id WHERE COALESCE(l.grade,'') NOT IN ('Yifun Staff','同事') AND t.owner_id=? AND l.owner_id=? AND date(t.due_at,'+8 hours')<=? AND t.status IN ('待处理','已解决')",[u.id,u.id,today]);
   if(managesAllocation){const allocation=await allocationPerformance(db);for(const person of allocation.rows.filter(p=>p.performance.tier==='review'))reminders.push({id:'allocation-review:'+person.id,lead_id:'',page:'分配管理',name:person.name,title:'持续未达标，需管理层处理调岗',date:today,label:'调岗待办',rank:0,kind:'岗位调整'});}
-  return {today,newLeads,projects,reminders:reminders.sort((a,b)=>a.rank-b.rank||a.date.localeCompare(b.date)),priorities:[...priority].filter(([,v])=>v).map(([k])=>k),tasks,taskCompletion:{total:tasks.length+orderTasks.length,done:tasks.filter(t=>t.status==='done').length+orderTasks.filter(t=>t.status==='已解决').length}};
+  return {today,newLeads,projects,receptionExpenses:await receptionReminders(db,u.id),reminders:reminders.sort((a,b)=>a.rank-b.rank||a.date.localeCompare(b.date)),priorities:[...priority].filter(([,v])=>v).map(([k])=>k),tasks,taskCompletion:{total:tasks.length+orderTasks.length,done:tasks.filter(t=>t.status==='done').length+orderTasks.filter(t=>t.status==='已解决').length}};
  }
  fail('个人业务操作不存在',404);
 }
