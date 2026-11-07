@@ -121,3 +121,4 @@
 .management-workspace .mw-project-overview .mw-project-dimension{white-space:nowrap}
 .management-workspace .mw-project-overview:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(max-width:720px){.management-workspace .mw-project-overview{--project-name-width:140px}.management-workspace .mw-project-overview th:first-child{white-space:normal}}
+.mw-project-overview .mw-project-contract{margin-top:3px;font-size:12px;color:var(--ink)}
