@@ -42,7 +42,7 @@ export default function OrderInstallationPlan({rows,projects,user,api,demo,initi
   if(tableDirty||calendarEditing){ERROR('请先完成当前排期编辑');return false;}
   if(!dirtyRef.current)return true;
   if(context.current.step>2){ERROR('请先完成当前确认，或放弃本次修改');return false;}
-  const form=formRef.current;if(!form)return false;
+  const form=formRef.current;if(!form)return false;if(!form.checkValidity()){ERROR('请核对日期或数值，当前填写已保留。');return false;}
   const ok=await save(['profile','factory-draft','client-save'][context.current.step],form,true);
   return ok&&dirtyRef.current?flushDraft():ok;
  }
