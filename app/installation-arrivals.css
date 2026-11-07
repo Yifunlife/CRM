@@ -1,18 +1,48 @@
-.installation-arrivals{margin:12px 0;padding:10px 0;border-bottom:1px solid var(--line)}
-.installation-arrivals-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.installation-arrivals{margin:12px 0;padding:0 0 12px;border-bottom:1px solid var(--line)}
+.installation-arrivals-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .installation-arrivals h3{margin:0;font-size:14px;font-weight:600;color:#2c435c}
 .installation-arrivals h3 span{margin-left:8px;font-weight:500;color:#0f548c;font-variant-numeric:tabular-nums}
 .installation-arrivals>p{margin:6px 0;font-size:13px;color:#4c6075}
-.installation-arrivals-rows{display:grid;gap:8px}
-.installation-arrival-row{display:grid;grid-template-columns:60px minmax(130px,1.4fr) minmax(150px,1fr) minmax(150px,1fr) auto;align-items:start;gap:8px 12px;padding:8px 0;border-top:1px solid #e2e8ef}
-.installation-arrival-row>strong{padding-top:27px;font-size:13px;font-weight:500;color:#355777;white-space:nowrap}
-.office-app .workspace .installation-arrival-row label{margin:0;font-size:13px;min-width:0}
-.office-app .workspace .installation-arrival-row input{width:100%;min-width:0;margin:4px 0 0;font-size:13px}
-.office-app .workspace .installation-arrival-row>button{align-self:start;margin-top:24px;font-size:12px;white-space:nowrap}
-.installation-arrival-date-state{display:block;font-size:12px;margin-top:3px;color:#4c6075}
+.installation-arrivals-columns,.installation-arrival-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.installation-arrivals-columns{padding:6px 0;background:#f4f7fb;color:#355777;font-size:12px;font-weight:600}
+.installation-arrival-row{align-items:start;padding:8px 0;border-bottom:1px solid #e2e8ef}
+.installation-arrival-row:last-child{border-bottom:0}
+.installation-arrival-description,.installation-arrival-actual{display:flex;align-items:start;gap:8px;min-width:0}
+.installation-arrival-number{display:flex;align-items:center;justify-content:center;flex:0 0 56px;min-height:34px;border-radius:4px;background:#0f6cbd;color:#fff;font-size:13px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.office-app .workspace .installation-arrival-row label{flex:1;margin:0;font-size:13px;min-width:0}
+.office-app .workspace .installation-arrival-row input{width:100%;min-width:0;margin:0;font-size:13px}
+.installation-arrival-label{display:none}
+.office-app .workspace .installation-arrival-remove{flex-shrink:0;margin:0;min-height:34px;font-size:12px;white-space:nowrap}
+.installation-arrival-date-state{display:block;font-size:12px;margin-top:2px;color:#4c6075}
 .installation-arrivals-summary>p{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0;font-size:13px}
 .installation-arrivals-summary>p strong{font-weight:500;color:#355777}
 .installation-arrival-legacy{margin:8px 0 12px;color:#4c6075;font-size:12px}
+.installation-arrival-legacy summary{padding:4px 0}
 .installation-arrival-legacy p{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-@media(max-width:1100px){.installation-arrival-row{grid-template-columns:50px minmax(100px,1fr) minmax(150px,1fr)}.installation-arrival-row>label:nth-of-type(3){grid-column:2}.office-app .workspace .installation-arrival-row>button{margin-top:24px;justify-self:end}}
-@media(max-width:720px){.installation-arrival-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}.installation-arrival-row>strong{grid-column:1;padding-top:0}.installation-arrival-row>label:first-of-type{grid-column:1/-1}.installation-arrival-row>label:nth-of-type(3){grid-column:auto}.office-app .workspace .installation-arrival-row>button{grid-column:2;grid-row:1;margin-top:0;min-height:44px}.office-app .workspace .installation-arrival-row input{font-size:16px;min-height:44px}.installation-arrival-row>strong{align-self:center}}
+.installation-workspace .installation-arrival-stage .installation-form-grid{gap:8px 16px}
+.office-app .workspace .installation-workspace .installation-arrival-stage .installation-form-grid label{margin:0;min-width:0}
+.installation-arrival-stage .installation-checks{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 16px}
+.office-app .workspace .installation-arrival-stage .installation-checks .checkbox{align-items:flex-start;margin:0;font-size:13px;line-height:1.5}
+.office-app .workspace .installation-arrival-stage .installation-checks input{margin-top:2px}
+@media(min-width:1100px){
+ .installation-workspace .installation-arrival-stage .installation-form-grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+ .installation-workspace .installation-arrival-stage .installation-form-grid>label{grid-column:span 4}
+ .installation-workspace .installation-arrival-stage .installation-form-grid>label:is([data-field=visa_type],[data-field=visa_duration],[data-field=buyer],[data-field=due_date]){grid-column:span 3}
+ .installation-workspace .installation-arrival-stage .installation-form-grid>label:is([data-field=actual_arrival],[data-field=actual_arrival_note]){grid-column:span 6}
+}
+@media(min-width:721px) and (max-width:1099px){.installation-workspace .installation-arrival-stage .installation-form-grid>label[data-field=cost]{grid-column:1/-1}}
+@media(max-width:720px){
+ .installation-arrivals-columns{display:none}
+ .installation-arrival-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 12px;padding-block:10px}
+ .installation-arrival-description,.installation-arrival-actual{display:contents}
+ .installation-arrival-number{grid-column:1;grid-row:1;justify-self:start;min-height:32px;padding:0 10px}
+ .installation-arrival-description>label{grid-column:1/-1;grid-row:2}
+ .installation-arrival-expected{grid-column:1;grid-row:3}
+ .installation-arrival-actual>label{grid-column:2;grid-row:3}
+ .installation-arrival-label{display:block;margin-bottom:4px}
+ .office-app .workspace .installation-arrival-remove{grid-column:2;grid-row:1;justify-self:end;min-height:44px}
+ .office-app .workspace .installation-arrival-row input{font-size:16px;min-height:44px}
+ .installation-workspace .installation-arrival-stage .installation-form-grid{gap:10px}
+ .installation-arrival-stage .installation-checks{grid-template-columns:1fr;gap:8px}
+ .office-app .workspace .installation-arrival-stage .installation-checks .checkbox{align-items:center;min-height:44px}
+}
