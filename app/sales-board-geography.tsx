@@ -10,7 +10,7 @@ export default function SalesBoardGeography({markets,total,totalGrades}:{markets
  const [selection,select]=useState<Record<string,string>>({});
  const otherGrades=total-['A','B','C'].reduce((n,g)=>n+(totalGrades[g]||0),0),unclassified=total-markets.reduce((n,m)=>n+m.distribution.total,0);
  return <section className="panel so-geography" data-mobile-panel="geography" aria-label="客户地域与等级分布">
-  <div className="section-heading"><div><h2>客户地域与等级分布</h2><p className="small muted">按客户数排序 · 当前存量</p></div><div className="so-geography-legend" aria-label="客户等级图例">{REGION_GRADES.filter(g=>g!=='other'||otherGrades>0).map(g=><span key={g}><i className={'so-region-'+g} aria-hidden="true"/>{label[g]} {count(g==='other'?otherGrades:totalGrades[g]||0)}</span>)}</div></div>
+  <div className="section-heading"><div><h2>客户地域与等级分布</h2></div><div className="so-geography-legend" aria-label="客户等级图例">{REGION_GRADES.filter(g=>g!=='other'||otherGrades>0).map(g=><span key={g}><i className={'so-region-'+g} aria-hidden="true"/>{label[g]} {count(g==='other'?otherGrades:totalGrades[g]||0)}</span>)}</div></div>
   <div className={'so-geography-markets'+(markets.length===1?' is-single':'')}>{markets.map(({name,distribution:d})=>{
    const unit=d.kind==='city'?'城市':'国家',selected=d.top.find(r=>r.key===selection[name])||d.top[0],max=d.top[0]?.total||1;
    return <section className="so-geography-market" key={name} aria-label={name+unit+'与客户等级分布'}>

@@ -13,6 +13,6 @@ export default function ContractPaymentPlan({templateId,value,amountMinor,curren
    <label>付款比例<div className="payment-percent"><input aria-label={'第'+(i+1)+'阶段付款比例'} type="number" required min="0.01" max="100" step="0.01" value={row.percent} onChange={e=>change(i,{percent:e.target.value})} placeholder="填写比例"/><span aria-hidden="true">%</span></div></label>
    <div className="payment-amount"><span className="small muted">本阶段金额（{currency}）</span><output aria-label={'第'+(i+1)+'阶段金额'}>{amounts[i]||'—'}</output></div>
   </div>)}</div>
-  <p className={'small'+(complete&&!valid?' notice error':' muted')} role="status">合计 {Number(total.toFixed(2))}%{valid?'，比例已合计100%。':complete?'，请调整至100%。':'，各阶段比例合计须为100%。'}{amountMinor===null?' 填写合同金额或明细后计算各阶段金额。':''}</p>
+  <p className={'small'+(complete&&!valid?' notice error':' muted')} role="status">合计 {Number(total.toFixed(2))}%{valid?'':complete?'，请调整至100%。':'，各阶段比例合计须为100%。'}{amountMinor===null?' · 合同金额待填写':''}</p>
  </div>;
 }
