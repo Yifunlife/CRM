@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {database,moduleURL} from './test-form-intake.mjs';
+const {roleWorkspaceEndpoint}=await import(moduleURL('lib/role-workspace-server.ts'));
+const {projectProfileEndpoint}=await import(moduleURL('lib/project-profile-server.ts'));
+const {crmLocation,readCRMLocation}=await import(moduleURL('lib/crm-location.ts'));
+const {passwordHash}=await import(moduleURL('lib/crm.ts'));
+const migrations=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort().map(f=>readFileSync('drizzle/'+f,'utf8'));
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');migrations.forEach(s=>sql.exec(s));
+const db=database(sql),admin={id:'admin-fixture',role:'admin'},sales={id:'sales-fixture',role:'sales',trade_scopes:['foreign']};
+for(const [id,name,role,scopes] of [[admin.id,'档案测试管理','admin',[]],[sales.id,'测试业务员','sales',['foreign']],['other','其他业务员','sales',['foreign']],['follow','测试跟单员','followup',['foreign']]])sql.prepare('INSERT INTO crm_users(id,username,name,role,password,trade_scopes,created) VALUES(?,?,?,?,?,?,?)').run(id,id,name,role,'unused',JSON.stringify(scopes),'2026-11-01');
+for(const [id,name,owner,market,country] of [['lead-a','演示客户 A',sales.id,'外贸','沙特'],['lead-b','演示客户 B','other','外贸','沙特'],['domestic','演示内贸客户','other','内贸','中国']])sql.prepare("INSERT INTO crm_leads(id,name,source,market,country,cohort,owner_id,phone,detail,fingerprint,created) VALUES(?,?,'WhatsApp',?,?, 'historical',?,'12025550101',?,?,'2026-11-01')").run(id,name,market,country,owner,JSON.stringify({_customer_profile:{contractNumber:'旧客户层编号',project:'历史项目摘要',wechat:'demo_contact'}}),id);
+for(const [id,lead,contract,address] of [['one','lead-a','HT-001','一店地址'],['two','lead-a','',''],['private','lead-b','PRIVATE','别人的地址'],['domestic','domestic','DOMESTIC','国内地址']])sql.prepare("INSERT INTO crm_sales_projects(project_id,lead_id,name,stage,stage_at,details,token,created,created_by,updated,updated_by) VALUES(?,?,?,'won','2026-11-01',?,'token','2026-11-01',?,'2026-11-01',?)").run(id,lead,'演示项目 '+id,JSON.stringify({contract_no:contract,qualification:{project_address:{value:address},area_m2:{value:'980'}}}),admin.id,admin.id);
+sql.prepare("INSERT INTO crm_deals(id,lead_id,owner_id,business_scope,order_number,deal_date,created,created_by) VALUES('deal','lead-a',?,'meta-full','HT-001','2026-11-01','2026-11-01',?)").run(sales.id,admin.id);
+sql.prepare("INSERT INTO crm_followup_orders(id,deal_id,order_number,project,lead_id,commercial_id,logistics_id,details,steps,change_token,created,created_by,updated,updated_by) VALUES('order','deal','HT-001','演示项目一店','lead-a',?,'follow',?,'[]','token','2026-11-01',?,'2026-11-01',?)").run(sales.id,JSON.stringify({contract_source:{contract_no:'HT-SIGNED'},project_address:'正式项目地址'}),admin.id,admin.id);
+sql.exec("UPDATE crm_sales_projects SET details=json_set(details,'$.deal_id','deal') WHERE project_id='one'");
+const request=(lead,user=admin,method='GET')=>roleWorkspaceEndpoint(db,user,user,'role-workspace/customer-projects',method,{},new URL('https://test/?lead_id='+lead));
+const before=JSON.stringify(['crm_leads','crm_sales_projects','crm_followup_orders','crm_deals','crm_receipts','crm_notes'].map(t=>sql.prepare('SELECT * FROM '+t).all()));
+let result=await request('lead-a');assert.equal(result.projects.length,2);assert.deepEqual(result.projects.map(p=>p.id),['order:order','sales:two']);assert.equal(result.projects[0].contractNumber,'HT-SIGNED');assert.equal(result.projects[0].projectAddress,'正式项目地址');assert.equal(result.projects[1].contractNumber,'');assert.equal(result.projects[1].projectAddress,'');assert.equal(result.projects[1].area,'980');
+assert(!JSON.stringify(result).includes('旧客户层编号'));assert(!JSON.stringify(result).includes('PRIVATE'));
+assert.deepEqual(await request('lead-a',sales),result);await assert.rejects(request('lead-b',sales),e=>e.status===404);await assert.rejects(request('domestic',sales),e=>e.status===404);await assert.rejects(request('missing'),e=>e.status===404);await assert.rejects(request('lead-a',admin,'POST'),e=>e.status===405);
+assert.equal(JSON.stringify(['crm_leads','crm_sales_projects','crm_followup_orders','crm_deals','crm_receipts','crm_notes'].map(t=>sql.prepare('SELECT * FROM '+t).all())),before,'archive reads must not mutate records');
+let profile=await projectProfileEndpoint(db,admin,admin,'GET',{},new URL('https://test/?entity=sales:two'));
+await projectProfileEndpoint(db,admin,admin,'POST',{entity:'sales:two',version:profile.version,values:{...profile.values,contractNumber:'HT-002',projectAddress:'同一份资料保存的二店地址',height:'6.5'}},new URL('https://test/'));
+result=await request('lead-a');assert.equal(result.projects[1].contractNumber,'HT-002');assert.equal(result.projects[1].projectAddress,'同一份资料保存的二店地址');assert.equal(result.projects[0].projectAddress,'正式项目地址');assert.equal(JSON.parse(sql.prepare("SELECT detail FROM crm_leads WHERE id='lead-a'").get().detail)._customer_profile.contractNumber,'旧客户层编号');
+const route={page:'项目档案',lead:'lead-a',tab:'成交与收款',project:'order:order',dossierProject:'sales:two',market:'外贸',demo:false};const hash=crmLocation('account:role:view',route);assert.deepEqual(readCRMLocation(hash,'account:role:view'),route);assert.equal(readCRMLocation(hash,'another-account'),null);assert.equal(readCRMLocation('#crm?scope=x&page='+'x'.repeat(41),'x'),null);assert.equal(readCRMLocation('#other','x'),null);
+if(process.env.CRM_ARCHIVE_FIXTURE){
+ sql.prepare('UPDATE crm_users SET password=? WHERE id=?').run(await passwordHash('ArchiveTest-2026'),admin.id);
+ const quote=value=>value===null?'NULL':typeof value==='number'?String(value):"'"+String(value).replaceAll("'","''")+"'";
+ const tables=sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
+ const inserts=tables.flatMap(({name})=>sql.prepare('SELECT * FROM "'+name+'"').all().map(row=>'INSERT OR REPLACE INTO "'+name+'" ('+Object.keys(row).map(k=>'"'+k+'"').join(',')+') VALUES ('+Object.values(row).map(quote).join(',')+');'));
+ writeFileSync(process.env.CRM_ARCHIVE_FIXTURE,migrations.join('\n')+'\nPRAGMA foreign_keys=OFF;\n'+inserts.join('\n'));
+}
+assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+console.log('PASS: one canonical customer/project archive, linked-order deduplication, isolated contract/address data, same-record readback after edit, owner and market access, no read-side writes, scoped navigation restoration.');
