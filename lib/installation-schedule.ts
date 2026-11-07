@@ -36,4 +36,4 @@ export function installationStaffCounts(plan:InstallationPlan){
  const external=number(plan.factory.external_people)??(plan.factory.external_technicians?null:0),total=number(plan.factory.people),company=number(plan.factory.company_people)??(external!==null&&total!==null&&total>=external?total-external:null);
  return {company,external};
 }
-export function installationStaffLabel(plan:InstallationPlan){const c=installationStaffCounts(plan),label=(name:string,value:number|null)=>name+(value===null?'待定':value+'位');return label('师傅',c.company)+'+'+label('外请',c.external);}
+export function installationStaffLabel(plan:InstallationPlan,hideZeroExternal=false){const c=installationStaffCounts(plan),label=(name:string,value:number|null)=>name+(value===null?'待定':value+'位');return label('师傅',c.company)+(hideZeroExternal&&c.external===0?'':'+'+label('外请',c.external));}
